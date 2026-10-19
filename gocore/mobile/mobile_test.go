@@ -201,3 +201,21 @@ func TestDispatch_Camera(t *testing.T) {
 		t.Fatalf("data: %s", r.Data)
 	}
 }
+
+// Regression: response.Data must serialize as raw JSON object, not base64 string.
+// Previously Data was []byte alias, and json.Marshal encoded it as base64 —
+// breaking every real client silently (unit tests didn't catch it).
+func TestDispatchResponse_JSONFormat(t *testing.T) {
+	setup(t)
+	r := dispatch(mkReq(t, "ping", nil))
+	b, err := json.Marshal(r)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	if strings.Contains(string(b), "eyJ") {
+		t.Fatalf("data appears base64-encoded: %s", b)
+	}
+	if !strings.Contains(string(b), `"data":{"pong":true}`) {
+		t.Fatalf("data must be raw JSON, got: %s", b)
+	}
+}

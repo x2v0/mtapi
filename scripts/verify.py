@@ -13,9 +13,11 @@ expected = {
 
     "gocore/go.mod":                                          ("module mtapi/gocore", None),
     "gocore/mobile/mobile.go":                                ("type AndroidAPI interface", "func dispatch"),
-    "gocore/mobile/json_shim.go":                             ("func json_NewEncoder", None),
     "gocore/mobile/version.go":                               ('const Version = "1"', None),
     "gocore/mobile/mobile_test.go":                           ("func TestDispatch_Ping", None),
+    "gocore/mobile/grpc.go":                                 ("newGRPCServer", "startGRPC"),
+    "gocore/mobile/grpc_codec.go":                            ("jsonCodec", None),
+    "gocore/mobile/grpc_test.go":                             ("TestGRPC_UnaryPing", None),
     "gocore/mobile/mobile.go":                                ("case \"contacts\":", "case \"calllog\":"),
 
     "client/go.mod":                                          ("module mtapi/client", None),

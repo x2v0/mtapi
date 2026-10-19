@@ -2,6 +2,7 @@ package mobile
 
 import (
 	"bufio"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net"
@@ -35,15 +36,13 @@ type request struct {
 	V      int             `json:"v,omitempty"`
 	Auth   string          `json:"auth,omitempty"`
 	Method string          `json:"method"`
-	Params json_RawMessage `json:"params,omitempty"`
+	Params json.RawMessage `json:"params,omitempty"`
 }
 
-// small alias so we do not need to import encoding/json twice in the header
-type json_RawMessage = []byte
 
 type response struct {
 	OK    bool            `json:"ok"`
-	Data  json_RawMessage `json:"data,omitempty"`
+	Data  json.RawMessage `json:"data,omitempty"`
 	Error string          `json:"error,omitempty"`
 }
 
@@ -70,10 +69,15 @@ func Start(tok string, a AndroidAPI) error {
 	listener = ln
 	mu.Unlock()
 	go acceptLoop()
+
+	if err := startGRPC(); err != nil {
+		log.Printf("mtapi grpc: %v (JSON still available)", err)
+	}
 	return nil
 }
 
 func Stop() error {
+	stopGRPC()
 	mu.Lock()
 	defer mu.Unlock()
 	if listener != nil {
@@ -111,7 +115,7 @@ func handle(conn net.Conn) {
 
 	sc := bufio.NewScanner(conn)
 	sc.Buffer(make([]byte, 64<<10), 16<<20)
-	enc := json_NewEncoder(conn)
+	enc := json.NewEncoder(conn)
 
 	for sc.Scan() {
 		line := sc.Bytes()
@@ -119,7 +123,7 @@ func handle(conn net.Conn) {
 			continue
 		}
 		var req request
-		if err := json_Unmarshal(line, &req); err != nil {
+		if err := json.Unmarshal(line, &req); err != nil {
 			_ = enc.Encode(response{Error: "bad request: " + err.Error()})
 			continue
 		}
@@ -152,7 +156,7 @@ func dispatch(req *request) response {
 		return response{OK: true, Data: []byte("null")}
 	}
 	get := func(dst interface{}) {
-		_ = json_Unmarshal(req.Params, dst)
+		_ = json.Unmarshal(req.Params, dst)
 	}
 
 	switch req.Method {
@@ -179,7 +183,7 @@ func dispatch(req *request) response {
 			if err != nil {
 				return response{Error: err.Error()}
 			}
-			b, _ := json_Marshal(map[string]string{"text": s})
+			b, _ := json.Marshal(map[string]string{"text": s})
 			return response{OK: true, Data: b}
 		case "set":
 			return done(a.ClipboardSet(p.Text))
