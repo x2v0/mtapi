@@ -44,21 +44,21 @@ var checks = []check{
 	{path: "android/build.gradle.kts", must: []string{"com.android.application"}},
 	{path: "android/gradle.properties", must: []string{"android.useAndroidX=true"}},
 	{path: "android/app/build.gradle.kts", must: []string{
-		`implementation(files("libs/mobile.aar"))`, "androidx.camera:camera-core",
+		`implementation(files("libs/mobile.aar"))`,
 	}},
 	{path: "android/app/src/main/AndroidManifest.xml", must: []string{
-		`android:foregroundServiceType="dataSync|camera"`, "RECEIVE_BOOT_COMPLETED",
+		`android:foregroundServiceType="dataSync"`, "RECEIVE_BOOT_COMPLETED",
 	}},
-	{path: "android/app/src/main/kotlin/dev/mtapi/App.kt", must: []string{"class App : Application"}},
-	{path: "android/app/src/main/kotlin/dev/mtapi/Token.kt", must: []string{"SecureRandom"}},
-	{path: "android/app/src/main/kotlin/dev/mtapi/ApiService.kt", must: []string{
-		"LifecycleService", "Mobile.start(token",
+	{path: "android/app/src/main/java/dev/mtapi/App.java", must: []string{"class App extends Application"}},
+	{path: "android/app/src/main/java/dev/mtapi/Token.java", must: []string{"SecureRandom"}},
+	{path: "android/app/src/main/java/dev/mtapi/ApiService.java", must: []string{
+		"class ApiService extends Service", "Mobile.start(token",
 	}},
-	{path: "android/app/src/main/kotlin/dev/mtapi/MainActivity.kt", must: []string{`token:\n`}},
-	{path: "android/app/src/main/kotlin/dev/mtapi/AndroidApiImpl.kt", must: []string{
-		"ProcessCameraProvider", "override fun tts",
+	{path: "android/app/src/main/java/dev/mtapi/MainActivity.java", must: []string{`token:\n`}},
+	{path: "android/app/src/main/java/dev/mtapi/AndroidApiImpl.java", must: []string{
+		"class AndroidApiImpl", "public void tts",
 	}},
-	{path: "android/app/src/main/kotlin/dev/mtapi/BootReceiver.kt", must: []string{
+	{path: "android/app/src/main/java/dev/mtapi/BootReceiver.java", must: []string{
 		"class BootReceiver", "ACTION_BOOT_COMPLETED",
 	}},
 	{path: "android/app/src/main/res/values/strings.xml", must: []string{`<string name="app_name">`}},
