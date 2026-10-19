@@ -1,25 +1,65 @@
 package dev.mtapi;
 
+import android.util.Log;
+
 /**
- * JNI wrapper around libgojni.so (built from gocore/jni).
+ * JNI wrapper around libgojni.so.
  *
- * Replaces com.google.gomobile.Mobile from gomobile bind.
- * Native methods are implemented in gocore/jni/main.go via //export.
+ * Hardened: if loadLibrary fails, static block doesn't throw —
+ * `available=false`, nativeStart/Stop/Ping short-circuit, app keeps working.
  */
 public final class Mobile {
 
+    private static final String TAG = "mtapi";
+    private static boolean available = false;
+    private static String loadError = "";
+
     static {
-        System.loadLibrary("gojni");
+        try {
+            System.loadLibrary("gojni");
+            available = true;
+            Log.i(TAG, "libgojni loaded ok");
+        } catch (Throwable t) {
+            available = false;
+            loadError = String.valueOf(t);
+            Log.e(TAG, "loadLibrary(gojni) failed: " + loadError, t);
+        }
     }
 
     private Mobile() {}
 
-    /** Returns 0 on success, -1 on error (start failed). */
-    public static native int nativeStart(String token, AndroidAPI api);
+    public static boolean isAvailable() { return available; }
+    public static String getLoadError() { return loadError; }
 
-    /** Stops the Go server. Idempotent. */
-    public static native void nativeStop();
+    /** Returns 0 on success, -1 on error. Safe if native not loaded. */
+    public static int nativeStart(String token, AndroidAPI api) {
+        if (!available) {
+            Log.w(TAG, "nativeStart: library not loaded: " + loadError);
+            return -1;
+        }
+        try {
+            return nativeStartImpl(token, api);
+        } catch (Throwable t) {
+            Log.e(TAG, "nativeStart threw", t);
+            return -1;
+        }
+    }
 
-    /** Returns "mtapi/<version>" — used as a liveness check. */
-    public static native String nativePing();
+    public static void nativeStop() {
+        if (!available) return;
+        try { nativeStopImpl(); } catch (Throwable t) { Log.e(TAG, "nativeStop", t); }
+    }
+
+    public static String nativePing() {
+        if (!available) return "unavailable: " + loadError;
+        try { return nativePingImpl(); } catch (Throwable t) {
+            Log.e(TAG, "nativePing", t);
+            return "error: " + t;
+        }
+    }
+
+    // actual JNI entry points
+    private static native int  nativeStartImpl(String token, AndroidAPI api);
+    private static native void nativeStopImpl();
+    private static native String nativePingImpl();
 }

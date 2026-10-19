@@ -13,35 +13,67 @@ import android.os.IBinder;
 public class ApiService extends Service {
 
     public static final int NOTIF_ID = 0x4d5441;
+    private static final String TAG = "mtapi";
+
     private boolean started = false;
     private AndroidApiImpl api;
+    private String status = "starting";
 
     @Override
     public void onCreate() {
         super.onCreate();
-        startForeground(NOTIF_ID, buildNotification());
+        try {
+            startForeground(NOTIF_ID, buildNotification());
+        } catch (Throwable t) {
+            android.util.Log.e(TAG, "startForeground failed", t);
+        }
     }
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
-        if (!started) {
-            String token = Token.getOrCreate(this);
-            try {
-                api = new AndroidApiImpl(this);
-                int rc = Mobile.nativeStart(token, api);
-                if (rc == 0) {
-                    started = true;
-                    android.util.Log.i("mtapi",
-                        "started ok; ping=" + Mobile.nativePing());
-                } else {
-                    android.util.Log.e("mtapi",
-                        "nativeStart failed rc=" + rc);
-                }
-            } catch (Throwable t) {
-                android.util.Log.e("mtapi", "start failed", t);
-            }
+        if (started) return START_STICKY;
+
+        String token = Token.getOrCreate(this);
+        try {
+            api = new AndroidApiImpl(this);
+        } catch (Throwable t) {
+            android.util.Log.e(TAG, "AndroidApiImpl init failed", t);
+            status = "api_init_failed";
+            notifyStatus();
+            return START_STICKY;
         }
+
+        if (!Mobile.isAvailable()) {
+            status = "native_unavailable";
+            android.util.Log.e(TAG, "native library unavailable: " + Mobile.getLoadError());
+            notifyStatus();
+            return START_STICKY;
+        }
+
+        try {
+            int rc = Mobile.nativeStart(token, api);
+            if (rc == 0) {
+                started = true;
+                String ping = Mobile.nativePing();
+                status = "running: " + ping;
+                android.util.Log.i(TAG, "nativeStart ok; ping=" + ping);
+            } else {
+                status = "nativeStart rc=" + rc;
+                android.util.Log.e(TAG, status);
+            }
+        } catch (Throwable t) {
+            status = "nativeStart_threw";
+            android.util.Log.e(TAG, "nativeStart threw", t);
+        }
+        notifyStatus();
         return START_STICKY;
+    }
+
+    private void notifyStatus() {
+        try {
+            NotificationManager nm = getSystemService(NotificationManager.class);
+            if (nm != null) nm.notify(NOTIF_ID, buildNotification());
+        } catch (Throwable ignored) {}
     }
 
     @Override
@@ -63,18 +95,15 @@ public class ApiService extends Service {
 
     @Override
     public void onDestroy() {
-        try {
-            if (started) Mobile.nativeStop();
-        } catch (Throwable t) {
-            android.util.Log.e("mtapi", "stop failed", t);
-        }
+        try { if (started) Mobile.nativeStop(); }
+        catch (Throwable t) { android.util.Log.e(TAG, "nativeStop", t); }
         started = false;
         super.onDestroy();
     }
 
     private Notification buildNotification() {
         String ch = "mtapi";
-        NotificationManager nm = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
+        NotificationManager nm = getSystemService(NotificationManager.class);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && nm != null) {
             if (nm.getNotificationChannel(ch) == null) {
                 nm.createNotificationChannel(
@@ -94,7 +123,7 @@ public class ApiService extends Service {
             b = new Notification.Builder(this);
         }
         return b.setContentTitle("mtapi")
-                .setContentText("daemon listening on @mtapi")
+                .setContentText(status)
                 .setSmallIcon(android.R.drawable.stat_sys_download_done)
                 .setOngoing(true)
                 .setContentIntent(pi)

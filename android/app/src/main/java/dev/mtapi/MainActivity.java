@@ -17,17 +17,23 @@ import java.util.List;
 public class MainActivity extends Activity {
 
     private static final int REQ = 0x4d50;
+    private TextView statusView;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        requestPermsIfNeeded();
 
         final String tok = Token.getOrCreate(this);
+
         TextView tv = new TextView(this);
         tv.setText("token:\n" + tok);
         tv.setTextIsSelectable(true);
         tv.setTextSize(14f);
+
+        statusView = new TextView(this);
+        statusView.setTextSize(12f);
+        statusView.setPadding(0, 24, 0, 24);
+        updateStatus();
 
         Button copyBtn = new Button(this);
         copyBtn.setText("Copy token");
@@ -40,17 +46,38 @@ public class MainActivity extends Activity {
         permBtn.setText("Re-check permissions");
         permBtn.setOnClickListener(v -> requestPermsIfNeeded());
 
+        Button statusBtn = new Button(this);
+        statusBtn.setText("Refresh status");
+        statusBtn.setOnClickListener(v -> updateStatus());
+
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
         root.setPadding(48, 96, 48, 48);
         root.addView(tv);
+        root.addView(statusView);
         root.addView(copyBtn);
         root.addView(permBtn);
+        root.addView(statusBtn);
         setContentView(root);
+
+        requestPermsIfNeeded();
+    }
+
+    private void updateStatus() {
+        if (statusView == null) return;
+        StringBuilder sb = new StringBuilder();
+        sb.append("native: ").append(Mobile.isAvailable() ? "loaded" : "NOT loaded").append("\n");
+        if (!Mobile.isAvailable()) {
+            sb.append("error: ").append(Mobile.getLoadError()).append("\n");
+        } else {
+            sb.append("ping: ").append(Mobile.nativePing());
+        }
+        statusView.setText(sb.toString());
     }
 
     private void requestPermsIfNeeded() {
         String[] perms = {
+            Manifest.permission.POST_NOTIFICATIONS,
             Manifest.permission.READ_CONTACTS,
             Manifest.permission.READ_CALL_LOG,
             Manifest.permission.READ_SMS,
