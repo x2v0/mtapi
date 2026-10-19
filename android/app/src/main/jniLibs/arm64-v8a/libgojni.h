@@ -29,6 +29,7 @@ extern const char *_GoStringPtr(_GoString_ s);
 #include <string.h>
 #include <jni.h>
 
+
 // ── string helpers ─────────────────────────────────────
 static char* go_str_dup(jstring s, JNIEnv* env) {
     if (s == NULL) return NULL;

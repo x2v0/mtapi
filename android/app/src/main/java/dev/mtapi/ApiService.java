@@ -1,11 +1,6 @@
 package dev.mtapi;
 
-import android.app.AlarmManager;
-import android.app.Notification;
-import android.app.NotificationChannel;
-import android.app.NotificationManager;
-import android.app.PendingIntent;
-import android.app.Service;
+import android.app.*;
 import android.content.Intent;
 import android.os.Build;
 import android.os.IBinder;
@@ -16,104 +11,64 @@ public class ApiService extends Service {
     public static final int NOTIF_ID = 0x4d5441;
     private static final String TAG = "mtapi";
 
-    private boolean started = false;
     private AndroidApiImpl api;
-    private String status = "starting";
+    private String token;
 
     @Override
     public void onCreate() {
         super.onCreate();
         try {
-            Notification n = buildNotification();
-            if (Build.VERSION.SDK_INT >= 29) {
-                startForeground(NOTIF_ID, n, 0x1 /* FOREGROUND_SERVICE_TYPE_DATA_SYNC */);
-            } else {
-                startForeground(NOTIF_ID, n);
-            }
-            Log.i(TAG, "startForeground ok (type=dataSync)");
+            startForeground(NOTIF_ID, buildNotification("starting"));
+            Log.i(TAG, "startForeground ok");
         } catch (Throwable t) {
             Log.e(TAG, "startForeground failed", t);
-            DiagLog.write(this, "svc: startForeground THREW " + t);
         }
     }
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
-        if (started) return START_STICKY;
+        if (api != null) return START_STICKY;
 
-        String token = Token.getOrCreate(this);
-
-        if (!Mobile.ensureLoaded()) {
-            status = "native_unavailable: " + Mobile.getLoadError();
-            Log.e(TAG, status);
-            notifyStatus();
-            return START_STICKY;
-        }
+        token = Token.getOrCreate(this);
+        api = new AndroidApiImpl(this);
 
         try {
-            api = new AndroidApiImpl(this);
+            GoServerLauncher.start(this, api, token);
+            updateNotification("running — http://127.0.0.1:7788/");
+            DiagLog.write(this, "svc: Go server started");
         } catch (Throwable t) {
-            Log.e(TAG, "AndroidApiImpl init failed", t);
-            status = "api_init_failed";
-            notifyStatus();
-            return START_STICKY;
+            DiagLog.write(this, "svc: Go server start failed " + t);
+            updateNotification("error: " + t.getMessage());
         }
 
-        try {
-            int rc = Mobile.nativeStart(token, api);
-            if (rc == 0) {
-                started = true;
-                status = "running: " + Mobile.nativePing();
-                Log.i(TAG, status);
-            } else {
-                status = "nativeStart rc=" + rc;
-                Log.e(TAG, status);
-            }
-        } catch (Throwable t) {
-            status = "nativeStart_threw: " + t;
-            Log.e(TAG, status, t);
-        }
-        notifyStatus();
         return START_STICKY;
-    }
-
-    private void notifyStatus() {
-        try {
-            NotificationManager nm = getSystemService(NotificationManager.class);
-            if (nm != null) nm.notify(NOTIF_ID, buildNotification());
-        } catch (Throwable ignored) {}
     }
 
     @Override
     public IBinder onBind(Intent intent) { return null; }
 
     @Override
-    public void onTaskRemoved(Intent rootIntent) {
-        try {
-            Intent restart = new Intent(getApplicationContext(), ApiService.class);
-            int piFlags = PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_ONE_SHOT;
-            PendingIntent pi = PendingIntent.getService(this, 1, restart, piFlags);
-            AlarmManager am = (AlarmManager) getSystemService(ALARM_SERVICE);
-            if (am != null) am.set(AlarmManager.RTC, System.currentTimeMillis() + 1500L, pi);
-        } catch (Throwable ignored) {}
-        super.onTaskRemoved(rootIntent);
-    }
-
-    @Override
     public void onDestroy() {
-        try { if (started) Mobile.nativeStop(); }
-        catch (Throwable t) { Log.e(TAG, "nativeStop", t); }
-        started = false;
+        DiagLog.write(this, "svc: destroy");
+        try { GoServerLauncher.stop(this); } catch (Throwable ignored) {}
+        api = null;
         super.onDestroy();
     }
 
-    private Notification buildNotification() {
+    private void updateNotification(String status) {
+        try {
+            NotificationManager nm = getSystemService(NotificationManager.class);
+            if (nm != null) nm.notify(NOTIF_ID, buildNotification(status));
+        } catch (Throwable ignored) {}
+    }
+
+    private Notification buildNotification(String text) {
         String ch = "mtapi";
         NotificationManager nm = getSystemService(NotificationManager.class);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && nm != null) {
             if (nm.getNotificationChannel(ch) == null) {
-                nm.createNotificationChannel(
-                    new NotificationChannel(ch, "mtapi daemon", NotificationManager.IMPORTANCE_LOW));
+                nm.createNotificationChannel(new NotificationChannel(
+                        ch, "mtapi daemon", NotificationManager.IMPORTANCE_LOW));
             }
         }
         Intent intent = new Intent(this, MainActivity.class);
@@ -126,7 +81,7 @@ public class ApiService extends Service {
             b = new Notification.Builder(this);
         }
         return b.setContentTitle("mtapi")
-                .setContentText(status)
+                .setContentText(text)
                 .setSmallIcon(android.R.drawable.stat_sys_download_done)
                 .setOngoing(true)
                 .setContentIntent(pi)
