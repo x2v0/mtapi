@@ -32,7 +32,6 @@ import java.util.Locale;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
-import go.mobile.mobile.AndroidAPI;
 
 public class AndroidApiImpl implements AndroidAPI {
 
