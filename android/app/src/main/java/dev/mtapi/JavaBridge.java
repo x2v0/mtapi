@@ -177,6 +177,9 @@ public final class JavaBridge {
             case "displayColor": return api.displayColor();
             case "microphoneList": return api.microphoneList();
             case "kernelInfo": return api.kernelInfo();
+            case "microphoneRecord": return api.microphoneRecord(
+                    p.optString("path", ""), p.optInt("seconds", 5));
+            case "torchBrightness": return api.torchBrightness(p.optInt("level", 0));
             default:
                 throw new RuntimeException("unknown bridge method: " + method);
         }

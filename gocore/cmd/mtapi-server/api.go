@@ -51,6 +51,10 @@ type AndroidAPI interface {
 	DisplayColor() (string, error)
 	MicrophoneList() (string, error)
 	KernelInfo() (string, error)
+
+	// Patch 38
+	MicrophoneRecord(path string, seconds int32) (string, error)
+	TorchBrightness(level int32) (string, error)
 }
 
 type bridgeAPI struct{ b *bridge }
@@ -124,6 +128,13 @@ func (a *bridgeAPI) DisplayBrightness() (string, error){ return a.b.callStr("dis
 func (a *bridgeAPI) DisplayColor() (string, error)     { return a.b.callStr("displayColor", nil) }
 func (a *bridgeAPI) MicrophoneList() (string, error)   { return a.b.callStr("microphoneList", nil) }
 func (a *bridgeAPI) KernelInfo() (string, error)       { return a.b.callStr("kernelInfo", nil) }
+
+func (a *bridgeAPI) MicrophoneRecord(path string, seconds int32) (string, error) {
+	return a.b.callStr("microphoneRecord", map[string]any{"path": path, "seconds": seconds})
+}
+func (a *bridgeAPI) TorchBrightness(level int32) (string, error) {
+	return a.b.callStr("torchBrightness", map[string]any{"level": level})
+}
 
 func _atoi32(s string) int32 {
 	n, _ := strconv.Atoi(s)

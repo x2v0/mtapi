@@ -69,7 +69,9 @@ public class MainActivity extends Activity {
                 Intent i = new Intent(this, ApiService.class);
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                     startForegroundService(i);
-                } else {
+                    // MediaStore for /sdcard/Download/mtapi.token (Android 10+)
+        writeTokenViaMediaStore();
+    } else {
                     startService(i);
                 }
                 statusView.setText("started — check notification");
@@ -247,6 +249,50 @@ public class MainActivity extends Activity {
             DiagLog.write(this, "token write (/sdcard/Download) failed: " + t);
         }
 
+    }
+
+
+    private void writeTokenViaMediaStore() {
+        if (Build.VERSION.SDK_INT < 29) return;
+        try {
+            android.content.ContentResolver cr = getContentResolver();
+            android.net.Uri coll = android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI;
+
+            // Query for existing "mtapi.token"
+            android.database.Cursor c = cr.query(coll,
+                    new String[]{android.provider.MediaStore.MediaColumns._ID},
+                    android.provider.MediaStore.MediaColumns.DISPLAY_NAME + "=?",
+                    new String[]{"mtapi.token"}, null);
+            if (c != null) {
+                try {
+                    if (c.moveToFirst()) {
+                        long id = c.getLong(0);
+                        android.net.Uri existing = android.content.ContentUris.withAppendedId(coll, id);
+                        try (java.io.OutputStream os = cr.openOutputStream(existing, "wt")) {
+                            os.write(token.getBytes("UTF-8"));
+                        }
+                        DiagLog.write(this, "token via MediaStore (update): " + existing);
+                        return;
+                    }
+                } finally { c.close(); }
+            }
+
+            // Insert new
+            android.content.ContentValues cv = new android.content.ContentValues();
+            cv.put(android.provider.MediaStore.MediaColumns.DISPLAY_NAME, "mtapi.token");
+            cv.put(android.provider.MediaStore.MediaColumns.MIME_TYPE, "text/plain");
+            cv.put(android.provider.MediaStore.MediaColumns.RELATIVE_PATH,
+                    android.os.Environment.DIRECTORY_DOWNLOADS);
+            android.net.Uri uri = cr.insert(coll, cv);
+            if (uri != null) {
+                try (java.io.OutputStream os = cr.openOutputStream(uri)) {
+                    os.write(token.getBytes("UTF-8"));
+                }
+                DiagLog.write(this, "token via MediaStore (insert): " + uri);
+            }
+        } catch (Throwable t) {
+            DiagLog.write(this, "MediaStore token write failed: " + t);
+        }
     }
 
     private void requestPermsIfNeeded() {

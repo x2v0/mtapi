@@ -293,6 +293,20 @@ func (s *apiServer) dispatch(w http.ResponseWriter, method string, p map[string]
 		data, err := s.api.KernelInfo()
 		if err != nil { s.fail(w, 500, err); return }
 		s.ok(w, data)
+	case "camera/snapshot":
+		data, err := s.api.CameraPhoto(strp(p, "path"))
+		if err != nil { s.fail(w, 500, err); return }
+		s.writeJSON(w, 200, map[string]any{"ok": true, "data": data})
+	case "microphone/record":
+		secs := intp(p, "seconds"); if secs <= 0 { secs = 5 }
+		data, err := s.api.MicrophoneRecord(strp(p, "path"), secs)
+		if err != nil { s.fail(w, 500, err); return }
+		s.writeJSON(w, 200, map[string]any{"ok": true, "data": data})
+	case "torch/brightness":
+		lvl := intp(p, "level")
+		data, err := s.api.TorchBrightness(lvl)
+		if err != nil { s.fail(w, 500, err); return }
+		s.ok(w, data)
 	default:
 		s.writeJSON(w, 404, map[string]any{"ok": false, "error": "unknown method: " + method})
 	}
@@ -374,13 +388,46 @@ func (s *apiServer) handleIndex(w http.ResponseWriter, r *http.Request) {
     <li><a href="/sms?limit=5&amp;token=%s">/sms?limit=5</a> — SMS list; <code>/sms?op=send&amp;to=%2B100&amp;text=yo</code> — SEND</li>
   </ul>
 
+  <h3>System info</h3>
+  <ul>
+    <li><a href="/system?token=%s">/system</a> — CPU/RAM/build</li>
+    <li><a href="/cpu/detail?token=%s">/cpu/detail</a> — per-core freq</li>
+    <li><a href="/thermal?token=%s">/thermal</a> — thermal zones</li>
+    <li><a href="/memory?token=%s">/memory</a> — meminfo</li>
+    <li><a href="/storage?token=%s">/storage</a></li>
+    <li><a href="/kernel?token=%s">/kernel</a></li>
+    <li><a href="/sensors?token=%s">/sensors</a> — all sensors</li>
+    <li><a href="/network?token=%s">/network</a></li>
+    <li><a href="/wifi/detailed?token=%s">/wifi/detailed</a></li>
+    <li><a href="/bluetooth?token=%s">/bluetooth</a></li>
+    <li><a href="/telephony?token=%s">/telephony</a></li>
+    <li><a href="/display?token=%s">/display</a></li>
+    <li><a href="/display/brightness?token=%s">/display/brightness</a></li>
+    <li><a href="/display/color?token=%s">/display/color</a></li>
+    <li><a href="/audio?token=%s">/audio</a></li>
+    <li><a href="/microphone?token=%s">/microphone</a></li>
+    <li><a href="/features?token=%s">/features</a></li>
+    <li><a href="/camera/list?token=%s">/camera/list</a></li>
+    <li><a href="/battery/detailed?token=%s">/battery/detailed</a></li>
+    <li><a href="/location/detailed?token=%s">/location/detailed</a></li>
+    <li><a href="/locale?token=%s">/locale</a></li>
+  </ul>
+
   <h3>Actions</h3>
   <ul>
-    <li><a href="/toast?text=hi&amp;token=%s">/toast?text=hi</a> — show toast</li>
-    <li><a href="/notify?title=Hi&amp;body=World&amp;token=%s">/notify?title=Hi&amp;body=World</a> — notification</li>
-    <li><a href="/vibrate?ms=200&amp;token=%s">/vibrate?ms=200</a> — vibrate</li>
-    <li><a href="/torch?on=1&amp;token=%s">/torch?on=1</a> — flash on; <code>/torch?on=0</code> — off</li>
-    <li><a href="/tts?text=hello&amp;token=%s">/tts?text=hello</a> — text-to-speech</li>
+    <li><a href="/toast?text=hi&amp;token=%s">/toast</a></li>
+    <li><a href="/notify?title=Hi&amp;body=World&amp;token=%s">/notify</a></li>
+    <li><a href="/vibrate?ms=200&amp;token=%s">/vibrate</a></li>
+    <li><a href="/torch?on=1&amp;token=%s">/torch</a> on/off</li>
+    <li><a href="/torch/brightness?level=50&amp;token=%s">/torch/brightness?level=50</a></li>
+    <li><a href="/tts?text=hello&amp;token=%s">/tts</a></li>
+  </ul>
+
+  <h3>Hardware (slow — few seconds)</h3>
+  <ul>
+    <li><a href="/camera/snapshot?token=%s">/camera/snapshot</a> — takes photo</li>
+    <li><a href="/microphone/record?seconds=3&amp;token=%s">/microphone/record?seconds=3</a> — records 3s</li>
+    <li><a href="/sensors/read?name=accelerometer&amp;ms=500&amp;token=%s">/sensors/read?name=accelerometer&amp;ms=500</a></li>
   </ul>
 
   <h3>POST /call (JSON-RPC)</h3>
@@ -389,7 +436,7 @@ func (s *apiServer) handleIndex(w http.ResponseWriter, r *http.Request) {
   -d '{"method":"battery"}'</pre>
 </div>
 </body>
-</html>`, s.token, s.token, s.token, s.token, s.token, s.token, s.token, s.token, s.token, s.token, s.token, s.token, s.token, s.token, s.token, s.token, s.token)
+</html>`, s.token, s.token, s.token, s.token, s.token, s.token, s.token, s.token, s.token, s.token, s.token, s.token, s.token, s.token, s.token, s.token, s.token, s.token, s.token, s.token, s.token, s.token, s.token, s.token, s.token, s.token, s.token, s.token, s.token, s.token, s.token, s.token, s.token, s.token, s.token, s.token, s.token, s.token, s.token, s.token, s.token)
 }
 
 func startHTTP(api AndroidAPI, token string) error {
@@ -408,7 +455,9 @@ func startHTTP(api AndroidAPI, token string) error {
 		"camera/list", "battery/detailed", "location/detailed", "locale",
 		// patch 36
 		"cpu/detail", "thermal", "memory", "wifi/detailed", "bluetooth",
-		"display/brightness", "display/color", "microphone", "kernel"}
+		"display/brightness", "display/color", "microphone", "kernel",
+		// patch 38
+		"camera/snapshot", "microphone/record", "torch/brightness"}
 	for _, m := range methods {
 		m := m
 		mux.HandleFunc("/"+m, s.handleMethod(m, func(w http.ResponseWriter, p map[string]any) {

@@ -235,17 +235,7 @@ public class AndroidApiImpl implements AndroidAPI {
         ctx.startActivity(chooser);
     }
 
-    @Override
-    public String cameraPhoto(String path) throws Exception {
-        // Camera requires an Activity context (system intent capture).
-        // From a long-lived Service, the recommended path is to expose
-        // a "camera_open" method that starts MainActivity with an intent.
-        // For now: explicit, honest error.
-        need(Manifest.permission.CAMERA);
-        throw new RuntimeException(
-                "camera_requires_activity: call via MainActivity, "
-              + "or use torch for illumination");
-    }
+    
 
     @Override
     public String contactsList(int limit) throws Exception {
@@ -1152,6 +1142,225 @@ public class AndroidApiImpl implements AndroidAPI {
                 o.put("uptimeSec", up);
                 o.put("bootTimeUnixMs", System.currentTimeMillis() - (long)(up * 1000));
             }
+        }
+        return o.toString();
+    }
+
+
+    @Override
+    public String cameraPhoto(String path) throws Exception {
+        need(Manifest.permission.CAMERA);
+        final java.io.File outFile;
+        if (path == null || path.isEmpty() || !path.startsWith("/")) {
+            java.io.File d = new java.io.File(ctx.getFilesDir(), "photos");
+            d.mkdirs();
+            outFile = new java.io.File(d, "img_" + System.currentTimeMillis() + ".jpg");
+        } else {
+            outFile = new java.io.File(path);
+            java.io.File p = outFile.getParentFile();
+            if (p != null) p.mkdirs();
+        }
+
+        android.hardware.camera2.CameraManager cm =
+                (android.hardware.camera2.CameraManager) ctx.getSystemService(Context.CAMERA_SERVICE);
+        if (cm == null) throw new RuntimeException("no_camera_manager");
+
+        String[] ids = cm.getCameraIdList();
+        if (ids.length == 0) throw new RuntimeException("no_cameras");
+
+        String camId = null;
+        for (String id : ids) {
+            Integer facing = cm.getCameraCharacteristics(id)
+                    .get(android.hardware.camera2.CameraCharacteristics.LENS_FACING);
+            if (facing != null && facing == android.hardware.camera2.CameraCharacteristics.LENS_FACING_BACK) {
+                camId = id; break;
+            }
+        }
+        if (camId == null) camId = ids[0];
+
+        android.hardware.camera2.CameraCharacteristics chars =
+                cm.getCameraCharacteristics(camId);
+        android.hardware.camera2.params.StreamConfigurationMap scm =
+                chars.get(android.hardware.camera2.CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP);
+        android.util.Size size = new android.util.Size(1920, 1080);
+        if (scm != null) {
+            android.util.Size[] sizes = scm.getOutputSizes(android.graphics.ImageFormat.JPEG);
+            if (sizes != null && sizes.length > 0) {
+                android.util.Size best = sizes[0];
+                for (android.util.Size s : sizes) {
+                    long a = (long) s.getWidth() * s.getHeight();
+                    long b = (long) best.getWidth() * best.getHeight();
+                    if (a > b && a <= 1920L * 1080 * 4) { best = s; }
+                }
+                size = best;
+            }
+        }
+
+        final java.util.concurrent.CountDownLatch latch = new java.util.concurrent.CountDownLatch(1);
+        final java.util.concurrent.atomic.AtomicReference<Throwable> errRef =
+                new java.util.concurrent.atomic.AtomicReference<>();
+
+        android.media.ImageReader reader = android.media.ImageReader.newInstance(
+                size.getWidth(), size.getHeight(),
+                android.graphics.ImageFormat.JPEG, 2);
+
+        reader.setOnImageAvailableListener(r -> {
+            android.media.Image img = null;
+            try {
+                img = r.acquireLatestImage();
+                if (img == null) return;
+                java.nio.ByteBuffer buf = img.getPlanes()[0].getBuffer();
+                byte[] bytes = new byte[buf.remaining()];
+                buf.get(bytes);
+                try (java.io.FileOutputStream fos = new java.io.FileOutputStream(outFile)) {
+                    fos.write(bytes);
+                }
+            } catch (Throwable t) {
+                errRef.set(t);
+            } finally {
+                if (img != null) try { img.close(); } catch (Throwable ignored) {}
+                latch.countDown();
+            }
+        }, null);
+
+        cm.openCamera(camId, new android.hardware.camera2.CameraDevice.StateCallback() {
+            @Override public void onOpened(android.hardware.camera2.CameraDevice camera) {
+                try {
+                    camera.createCaptureSession(
+                            java.util.Collections.singletonList(reader.getSurface()),
+                            new android.hardware.camera2.CameraCaptureSession.StateCallback() {
+                                @Override public void onConfigured(android.hardware.camera2.CameraCaptureSession session) {
+                                    try {
+                                        android.hardware.camera2.CaptureRequest.Builder b =
+                                                camera.createCaptureRequest(
+                                                        android.hardware.camera2.CameraDevice.TEMPLATE_STILL_CAPTURE);
+                                        b.addTarget(reader.getSurface());
+                                        b.set(android.hardware.camera2.CaptureRequest.CONTROL_MODE,
+                                                android.hardware.camera2.CameraMetadata.CONTROL_MODE_AUTO);
+                                        session.capture(b.build(), null, null);
+                                    } catch (Throwable t) {
+                                        errRef.set(t); latch.countDown();
+                                    }
+                                }
+                                @Override public void onConfigureFailed(android.hardware.camera2.CameraCaptureSession session) {
+                                    errRef.set(new RuntimeException("configure_failed"));
+                                    latch.countDown();
+                                }
+                            }, null);
+                } catch (Throwable t) {
+                    errRef.set(t); latch.countDown();
+                }
+            }
+            @Override public void onDisconnected(android.hardware.camera2.CameraDevice camera) {
+                errRef.set(new RuntimeException("disconnected")); latch.countDown();
+            }
+            @Override public void onError(android.hardware.camera2.CameraDevice camera, int error) {
+                errRef.set(new RuntimeException("camera_error_" + error)); latch.countDown();
+            }
+        }, null);
+
+        try {
+            if (!latch.await(30, java.util.concurrent.TimeUnit.SECONDS)) {
+                throw new RuntimeException("camera_timeout");
+            }
+            if (errRef.get() != null) {
+                throw new RuntimeException("camera: " + errRef.get().getMessage());
+            }
+            if (!outFile.exists() || outFile.length() == 0) {
+                throw new RuntimeException("camera: empty_file");
+            }
+            return outFile.getAbsolutePath() + " (" + outFile.length() + " bytes)";
+        } finally {
+            try { reader.close(); } catch (Throwable ignored) {}
+        }
+    }
+
+    @Override
+    public String microphoneRecord(String path, int seconds) throws Exception {
+        need(Manifest.permission.RECORD_AUDIO);
+        final java.io.File outFile;
+        if (path == null || path.isEmpty() || !path.startsWith("/")) {
+            java.io.File d = new java.io.File(ctx.getFilesDir(), "audio");
+            d.mkdirs();
+            outFile = new java.io.File(d, "rec_" + System.currentTimeMillis() + ".m4a");
+        } else {
+            outFile = new java.io.File(path);
+            java.io.File p = outFile.getParentFile();
+            if (p != null) p.mkdirs();
+        }
+        if (seconds <= 0) seconds = 5;
+        if (seconds > 60) seconds = 60;
+
+        android.media.MediaRecorder mr = new android.media.MediaRecorder();
+        try {
+            mr.setAudioSource(android.media.MediaRecorder.AudioSource.MIC);
+            mr.setOutputFormat(android.media.MediaRecorder.OutputFormat.MPEG_4);
+            mr.setAudioEncoder(android.media.MediaRecorder.AudioEncoder.AAC);
+            mr.setAudioChannels(1);
+            mr.setAudioSamplingRate(44100);
+            mr.setAudioEncodingBitRate(96000);
+            mr.setOutputFile(outFile.getAbsolutePath());
+            mr.prepare();
+            mr.start();
+            Thread.sleep(seconds * 1000L);
+            mr.stop();
+            return outFile.getAbsolutePath() + " (" + outFile.length() + " bytes)";
+        } catch (Throwable t) {
+            try { mr.reset(); } catch (Throwable ignored) {}
+            throw new RuntimeException("record_failed: " + t.getMessage());
+        } finally {
+            try { mr.release(); } catch (Throwable ignored) {}
+        }
+    }
+
+    @Override
+    public String torchBrightness(int level) throws Exception {
+        android.hardware.camera2.CameraManager cm =
+                (android.hardware.camera2.CameraManager) ctx.getSystemService(Context.CAMERA_SERVICE);
+        if (cm == null) throw new RuntimeException("no_camera_manager");
+        if (level < 0) level = 0;
+        if (level > 100) level = 100;
+
+        String flashId = null;
+        android.hardware.camera2.CameraCharacteristics flashChars = null;
+        for (String id : cm.getCameraIdList()) {
+            android.hardware.camera2.CameraCharacteristics cc = cm.getCameraCharacteristics(id);
+            Boolean flash = cc.get(android.hardware.camera2.CameraCharacteristics.FLASH_INFO_AVAILABLE);
+            if (flash != null && flash) {
+                flashId = id; flashChars = cc; break;
+            }
+        }
+        if (flashId == null) throw new RuntimeException("no_flash");
+
+        JSONObject o = new JSONObject();
+        o.put("level", level);
+
+        if (Build.VERSION.SDK_INT >= 33) {
+            Integer maxLvl = flashChars.get(android.hardware.camera2.CameraCharacteristics.FLASH_INFO_STRENGTH_MAXIMUM_LEVEL);
+            Integer defLvl = flashChars.get(android.hardware.camera2.CameraCharacteristics.FLASH_INFO_STRENGTH_DEFAULT_LEVEL);
+            int max = (maxLvl != null && maxLvl > 0) ? maxLvl : 1;
+            o.put("max", max);
+            o.put("default", defLvl != null ? defLvl : 1);
+            if (level == 0) {
+                cm.setTorchMode(flashId, false);
+                o.put("on", false);
+            } else {
+                int actual = Math.max(1, (level * max) / 100);
+                cm.turnOnTorchWithStrengthLevel(flashId, actual);
+                o.put("actual", actual);
+                o.put("on", true);
+            }
+            o.put("supportsStrength", max > 1);
+        } else {
+            if (level > 0) {
+                cm.setTorchMode(flashId, true);
+                o.put("on", true);
+            } else {
+                cm.setTorchMode(flashId, false);
+                o.put("on", false);
+            }
+            o.put("supportsStrength", false);
+            o.put("note", "API<33: on/off only");
         }
         return o.toString();
     }

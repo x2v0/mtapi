@@ -51,4 +51,8 @@ public interface AndroidAPI {
     String microphoneList() throws Exception;
     String kernelInfo() throws Exception;
 
+    // Patch 38 - hardware actions
+    String microphoneRecord(String path, int seconds) throws Exception;
+    String torchBrightness(int level) throws Exception;
+
 }
