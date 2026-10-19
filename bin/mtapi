@@ -1,0 +1,106 @@
+#!/data/data/com.termux/files/usr/bin/bash
+# mtapi — CLI wrapper for localhost HTTP API (127.0.0.1:7788)
+set -u
+
+TOKEN_FILE="${HOME}/.config/mtapi/token"
+BASE="http://127.0.0.1:7788"
+
+if [ ! -f "$TOKEN_FILE" ]; then
+    echo "mtapi: no token at $TOKEN_FILE" >&2
+    echo "  rish -c 'cat /sdcard/Android/data/dev.mtapi/files/token.txt' > ~/.config/mtapi/token" >&2
+    exit 1
+fi
+TOKEN=$(cat "$TOKEN_FILE")
+[ -z "$TOKEN" ] && { echo "mtapi: empty token" >&2; exit 1; }
+
+cmd="${1:-}"; shift || true
+
+pp() { if command -v jq >/dev/null 2>&1; then jq . 2>/dev/null || cat; else cat; fi; }
+
+url() {
+    local path="$1"; local sep="?"
+    [[ "$path" == *"?"* ]] && sep="&"
+    echo "${BASE}${path}${sep}token=${TOKEN}"
+}
+get() { curl -s -m 10 -H "Authorization: Bearer $TOKEN" "$(url "$1")" | pp; }
+
+case "$cmd" in
+    ""|help)
+        cat <<EOF
+mtapi — HTTP client for Android mtapi app
+
+Basic:    ping battery wifi device location
+          clipboard [get] | clipboard set <t>
+          toast <t> | notify <title> <body> | vibrate <ms>
+          torch on|off | torch <0-100>
+          tts <text> | share <t> <x>
+
+Data:     contacts [N] | calllog [N] | sms list [N]
+          sms send <num> <text>
+
+System:   system cpu thermal memory storage kernel
+          network wifi+ bt telephony
+          display bright color audio microphone features
+          sensors | sensors/read <name> [ms]
+          camera/list | camera/snapshot
+          microphone/record [sec]
+          battery/detailed | location/detailed | locale
+EOF
+        ;;
+    ping|battery|wifi|device|location|system|storage|network|telephony)
+        get "/$cmd" ;;
+    locale|kernel|thermal|memory|features|audio|display)
+        get "/$cmd" ;;
+    cpu)    get "/cpu/detail" ;;
+    bright) get "/display/brightness" ;;
+    color)  get "/display/color" ;;
+    wifi+)  get "/wifi/detailed" ;;
+    bt)     get "/bluetooth" ;;
+    sensors) get "/sensors" ;;
+    sensors/read)
+        name="${1:-accelerometer}"; ms="${2:-500}"
+        get "/sensors/read?name=${name}&ms=${ms}" ;;
+    contacts) n="${1:-20}"; get "/contacts?limit=${n}" ;;
+    calllog)  n="${1:-20}"; get "/calllog?limit=${n}" ;;
+    sms)
+        op="${1:-list}"
+        if [ "$op" = "send" ]; then
+            to="$2"; txt="$3"
+            to_e=$(printf %s "$to" | jq -sRr @uri 2>/dev/null || echo "$to")
+            txt_e=$(printf %s "$txt" | jq -sRr @uri 2>/dev/null || echo "$txt")
+            get "/sms?op=send&to=${to_e}&text=${txt_e}"
+        else
+            n="${2:-20}"; get "/sms?limit=${n}"
+        fi ;;
+    clipboard)
+        op="${1:-get}"
+        if [ "$op" = "set" ]; then
+            txt="${2:-}"
+            txt_e=$(printf %s "$txt" | jq -sRr @uri 2>/dev/null || echo "$txt")
+            get "/clipboard?op=set&text=${txt_e}"
+        else get "/clipboard"; fi ;;
+    toast)
+        txt="${*:-hi}"
+        txt_e=$(printf %s "$txt" | jq -sRr @uri 2>/dev/null || echo "$txt")
+        get "/toast?text=${txt_e}" ;;
+    notify)  get "/notify?title=${1:-Hi}&body=${2:-There}" ;;
+    vibrate) get "/vibrate?ms=${1:-200}" ;;
+    torch)
+        case "${1:-on}" in
+            on)  get "/torch?on=1" ;;
+            off) get "/torch?on=0" ;;
+            *)   get "/torch/brightness?level=${1}" ;;
+        esac ;;
+    tts)
+        txt="${*:-hello}"
+        txt_e=$(printf %s "$txt" | jq -sRr @uri 2>/dev/null || echo "$txt")
+        get "/tts?text=${txt_e}" ;;
+    share) get "/share?title=${1:-Hi}&text=${2:-There}" ;;
+    camera/list) get "/camera/list" ;;
+    camera/snapshot) get "/camera/snapshot" ;;
+    microphone) get "/microphone" ;;
+    microphone/record) get "/microphone/record?seconds=${1:-5}" ;;
+    battery/detailed) get "/battery/detailed" ;;
+    location/detailed) get "/location/detailed" ;;
+    *) echo "mtapi: unknown '$cmd' — try 'mtapi help'" >&2; exit 1 ;;
+esac
