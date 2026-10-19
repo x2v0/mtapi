@@ -61,12 +61,6 @@ vet: tmp
 	cd gocore && $(GO) vet ./...
 	cd client && $(GO) vet ./...
 
-install:
-	@if [ ! -f android/app/build/outputs/apk/debug/app-debug.apk ]; then \
-		echo "APK not built — run make apk first"; exit 1; fi
-	adb install -r android/app/build/outputs/apk/debug/app-debug.apk
-	adb shell am start -n dev.mtapi/.MainActivity
-
 boot-test: tmp
 	bash scripts/test_boot.sh
 
@@ -91,3 +85,15 @@ setup-w2a:
 
 apk-wta:
 	cd ~/w2a && go run ./cmd/wta build -c ~/mtapi/mtapi.yaml
+
+install: apk-wta
+	@echo "staging APK -> /sdcard/Download/mtapi-debug.apk"
+	@cp -f android/app/build/outputs/apk/mtapi-debug.apk /sdcard/Download/ 2>/dev/null || \
+	 cp -f android/app/build/outputs/apk/mtapi-debug.apk ~/storage/downloads/
+	@echo "opening Android installer via termux-open..."
+	@termux-open /sdcard/Download/mtapi-debug.apk 2>/dev/null || \
+	 termux-open ~/storage/downloads/mtapi-debug.apk
+	@echo "→ tap INSTALL in the system dialog"
+	@echo "→ then open mtapi, copy token, run:"
+	@echo "    echo \"<token>\" > ~/.config/mtapi/token"
+	@echo "    ./client/dist/mtapi-native ping"
