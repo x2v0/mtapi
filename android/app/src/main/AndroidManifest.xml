@@ -3,6 +3,7 @@
 
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CAMERA"/>
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE"/>
@@ -37,7 +38,7 @@
         <service
             android:name=".ApiService"
             android:exported="false"
-            android:foregroundServiceType="dataSync"/>
+            android:foregroundServiceType="dataSync|camera"/>
 
         <!-- exported=true so adb shell and any test app can send dev.mtapi.TEST_BOOT.
              Production-safe: the only side effect is starting ApiService, which is idempotent. -->

@@ -30,7 +30,7 @@ func (m *mockAPI) DeviceInfo() (string, error)      { return `{"model":"x"}`, ni
 func (m *mockAPI) LocationLast() (string, error)    { return `{"lat":1,"lon":2}`, nil }
 func (m *mockAPI) TTS(s string) error               { return nil }
 func (m *mockAPI) Share(t, x string) error          { return nil }
-func (m *mockAPI) CameraPhoto(p string) error       { return errors.New("unsupported") }
+func (m *mockAPI) CameraPhoto(p string) (string, error) { return p, nil }
 func (m *mockAPI) ContactsList(limit int32) (string, error) {
 	return `[{"name":"Alice","phone":"+100"},{"name":"Bob","phone":"+200"}]`, nil
 }
@@ -188,5 +188,16 @@ func TestDispatch_SmsSend(t *testing.T) {
 	r := dispatch(mkReq(t, "sms", map[string]string{"op": "send", "to": "+100", "text": "yo"}))
 	if !r.OK {
 		t.Fatalf("not ok: %q", r.Error)
+	}
+}
+
+func TestDispatch_Camera(t *testing.T) {
+	setup(t)
+	r := dispatch(mkReq(t, "camera", map[string]string{"path": "/tmp/x.jpg"}))
+	if !r.OK {
+		t.Fatalf("not ok: %q", r.Error)
+	}
+	if !strings.Contains(string(r.Data), "/tmp/x.jpg") {
+		t.Fatalf("data: %s", r.Data)
 	}
 }

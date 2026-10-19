@@ -24,7 +24,7 @@ type AndroidAPI interface {
 	LocationLast() (string, error)
 	TTS(text string) error
 	Share(title, text string) error
-	CameraPhoto(path string) error
+	CameraPhoto(path string) (string, error)
 	ContactsList(limit int32) (string, error)
 	CallLogList(limit int32) (string, error)
 	SmsList(limit int32) (string, error)
@@ -212,7 +212,8 @@ func dispatch(req *request) response {
 	case "camera":
 		var p struct{ Path string }
 		get(&p)
-		return done(a.CameraPhoto(p.Path))
+		s, err := a.CameraPhoto(p.Path)
+		return ok(s, err)
 	case "contacts":
 		var p struct{ Limit int32 }
 		get(&p)

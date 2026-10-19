@@ -11,6 +11,7 @@ import android.location.LocationManager
 import android.net.wifi.WifiManager
 import android.os.BatteryManager
 import android.os.Build
+import android.os.Handler
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.provider.CallLog
@@ -18,11 +19,21 @@ import android.provider.ContactsContract
 import android.provider.Telephony
 import android.speech.tts.TextToSpeech
 import android.telephony.SmsManager
+import androidx.camera.core.CameraSelector
+import androidx.camera.core.ImageCapture
+import androidx.camera.core.ImageCaptureException
+import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.LifecycleOwner
 import go.mobile.mobile.AndroidAPI
 import org.json.JSONArray
 import org.json.JSONObject
+import java.io.File
 import java.util.Locale
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicReference
 
 class AndroidApiImpl(private val ctx: Context) : AndroidAPI {
 
@@ -64,7 +75,7 @@ class AndroidApiImpl(private val ctx: Context) : AndroidAPI {
     }
 
     override fun toast(text: String) {
-        android.os.Handler(ctx.mainLooper).post {
+        Handler(ctx.mainLooper).post {
             android.widget.Toast.makeText(ctx, text, android.widget.Toast.LENGTH_SHORT).show()
         }
     }
@@ -137,7 +148,7 @@ class AndroidApiImpl(private val ctx: Context) : AndroidAPI {
     }
 
     override fun tts(text: String) {
-        val latch = java.util.concurrent.CountDownLatch(1)
+        val latch = CountDownLatch(1)
         var t: TextToSpeech? = null
         t = TextToSpeech(ctx) { status ->
             if (status == TextToSpeech.SUCCESS) {
@@ -146,7 +157,7 @@ class AndroidApiImpl(private val ctx: Context) : AndroidAPI {
             }
             latch.countDown()
         }
-        if (!latch.await(5, java.util.concurrent.TimeUnit.SECONDS)) {
+        if (!latch.await(5, TimeUnit.SECONDS)) {
             throw RuntimeException("tts_init_timeout")
         }
     }
@@ -161,11 +172,88 @@ class AndroidApiImpl(private val ctx: Context) : AndroidAPI {
         ctx.startActivity(Intent.createChooser(i, title).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
     }
 
-    override fun cameraPhoto(path: String) {
-        throw RuntimeException("camera_not_implemented")
+    // ── CameraX ────────────────────────────────────────────
+    override fun cameraPhoto(path: String): String {
+        need(Manifest.permission.CAMERA)
+
+        val file: File = if (path.isBlank() || !path.startsWith("/")) {
+            val dir = File(ctx.filesDir, "photos").apply { mkdirs() }
+            File(dir, "img_${System.currentTimeMillis()}.jpg")
+        } else {
+            File(path).also { it.parentFile?.mkdirs() }
+        }
+
+        val owner = ctx as? LifecycleOwner
+            ?: throw RuntimeException("camera_no_lifecycle")
+
+        val latch = CountDownLatch(1)
+        val errRef = AtomicReference<Throwable?>(null)
+        val executor = Executors.newSingleThreadExecutor()
+
+        executor.execute {
+            try {
+                val provider = ProcessCameraProvider
+                    .getInstance(ctx)
+                    .get(10, TimeUnit.SECONDS)
+
+                val imageCapture = ImageCapture.Builder()
+                    .setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
+                    .build()
+
+                val outputOpts = ImageCapture.OutputFileOptions.Builder(file).build()
+
+                val bindLatch = CountDownLatch(1)
+                Handler(ctx.mainLooper).post {
+                    try {
+                        provider.unbindAll()
+                        provider.bindToLifecycle(
+                            owner,
+                            CameraSelector.DEFAULT_BACK_CAMERA,
+                            imageCapture,
+                        )
+                    } catch (t: Throwable) {
+                        errRef.set(t)
+                    } finally {
+                        bindLatch.countDown()
+                    }
+                }
+                bindLatch.await(10, TimeUnit.SECONDS)
+                if (errRef.get() != null) throw errRef.get()!!
+
+                imageCapture.takePicture(
+                    outputOpts,
+                    executor,
+                    object : ImageCapture.OnImageSavedCallback {
+                        override fun onImageSaved(o: ImageCapture.OutputFileResults) {
+                            latch.countDown()
+                        }
+                        override fun onError(e: ImageCaptureException) {
+                            errRef.set(e)
+                            latch.countDown()
+                        }
+                    },
+                )
+            } catch (t: Throwable) {
+                errRef.set(t)
+                latch.countDown()
+            }
+        }
+
+        try {
+            if (!latch.await(30, TimeUnit.SECONDS)) {
+                throw RuntimeException("camera_timeout")
+            }
+            val err = errRef.get()
+            if (err != null) {
+                throw RuntimeException("camera_failed: ${err.message}")
+            }
+            return file.absolutePath
+        } finally {
+            executor.shutdown()
+        }
     }
 
-    // ── 10b: contacts / calllog / sms ───────────────────────
+    // ── contacts / calllog / sms ───────────────────────────
 
     override fun contactsList(limit: Int): String {
         need(Manifest.permission.READ_CONTACTS)
