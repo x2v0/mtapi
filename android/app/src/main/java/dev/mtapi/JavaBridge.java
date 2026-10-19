@@ -195,6 +195,18 @@ public final class JavaBridge {
                     p.optString("host", "8.8.8.8"), p.optInt("count", 4));
             case "netDns": return api.netDns(p.optString("host", ""));
             case "netFetch": return api.netFetch(p.optString("url", ""));
+            case "calendarEvents": return api.calendarEvents(p.optInt("days", 7));
+            case "alarmNext": return api.alarmNext();
+            case "filesSave": return api.filesSave(
+                    p.optString("name", ""), p.optString("data", ""));
+            case "audioPlay": return api.audioPlay(p.optString("uri", ""));
+            case "audioPlayStop": return api.audioPlayStop();
+            case "ttsVoices": return api.ttsVoices();
+            case "ttsStop": return api.ttsStop();
+            case "clipboardWatchStart": return api.clipboardWatchStart(p.optInt("hz", 2));
+            case "clipboardWatchStop": return api.clipboardWatchStop();
+            case "locationWatchStart": return api.locationWatchStart(p.optInt("hz", 1));
+            case "locationWatchStop": return api.locationWatchStop();
             default:
                 throw new RuntimeException("unknown bridge method: " + method);
         }

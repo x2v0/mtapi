@@ -69,4 +69,17 @@ public interface AndroidAPI {
     String netDns(String host) throws Exception;
     String netFetch(String url) throws Exception;
 
+    // Patch 45: v1.2.0 universal
+    String calendarEvents(int days) throws Exception;
+    String alarmNext() throws Exception;
+    String filesSave(String name, String data) throws Exception;
+    String audioPlay(String uri) throws Exception;
+    String audioPlayStop() throws Exception;
+    String ttsVoices() throws Exception;
+    String ttsStop() throws Exception;
+    String clipboardWatchStart(int hz) throws Exception;
+    String clipboardWatchStop() throws Exception;
+    String locationWatchStart(int hz) throws Exception;
+    String locationWatchStop() throws Exception;
+
 }

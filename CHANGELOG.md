@@ -1,4 +1,29 @@
-# Changelog
+## [1.3.0] — 2026-10-19
+
+Web UI dashboard on `/` — click any endpoint → fetch → table.
+
+### Added
+- `index.html` embedded via `//go:embed` in `index.go`
+- `/` serves SPA dashboard:
+  - grouped endpoint list (11 groups, 50+ endpoints)
+  - search/filter
+  - click → live fetch → table rendering
+  - `{ }` toggle for raw JSON
+  - per-request timing (ms)
+  - auto-runs `/ping` on load
+  - error highlighting (permission_required, timeouts)
+  - copy-token button
+- `http.go`: `handleIndex` uses `strings.ReplaceAll(indexHTML, "{{TOKEN}}", s.token)`
+
+### Changed
+- Previously `/` was static HTML list; now fully interactive
+
+### Rendering rules
+- object → key-value table
+- array of objects → table with all keys as columns
+- array of scalars → single-column table
+- null / empty → grey `(empty)` hint
+- nested object → shown as compact `{"k":"v"}`, expandable via `{ }`
 
 ## [1.1.0] — 2026-10-19
 

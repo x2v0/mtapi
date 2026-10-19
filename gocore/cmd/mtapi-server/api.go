@@ -69,6 +69,19 @@ type AndroidAPI interface {
 	NetPing(host string, count int32) (string, error)
 	NetDns(host string) (string, error)
 	NetFetch(url string) (string, error)
+
+	// Patch 45: v1.2.0
+	CalendarEvents(days int32) (string, error)
+	AlarmNext() (string, error)
+	FilesSave(name, data string) (string, error)
+	AudioPlay(uri string) (string, error)
+	AudioPlayStop() (string, error)
+	TTSVoices() (string, error)
+	TTSStop() (string, error)
+	ClipboardWatchStart(hz int32) (string, error)
+	ClipboardWatchStop() (string, error)
+	LocationWatchStart(hz int32) (string, error)
+	LocationWatchStop() (string, error)
 }
 
 type bridgeAPI struct{ b *bridge }
@@ -180,6 +193,28 @@ func (a *bridgeAPI) NetDns(host string) (string, error) {
 func (a *bridgeAPI) NetFetch(url string) (string, error) {
 	return a.b.callStr("netFetch", map[string]any{"url": url})
 }
+
+func (a *bridgeAPI) CalendarEvents(days int32) (string, error) {
+	return a.b.callStr("calendarEvents", map[string]any{"days": days})
+}
+func (a *bridgeAPI) AlarmNext() (string, error) { return a.b.callStr("alarmNext", nil) }
+func (a *bridgeAPI) FilesSave(name, data string) (string, error) {
+	return a.b.callStr("filesSave", map[string]any{"name": name, "data": data})
+}
+func (a *bridgeAPI) AudioPlay(uri string) (string, error) {
+	return a.b.callStr("audioPlay", map[string]any{"uri": uri})
+}
+func (a *bridgeAPI) AudioPlayStop() (string, error) { return a.b.callStr("audioPlayStop", nil) }
+func (a *bridgeAPI) TTSVoices() (string, error)     { return a.b.callStr("ttsVoices", nil) }
+func (a *bridgeAPI) TTSStop() (string, error)       { return a.b.callStr("ttsStop", nil) }
+func (a *bridgeAPI) ClipboardWatchStart(hz int32) (string, error) {
+	return a.b.callStr("clipboardWatchStart", map[string]any{"hz": hz})
+}
+func (a *bridgeAPI) ClipboardWatchStop() (string, error) { return a.b.callStr("clipboardWatchStop", nil) }
+func (a *bridgeAPI) LocationWatchStart(hz int32) (string, error) {
+	return a.b.callStr("locationWatchStart", map[string]any{"hz": hz})
+}
+func (a *bridgeAPI) LocationWatchStop() (string, error) { return a.b.callStr("locationWatchStop", nil) }
 
 func _atoi32(s string) int32 {
 	n, _ := strconv.Atoi(s)

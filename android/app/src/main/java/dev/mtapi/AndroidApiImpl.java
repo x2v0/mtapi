@@ -78,10 +78,25 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
+import android.provider.AlarmClock;
+import android.provider.CalendarContract;
+import android.provider.MediaStore;
+import android.content.ContentValues;
+import android.media.MediaPlayer;
+import android.location.LocationListener;
+import android.location.Location;
+import android.speech.tts.Voice;
+import java.io.OutputStream;
+import java.util.Set;
+
 public class AndroidApiImpl implements AndroidAPI {
 
     private final Context ctx;
     private static final java.util.Map<String, SensorEventListener> sseRegistry = new ConcurrentHashMap<>();
+    private static volatile Thread clipWatchThread = null;
+    private static volatile Thread locWatchThread = null;
+    private static volatile android.media.MediaPlayer player = null;
+    private static volatile android.speech.tts.TextToSpeech cachedTts = null;
 
     public AndroidApiImpl(Context ctx) {
         this.ctx = ctx;
@@ -1615,6 +1630,307 @@ public class AndroidApiImpl implements AndroidAPI {
             case 6: return AudioManager.STREAM_VOICE_CALL;
             default: return s;
         }
+    }
+
+    // ── Patch 45: v1.2.0 universal ────────────────────────
+
+    @Override
+    public String calendarEvents(int days) throws Exception {
+        need(Manifest.permission.READ_CALENDAR);
+        if (days <= 0) days = 7;
+        if (days > 365) days = 365;
+        long now = System.currentTimeMillis();
+        long end = now + (long) days * 24L * 3600L * 1000L;
+
+        String[] proj = {
+            CalendarContract.Events._ID,
+            CalendarContract.Events.TITLE,
+            CalendarContract.Events.DTSTART,
+            CalendarContract.Events.DTEND,
+            CalendarContract.Events.ALL_DAY,
+            CalendarContract.Events.EVENT_LOCATION,
+            CalendarContract.Events.CALENDAR_ID,
+        };
+        String sel = CalendarContract.Events.DTSTART + ">=? AND " +
+                     CalendarContract.Events.DTSTART + "<=?";
+        String[] args = { String.valueOf(now), String.valueOf(end) };
+
+        JSONArray arr = new JSONArray();
+        try (android.database.Cursor c = ctx.getContentResolver().query(
+                CalendarContract.Events.CONTENT_URI, proj, sel, args,
+                CalendarContract.Events.DTSTART + " ASC")) {
+            if (c != null) {
+                while (c.moveToNext()) {
+                    try {
+                        JSONObject o = new JSONObject();
+                        o.put("id", c.getLong(0));
+                        o.put("title", c.getString(1));
+                        o.put("start_ms", c.getLong(2));
+                        o.put("end_ms", c.isNull(3) ? 0 : c.getLong(3));
+                        o.put("all_day", c.getInt(4) == 1);
+                        o.put("location", c.isNull(5) ? "" : c.getString(5));
+                        o.put("calendar_id", c.getLong(6));
+                        arr.put(o);
+                    } catch (Throwable ignored) {}
+                }
+            }
+        }
+        return arr.toString();
+    }
+
+    @Override
+    public String alarmNext() throws Exception {
+        JSONObject o = new JSONObject();
+        try {
+            android.app.AlarmManager am =
+                    (android.app.AlarmManager) ctx.getSystemService(Context.ALARM_SERVICE);
+            if (am != null) {
+                android.app.AlarmManager.AlarmClockInfo info = am.getNextAlarmClock();
+                if (info != null) {
+                    o.put("trigger_ms", info.getTriggerTime());
+                    android.app.PendingIntent pi = info.getShowIntent();
+                    if (pi != null) o.put("hasShowIntent", true);
+                }
+            }
+        } catch (Throwable ignored) {}
+
+        try {
+            String s = android.provider.Settings.System.getString(
+                    ctx.getContentResolver(),
+                    android.provider.Settings.System.NEXT_ALARM_FORMATTED);
+            if (s != null && !s.isEmpty()) o.put("formatted", s);
+        } catch (Throwable ignored) {}
+
+        return o.toString();
+    }
+
+    @Override
+    public String filesSave(String name, String data) throws Exception {
+        if (name == null || name.isEmpty()) name = "mtapi.txt";
+        byte[] bytes = data == null ? new byte[0] : data.getBytes("UTF-8");
+
+        if (Build.VERSION.SDK_INT >= 29) {
+            ContentValues cv = new ContentValues();
+            cv.put(MediaStore.MediaColumns.DISPLAY_NAME, name);
+            cv.put(MediaStore.MediaColumns.MIME_TYPE, "text/plain");
+            cv.put(MediaStore.MediaColumns.RELATIVE_PATH,
+                    android.os.Environment.DIRECTORY_DOWNLOADS);
+            android.net.Uri uri = ctx.getContentResolver().insert(
+                    MediaStore.Downloads.EXTERNAL_CONTENT_URI, cv);
+            if (uri == null) throw new RuntimeException("insert_failed");
+            try (OutputStream os = ctx.getContentResolver().openOutputStream(uri)) {
+                if (os == null) throw new RuntimeException("open_failed");
+                os.write(bytes);
+            }
+            return new JSONObject()
+                    .put("path", "/sdcard/Download/" + name)
+                    .put("bytes", bytes.length)
+                    .toString();
+        } else {
+            java.io.File d = new java.io.File("/sdcard/Download");
+            if (!d.exists()) d.mkdirs();
+            java.io.File f = new java.io.File(d, name);
+            try (java.io.FileOutputStream fos = new java.io.FileOutputStream(f)) {
+                fos.write(bytes);
+            }
+            return new JSONObject()
+                    .put("path", f.getAbsolutePath())
+                    .put("bytes", bytes.length)
+                    .toString();
+        }
+    }
+
+    @Override
+    public String audioPlay(String uri) throws Exception {
+        if (uri == null || uri.isEmpty()) throw new RuntimeException("uri_required");
+        synchronized (this) {
+            if (player != null) {
+                try { player.release(); } catch (Throwable ignored) {}
+                player = null;
+            }
+            final MediaPlayer mp = new MediaPlayer();
+            mp.setAudioAttributes(new android.media.AudioAttributes.Builder()
+                    .setUsage(android.media.AudioAttributes.USAGE_MEDIA)
+                    .setContentType(android.media.AudioAttributes.CONTENT_TYPE_MUSIC)
+                    .build());
+            if (uri.startsWith("http://") || uri.startsWith("https://")) {
+                mp.setDataSource(uri);
+            } else if (uri.startsWith("/")) {
+                mp.setDataSource(uri);
+            } else if (uri.startsWith("content://")) {
+                mp.setDataSource(ctx, android.net.Uri.parse(uri));
+            } else {
+                throw new RuntimeException("bad_uri: need http(s)://, content://, or /path");
+            }
+            mp.setOnCompletionListener(m -> {
+                try { m.release(); } catch (Throwable ignored) {}
+                synchronized (AndroidApiImpl.this) { if (player == m) player = null; }
+            });
+            mp.prepare();
+            mp.start();
+            player = mp;
+            return new JSONObject()
+                    .put("playing", true)
+                    .put("uri", uri)
+                    .put("duration_ms", mp.getDuration())
+                    .toString();
+        }
+    }
+
+    @Override
+    public String audioPlayStop() throws Exception {
+        synchronized (this) {
+            if (player != null) {
+                try { player.stop(); } catch (Throwable ignored) {}
+                try { player.release(); } catch (Throwable ignored) {}
+                player = null;
+                return "stopped";
+            }
+            return "not_playing";
+        }
+    }
+
+    @Override
+    public String ttsVoices() throws Exception {
+        final java.util.concurrent.CountDownLatch latch = new java.util.concurrent.CountDownLatch(1);
+        final TextToSpeech[] ref = new TextToSpeech[1];
+        final JSONArray out = new JSONArray();
+
+        ref[0] = new TextToSpeech(ctx, status -> {
+            if (status == TextToSpeech.SUCCESS) {
+                try {
+                    Set<Voice> voices = ref[0].getVoices();
+                    if (voices != null) {
+                        for (Voice v : voices) {
+                            JSONObject o = new JSONObject();
+                            o.put("name", v.getName());
+                            o.put("locale", v.getLocale().toString());
+                            o.put("quality", v.getQuality());
+                            o.put("latency", v.getLatency());
+                            o.put("network", v.isNetworkConnectionRequired());
+                            out.put(o);
+                        }
+                    }
+                } catch (Throwable ignored) {}
+            }
+            latch.countDown();
+        });
+        if (!latch.await(5, java.util.concurrent.TimeUnit.SECONDS)) {
+            throw new RuntimeException("tts_init_timeout");
+        }
+        try { ref[0].shutdown(); } catch (Throwable ignored) {}
+        return out.toString();
+    }
+
+    @Override
+    public String ttsStop() throws Exception {
+        if (cachedTts != null) {
+            try { cachedTts.stop(); } catch (Throwable ignored) {}
+        }
+        return "ok";
+    }
+
+    @Override
+    public String clipboardWatchStart(int hz) throws Exception {
+        if (clipWatchThread != null && clipWatchThread.isAlive()) return "already_watching";
+        if (hz <= 0) hz = 2;
+        if (hz > 20) hz = 20;
+        final int delay = 1000 / hz;
+        final String[] last = { null };
+        final android.content.ClipboardManager cm =
+                (android.content.ClipboardManager) ctx.getSystemService(Context.CLIPBOARD_SERVICE);
+        if (cm == null) throw new RuntimeException("no_clipboard");
+        if (cm.getPrimaryClip() != null && cm.getPrimaryClip().getItemCount() > 0) {
+            CharSequence t = cm.getPrimaryClip().getItemAt(0).coerceToText(ctx);
+            if (t != null) last[0] = t.toString();
+        }
+
+        clipWatchThread = new Thread(() -> {
+            while (!Thread.currentThread().isInterrupted()) {
+                try {
+                    Thread.sleep(delay);
+                    if (cm.getPrimaryClip() == null || cm.getPrimaryClip().getItemCount() == 0) continue;
+                    CharSequence t = cm.getPrimaryClip().getItemAt(0).coerceToText(ctx);
+                    if (t == null) continue;
+                    String s = t.toString();
+                    if (last[0] == null || !last[0].equals(s)) {
+                        last[0] = s;
+                        JSONObject ev = new JSONObject();
+                        ev.put("ts_ms", System.currentTimeMillis());
+                        ev.put("text", s);
+                        android.util.Log.i("mtapi-clip", ev.toString());
+                    }
+                } catch (InterruptedException ie) {
+                    return;
+                } catch (Throwable ignored) {}
+            }
+        }, "mtapi-clipwatch");
+        clipWatchThread.start();
+        return new JSONObject().put("watching", true).put("hz", hz).toString();
+    }
+
+    @Override
+    public String clipboardWatchStop() throws Exception {
+        if (clipWatchThread != null) {
+            clipWatchThread.interrupt();
+            clipWatchThread = null;
+            return "stopped";
+        }
+        return "not_watching";
+    }
+
+    @Override
+    public String locationWatchStart(int hz) throws Exception {
+        need(Manifest.permission.ACCESS_FINE_LOCATION);
+        if (locWatchThread != null && locWatchThread.isAlive()) return "already_watching";
+        if (hz <= 0) hz = 1;
+        if (hz > 10) hz = 10;
+        final long minMs = 1000L / hz;
+        final LocationManager lm =
+                (LocationManager) ctx.getSystemService(Context.LOCATION_SERVICE);
+        if (lm == null) throw new RuntimeException("no_location_manager");
+
+        locWatchThread = new Thread(() -> {
+            final LocationListener listener = new LocationListener() {
+                @Override public void onLocationChanged(Location l) {
+                    try {
+                        JSONObject ev = new JSONObject();
+                        ev.put("lat", l.getLatitude());
+                        ev.put("lon", l.getLongitude());
+                        ev.put("alt", l.getAltitude());
+                        ev.put("acc", l.getAccuracy());
+                        ev.put("provider", l.getProvider());
+                        ev.put("ts_ms", l.getTime());
+                        android.util.Log.i("mtapi-loc", ev.toString());
+                    } catch (Throwable ignored) {}
+                }
+                @Override public void onStatusChanged(String p, int s, android.os.Bundle b) {}
+                @Override public void onProviderEnabled(String p) {}
+                @Override public void onProviderDisabled(String p) {}
+            };
+            try {
+                android.os.Looper.prepare();
+                if (lm.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
+                    lm.requestLocationUpdates(LocationManager.GPS_PROVIDER, minMs, 0f, listener);
+                }
+                if (lm.isProviderEnabled(LocationManager.NETWORK_PROVIDER)) {
+                    lm.requestLocationUpdates(LocationManager.NETWORK_PROVIDER, minMs, 0f, listener);
+                }
+                android.os.Looper.loop();
+            } catch (Throwable ignored) {}
+        }, "mtapi-locwatch");
+        locWatchThread.start();
+        return new JSONObject().put("watching", true).put("hz", hz).toString();
+    }
+
+    @Override
+    public String locationWatchStop() throws Exception {
+        if (locWatchThread != null) {
+            locWatchThread.interrupt();
+            locWatchThread = null;
+            return "stopped";
+        }
+        return "not_watching";
     }
 
 }

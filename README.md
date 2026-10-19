@@ -25,6 +25,27 @@ crashes with 4 upstream Go bugs (golang/go#81051, #82111, #82260, #82753):
 getauxval SIGSEGV, `_cgo_init` undefined, crosscall2 missing, tlsg uninitialized.
 Running Go as a **separate process** sidesteps all of them.
 
+## Web UI
+
+Open `http://127.0.0.1:7788/?token=<TOKEN>` in the phone's browser (or via
+`adb forward tcp:7788 tcp:7788` from a PC).
+
+Interactive dashboard:
+- **Search** — filter endpoints by name
+- **Click** `GET /endpoint` → fetches → renders result as a table
+- **`{ }`** — toggle raw JSON view
+- **Time** (`45ms`, `1.2s`) — response latency per request
+- **Copy** — token to clipboard
+- **Auto-runs** `/ping` on load
+
+Rendering:
+| Data shape | Display |
+|---|---|
+| object | key-value table |
+| array of objects | table (all keys as columns) |
+| array of scalars | single-column table |
+| null | grey `(empty)` |
+
 ## Quick start (Termux)
 
 mkdir -p ~/.config/mtapi

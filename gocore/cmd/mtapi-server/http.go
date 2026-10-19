@@ -360,6 +360,53 @@ func (s *apiServer) dispatch(w http.ResponseWriter, method string, p map[string]
 		data, err := s.api.NetFetch(strp(p, "url"))
 		if err != nil { s.fail(w, 500, err); return }
 		s.ok(w, data)
+	case "calendar":
+		days := intp(p, "days"); if days <= 0 { days = 7 }
+		data, err := s.api.CalendarEvents(days)
+		if err != nil { s.fail(w, 500, err); return }
+		s.ok(w, data)
+	case "alarm/next":
+		data, err := s.api.AlarmNext()
+		if err != nil { s.fail(w, 500, err); return }
+		s.ok(w, data)
+	case "files/save":
+		data, err := s.api.FilesSave(strp(p, "name"), strp(p, "data"))
+		if err != nil { s.fail(w, 500, err); return }
+		s.ok(w, data)
+	case "audio/play":
+		data, err := s.api.AudioPlay(strp(p, "uri"))
+		if err != nil { s.fail(w, 500, err); return }
+		s.ok(w, data)
+	case "audio/play/stop":
+		data, err := s.api.AudioPlayStop()
+		if err != nil { s.fail(w, 500, err); return }
+		s.ok(w, data)
+	case "tts/voices":
+		data, err := s.api.TTSVoices()
+		if err != nil { s.fail(w, 500, err); return }
+		s.ok(w, data)
+	case "tts/stop":
+		data, err := s.api.TTSStop()
+		if err != nil { s.fail(w, 500, err); return }
+		s.ok(w, data)
+	case "clipboard/watch":
+		hz := intp(p, "hz"); if hz <= 0 { hz = 2 }
+		data, err := s.api.ClipboardWatchStart(hz)
+		if err != nil { s.fail(w, 500, err); return }
+		s.ok(w, data)
+	case "clipboard/watch/stop":
+		data, err := s.api.ClipboardWatchStop()
+		if err != nil { s.fail(w, 500, err); return }
+		s.ok(w, data)
+	case "location/watch":
+		hz := intp(p, "hz"); if hz <= 0 { hz = 1 }
+		data, err := s.api.LocationWatchStart(hz)
+		if err != nil { s.fail(w, 500, err); return }
+		s.ok(w, data)
+	case "location/watch/stop":
+		data, err := s.api.LocationWatchStop()
+		if err != nil { s.fail(w, 500, err); return }
+		s.ok(w, data)
 	default:
 		s.writeJSON(w, 404, map[string]any{"ok": false, "error": "unknown method: " + method})
 	}
@@ -371,125 +418,7 @@ func (s *apiServer) handleIndex(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	fmt.Fprintf(w, `<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>mtapi</title>
-<style>
-  *{box-sizing:border-box}
-  html,body{margin:0;padding:0;height:100%}
-  body{
-    font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
-    font-size:14px;line-height:1.5;
-    background:#1e1e1e;color:#ddd;
-    -webkit-text-size-adjust:100%;
-    -webkit-overflow-scrolling:touch;
-    overflow-x:hidden;
-    overflow-y:auto;
-  }
-  .wrap{
-    max-width:720px;margin:0 auto;
-    padding:16px 16px calc(32px + env(safe-area-inset-bottom));
-    padding-top:calc(16px + env(safe-area-inset-top));
-  }
-  h1{font-size:20px;margin:8px 0 12px}
-  h3{font-size:15px;margin:20px 0 8px;color:#aaa;text-transform:uppercase;letter-spacing:.05em}
-  a{color:#4fc3f7;text-decoration:none;word-break:break-all}
-  a:active{opacity:.7}
-  code{
-    background:#2a2a2a;padding:2px 6px;border-radius:4px;
-    word-break:break-all;color:#ce9178;
-  }
-  ul{list-style:none;padding:0;margin:0}
-  li{padding:10px 12px;background:#252525;border-radius:6px;margin-bottom:8px;word-break:break-word}
-  li a{font-weight:600}
-  pre{
-    background:#252525;padding:12px;border-radius:6px;
-    overflow-x:auto;font-size:12px;margin:8px 0;
-    white-space:pre-wrap;word-break:break-all;
-  }
-  .token-box{
-    background:#2a2a2a;padding:12px;border-radius:6px;margin:8px 0;
-    word-break:break-all;font-size:12px;
-    -webkit-user-select:all;user-select:all;
-  }
-  .hint{color:#888;font-size:12px;margin-top:4px}
-</style>
-</head>
-<body>
-<div class="wrap">
-  <h1>mtapi server</h1>
-  <p class="hint">Token (tap to select):</p>
-  <div class="token-box">%s</div>
-
-  <h3>Health / Info</h3>
-  <ul>
-    <li><a href="/ping?token=%s">/ping</a> — health check</li>
-    <li><a href="/battery?token=%s">/battery</a> — battery status</li>
-    <li><a href="/wifi?token=%s">/wifi</a> — wifi info</li>
-    <li><a href="/device?token=%s">/device</a> — device info</li>
-    <li><a href="/location?token=%s">/location</a> — last location</li>
-  </ul>
-
-  <h3>Data</h3>
-  <ul>
-    <li><a href="/clipboard?token=%s">/clipboard</a> — GET; <code>/clipboard?op=set&amp;text=hello</code> — SET</li>
-    <li><a href="/contacts?limit=5&amp;token=%s">/contacts?limit=5</a> — contacts</li>
-    <li><a href="/calllog?limit=5&amp;token=%s">/calllog?limit=5</a> — recent calls</li>
-    <li><a href="/sms?limit=5&amp;token=%s">/sms?limit=5</a> — SMS list; <code>/sms?op=send&amp;to=%2B100&amp;text=yo</code> — SEND</li>
-  </ul>
-
-  <h3>System info</h3>
-  <ul>
-    <li><a href="/system?token=%s">/system</a> — CPU/RAM/build</li>
-    <li><a href="/cpu/detail?token=%s">/cpu/detail</a> — per-core freq</li>
-    <li><a href="/thermal?token=%s">/thermal</a> — thermal zones</li>
-    <li><a href="/memory?token=%s">/memory</a> — meminfo</li>
-    <li><a href="/storage?token=%s">/storage</a></li>
-    <li><a href="/kernel?token=%s">/kernel</a></li>
-    <li><a href="/sensors?token=%s">/sensors</a> — all sensors</li>
-    <li><a href="/network?token=%s">/network</a></li>
-    <li><a href="/wifi/detailed?token=%s">/wifi/detailed</a></li>
-    <li><a href="/bluetooth?token=%s">/bluetooth</a></li>
-    <li><a href="/telephony?token=%s">/telephony</a></li>
-    <li><a href="/display?token=%s">/display</a></li>
-    <li><a href="/display/brightness?token=%s">/display/brightness</a></li>
-    <li><a href="/display/color?token=%s">/display/color</a></li>
-    <li><a href="/audio?token=%s">/audio</a></li>
-    <li><a href="/microphone?token=%s">/microphone</a></li>
-    <li><a href="/features?token=%s">/features</a></li>
-    <li><a href="/camera/list?token=%s">/camera/list</a></li>
-    <li><a href="/battery/detailed?token=%s">/battery/detailed</a></li>
-    <li><a href="/location/detailed?token=%s">/location/detailed</a></li>
-    <li><a href="/locale?token=%s">/locale</a></li>
-  </ul>
-
-  <h3>Actions</h3>
-  <ul>
-    <li><a href="/toast?text=hi&amp;token=%s">/toast</a></li>
-    <li><a href="/notify?title=Hi&amp;body=World&amp;token=%s">/notify</a></li>
-    <li><a href="/vibrate?ms=200&amp;token=%s">/vibrate</a></li>
-    <li><a href="/torch?on=1&amp;token=%s">/torch</a> on/off</li>
-    <li><a href="/torch/brightness?level=50&amp;token=%s">/torch/brightness?level=50</a></li>
-    <li><a href="/tts?text=hello&amp;token=%s">/tts</a></li>
-  </ul>
-
-  <h3>Hardware (slow — few seconds)</h3>
-  <ul>
-    <li><a href="/camera/snapshot?token=%s">/camera/snapshot</a> — takes photo</li>
-    <li><a href="/microphone/record?seconds=3&amp;token=%s">/microphone/record?seconds=3</a> — records 3s</li>
-    <li><a href="/sensors/read?name=accelerometer&amp;ms=500&amp;token=%s">/sensors/read?name=accelerometer&amp;ms=500</a></li>
-  </ul>
-
-  <h3>POST /call (JSON-RPC)</h3>
-  <pre>curl -X POST http://127.0.0.1:7788/call \
-  -H "Authorization: Bearer %s" \
-  -d '{"method":"battery"}'</pre>
-</div>
-</body>
-</html>`, s.token, s.token, s.token, s.token, s.token, s.token, s.token, s.token, s.token, s.token, s.token, s.token, s.token, s.token, s.token, s.token, s.token, s.token, s.token, s.token, s.token, s.token, s.token, s.token, s.token, s.token, s.token, s.token, s.token, s.token, s.token, s.token, s.token, s.token, s.token, s.token, s.token, s.token, s.token, s.token, s.token)
+	fmt.Fprint(w, strings.ReplaceAll(indexHTML, "{{TOKEN}}", s.token))
 }
 
 func startHTTP(api AndroidAPI, token string) error {
@@ -515,7 +444,12 @@ func startHTTP(api AndroidAPI, token string) error {
 		"sensors/stream", "sensors/stream/stop",
 		"audio/volume", "audio/ringer",
 		"wifi/scan", "app/list", "app/launch",
-		"net/ping", "net/dns", "net/fetch"}
+		"net/ping", "net/dns", "net/fetch",
+		// patch 45
+		"calendar", "alarm/next", "files/save",
+		"audio/play", "audio/play/stop", "tts/voices", "tts/stop",
+		"clipboard/watch", "clipboard/watch/stop",
+		"location/watch", "location/watch/stop"}
 	for _, m := range methods {
 		m := m
 		mux.HandleFunc("/"+m, s.handleMethod(m, func(w http.ResponseWriter, p map[string]any) {
