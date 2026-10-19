@@ -180,7 +180,7 @@ func (s *apiServer) dispatch(w http.ResponseWriter, method string, p map[string]
 	case "camera":
 		data, err := s.api.CameraPhoto(strp(p, "path"))
 		if err != nil { s.fail(w, 500, err); return }
-		s.writeJSON(w, 200, map[string]any{"ok": true, "data": data})
+		s.ok(w, data)
 	case "contacts":
 		lim := intp(p, "limit")
 		if lim <= 0 { lim = 20 }
@@ -296,15 +296,68 @@ func (s *apiServer) dispatch(w http.ResponseWriter, method string, p map[string]
 	case "camera/snapshot":
 		data, err := s.api.CameraPhoto(strp(p, "path"))
 		if err != nil { s.fail(w, 500, err); return }
-		s.writeJSON(w, 200, map[string]any{"ok": true, "data": data})
+		s.ok(w, data)
 	case "microphone/record":
 		secs := intp(p, "seconds"); if secs <= 0 { secs = 5 }
 		data, err := s.api.MicrophoneRecord(strp(p, "path"), secs)
 		if err != nil { s.fail(w, 500, err); return }
-		s.writeJSON(w, 200, map[string]any{"ok": true, "data": data})
+		s.ok(w, data)
 	case "torch/brightness":
 		lvl := intp(p, "level")
 		data, err := s.api.TorchBrightness(lvl)
+		if err != nil { s.fail(w, 500, err); return }
+		s.ok(w, data)
+	case "sensors/stream":
+		data, err := s.api.SensorStreamStart(strp(p, "name"), intp(p, "hz"))
+		if err != nil { s.fail(w, 500, err); return }
+		s.ok(w, data)
+	case "sensors/stream/stop":
+		data, err := s.api.SensorStreamStop(strp(p, "name"))
+		if err != nil { s.fail(w, 500, err); return }
+		s.ok(w, data)
+	case "audio/volume":
+		if _, has := p["level"]; has {
+			data, err := s.api.AudioVolumeSet(intp(p, "stream"), intp(p, "level"))
+			if err != nil { s.fail(w, 500, err); return }
+			s.ok(w, data)
+			return
+		}
+		data, err := s.api.AudioVolume(intp(p, "stream"))
+		if err != nil { s.fail(w, 500, err); return }
+		s.ok(w, data)
+	case "audio/ringer":
+		if mode := strp(p, "mode"); mode != "" {
+			data, err := s.api.AudioRingerSet(mode)
+			if err != nil { s.fail(w, 500, err); return }
+			s.ok(w, data)
+			return
+		}
+		data, err := s.api.AudioRinger()
+		if err != nil { s.fail(w, 500, err); return }
+		s.ok(w, data)
+	case "wifi/scan":
+		data, err := s.api.WifiScan()
+		if err != nil { s.fail(w, 500, err); return }
+		s.ok(w, data)
+	case "app/list":
+		data, err := s.api.AppList()
+		if err != nil { s.fail(w, 500, err); return }
+		s.ok(w, data)
+	case "app/launch":
+		data, err := s.api.AppLaunch(strp(p, "pkg"))
+		if err != nil { s.fail(w, 500, err); return }
+		s.ok(w, data)
+	case "net/ping":
+		cnt := intp(p, "count"); if cnt <= 0 { cnt = 4 }
+		data, err := s.api.NetPing(strp(p, "host"), cnt)
+		if err != nil { s.fail(w, 500, err); return }
+		s.ok(w, data)
+	case "net/dns":
+		data, err := s.api.NetDns(strp(p, "host"))
+		if err != nil { s.fail(w, 500, err); return }
+		s.ok(w, data)
+	case "net/fetch":
+		data, err := s.api.NetFetch(strp(p, "url"))
 		if err != nil { s.fail(w, 500, err); return }
 		s.ok(w, data)
 	default:
@@ -457,7 +510,12 @@ func startHTTP(api AndroidAPI, token string) error {
 		"cpu/detail", "thermal", "memory", "wifi/detailed", "bluetooth",
 		"display/brightness", "display/color", "microphone", "kernel",
 		// patch 38
-		"camera/snapshot", "microphone/record", "torch/brightness"}
+		"camera/snapshot", "microphone/record", "torch/brightness",
+		// patch 42
+		"sensors/stream", "sensors/stream/stop",
+		"audio/volume", "audio/ringer",
+		"wifi/scan", "app/list", "app/launch",
+		"net/ping", "net/dns", "net/fetch"}
 	for _, m := range methods {
 		m := m
 		mux.HandleFunc("/"+m, s.handleMethod(m, func(w http.ResponseWriter, p map[string]any) {

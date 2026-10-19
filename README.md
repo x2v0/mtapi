@@ -89,6 +89,19 @@ Response: `{"ok":true,"data":<...>}` or `{"ok":false,"error":"..."}`.
 - `/camera/snapshot` — take JPEG
 - `/microphone/record?seconds=N` — record AAC
 
+### Universal (works on any Android 8+, no root, no Shizuku)
+
+- `/audio/volume?stream=N[&level=M]` — get/set volume (stream: 1=ring, 2=music, 3=alarm, 4=notif)
+- `/audio/ringer[?mode=silent|vibrate|normal]` — get/set ringer mode
+- `/wifi/scan` — neighboring WiFi networks (SSID, BSSID, RSSI, freq)
+- `/app/list` — installed apps (pkg, name, system, uid)
+- `/app/launch?pkg=X` — launch any app by package name
+- `/net/ping?host=X&count=N` — TCP ping via socket connect (works everywhere)
+- `/net/dns?host=X` — DNS lookup (all A/AAAA records)
+- `/net/fetch?url=X` — HTTP GET from the phone (proxy for scripts)
+- `/sensors/stream?name=X&hz=N` — start sensor stream (logcat tag `mtapi-sse`)
+- `/sensors/stream/stop?name=X` — stop it
+
 ### Detailed
 - `/battery/detailed` — voltage, temp, health, current
 - `/location/detailed` — all providers

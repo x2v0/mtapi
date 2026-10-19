@@ -66,9 +66,22 @@ import java.util.Set;
 import java.util.HashMap;
 import java.util.Map;
 
+import java.net.InetAddress;
+import java.net.InetSocketAddress;
+import java.net.Socket;
+import java.net.URL;
+import java.net.HttpURLConnection;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.BufferedReader;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+
 public class AndroidApiImpl implements AndroidAPI {
 
     private final Context ctx;
+    private static final java.util.Map<String, SensorEventListener> sseRegistry = new ConcurrentHashMap<>();
 
     public AndroidApiImpl(Context ctx) {
         this.ctx = ctx;
@@ -1363,6 +1376,245 @@ public class AndroidApiImpl implements AndroidAPI {
             o.put("note", "API<33: on/off only");
         }
         return o.toString();
+    }
+
+    // ── Patch 42: universal features ──────────────────────
+
+    @Override
+    public String sensorStreamStart(String name, int hz) throws Exception {
+        SensorManager sm = (SensorManager) ctx.getSystemService(Context.SENSOR_SERVICE);
+        if (sm == null) throw new RuntimeException("no_sensor_manager");
+        Sensor target = null;
+        for (Sensor s : sm.getSensorList(Sensor.TYPE_ALL)) {
+            String st = s.getStringType() == null ? "" : s.getStringType();
+            if (s.getName().equalsIgnoreCase(name) || st.equalsIgnoreCase(name)
+                    || st.toLowerCase().endsWith("." + name.toLowerCase())) {
+                target = s; break;
+            }
+        }
+        if (target == null) throw new RuntimeException("sensor_not_found: " + name);
+        if (hz <= 0) hz = 20;
+        if (hz > 200) hz = 200;
+        final int delayUs = 1000000 / hz;
+
+        final String key = name;
+        if (sseRegistry.containsKey(key)) return "already_streaming";
+
+        final SensorEventListener[] self = new SensorEventListener[1];
+        self[0] = new SensorEventListener() {
+            @Override public void onSensorChanged(SensorEvent e) {
+                try {
+                    JSONArray vals = new JSONArray();
+                    for (float v : e.values) vals.put((double) v);
+                    JSONObject ev = new JSONObject();
+                    ev.put("ts_ns", e.timestamp);
+                    ev.put("values", vals);
+                    android.util.Log.i("mtapi-sse", ev.toString());
+                } catch (Throwable ignored) {}
+            }
+            @Override public void onAccuracyChanged(Sensor s, int a) {}
+        };
+        sseRegistry.put(key, self[0]);
+        sm.registerListener(self[0], target, delayUs);
+        return new JSONObject()
+            .put("streaming", true)
+            .put("sensor", target.getName())
+            .put("hz", hz)
+            .put("delay_us", delayUs)
+            .toString();
+    }
+
+    @Override
+    public String sensorStreamStop(String name) throws Exception {
+        SensorManager sm = (SensorManager) ctx.getSystemService(Context.SENSOR_SERVICE);
+        if (sm == null) return "no_sensor_manager";
+        SensorEventListener l = sseRegistry.remove(name);
+        if (l == null) return "not_streaming";
+        sm.unregisterListener(l);
+        return "stopped";
+    }
+
+    @Override
+    public String audioVolume(int stream) throws Exception {
+        AudioManager am = (AudioManager) ctx.getSystemService(Context.AUDIO_SERVICE);
+        if (am == null) throw new RuntimeException("no_audio_manager");
+        int s = mapStream(stream);
+        return new JSONObject()
+            .put("stream", s)
+            .put("level", am.getStreamVolume(s))
+            .put("max", am.getStreamMaxVolume(s))
+            .put("min", am.getStreamMinVolume(s))
+            .toString();
+    }
+
+    @Override
+    public String audioVolumeSet(int stream, int level) throws Exception {
+        AudioManager am = (AudioManager) ctx.getSystemService(Context.AUDIO_SERVICE);
+        if (am == null) throw new RuntimeException("no_audio_manager");
+        int s = mapStream(stream);
+        int max = am.getStreamMaxVolume(s);
+        if (level < 0) level = 0;
+        if (level > max) level = max;
+        am.setStreamVolume(s, level, 0);
+        return new JSONObject().put("stream", s).put("level", level).put("max", max).toString();
+    }
+
+    @Override
+    public String audioRinger() throws Exception {
+        AudioManager am = (AudioManager) ctx.getSystemService(Context.AUDIO_SERVICE);
+        if (am == null) throw new RuntimeException("no_audio_manager");
+        int m = am.getRingerMode();
+        String str = m == AudioManager.RINGER_MODE_SILENT ? "silent"
+                   : m == AudioManager.RINGER_MODE_VIBRATE ? "vibrate"
+                   : "normal";
+        return new JSONObject().put("mode", m).put("modeString", str).toString();
+    }
+
+    @Override
+    public String audioRingerSet(String mode) throws Exception {
+        AudioManager am = (AudioManager) ctx.getSystemService(Context.AUDIO_SERVICE);
+        if (am == null) throw new RuntimeException("no_audio_manager");
+        int m;
+        switch (mode) {
+            case "silent":  m = AudioManager.RINGER_MODE_SILENT;  break;
+            case "vibrate": m = AudioManager.RINGER_MODE_VIBRATE; break;
+            case "normal":  m = AudioManager.RINGER_MODE_NORMAL;  break;
+            default: throw new RuntimeException("bad_mode: " + mode);
+        }
+        am.setRingerMode(m);
+        return new JSONObject().put("mode", m).put("modeString", mode).toString();
+    }
+
+    @Override
+    public String wifiScan() throws Exception {
+        WifiManager wm = (WifiManager) ctx.getApplicationContext().getSystemService(Context.WIFI_SERVICE);
+        if (wm == null) throw new RuntimeException("no_wifi");
+        if (!wm.isWifiEnabled()) return "[]";
+
+        try { wm.startScan(); } catch (Throwable ignored) {}
+        Thread.sleep(500);
+
+        java.util.List<android.net.wifi.ScanResult> results = null;
+        try {
+            results = wm.getScanResults();
+        } catch (Throwable t) {
+            throw new RuntimeException("scan_failed: " + t.getMessage()
+                    + " (need ACCESS_FINE_LOCATION + location enabled)");
+        }
+
+        JSONArray arr = new JSONArray();
+        if (results != null) {
+            for (android.net.wifi.ScanResult r : results) {
+                try {
+                    JSONObject o = new JSONObject();
+                    o.put("ssid", r.SSID);
+                    o.put("bssid", r.BSSID);
+                    o.put("rssi", r.level);
+                    o.put("freq_mhz", r.frequency);
+                    if (Build.VERSION.SDK_INT >= 30) {
+                        try { o.put("wifiStandard", r.getWifiStandard()); } catch (Throwable ignored) {}
+                    }
+                    arr.put(o);
+                } catch (Throwable ignored) {}
+            }
+        }
+        return arr.toString();
+    }
+
+    @Override
+    public String appList() throws Exception {
+        android.content.pm.PackageManager pm = ctx.getPackageManager();
+        JSONArray arr = new JSONArray();
+        for (android.content.pm.ApplicationInfo ai : pm.getInstalledApplications(0)) {
+            try {
+                JSONObject o = new JSONObject();
+                o.put("pkg", ai.packageName);
+                o.put("name", String.valueOf(pm.getApplicationLabel(ai)));
+                o.put("system", (ai.flags & android.content.pm.ApplicationInfo.FLAG_SYSTEM) != 0);
+                o.put("uid", ai.uid);
+                arr.put(o);
+            } catch (Throwable ignored) {}
+        }
+        return arr.toString();
+    }
+
+    @Override
+    public String appLaunch(String pkg) throws Exception {
+        if (pkg == null || pkg.isEmpty()) throw new RuntimeException("pkg_required");
+        android.content.Intent i = ctx.getPackageManager().getLaunchIntentForPackage(pkg);
+        if (i == null) throw new RuntimeException("not_launchable: " + pkg);
+        i.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
+        ctx.startActivity(i);
+        return "launched";
+    }
+
+    @Override
+    public String netPing(String host, int count) throws Exception {
+        if (count <= 0) count = 4;
+        if (count > 10) count = 10;
+        JSONArray results = new JSONArray();
+        int ok = 0;
+        long totalMs = 0;
+        for (int i = 0; i < count; i++) {
+            long t0 = System.nanoTime();
+            boolean success = false;
+            try (Socket s = new Socket()) {
+                s.connect(new InetSocketAddress(host, 443), 3000);
+                success = true;
+            } catch (Throwable ignored) {}
+            long ms = (System.nanoTime() - t0) / 1_000_000L;
+            if (success) { ok++; totalMs += ms; }
+            results.put(new JSONObject().put("seq", i+1).put("ok", success).put("ms", ms));
+            Thread.sleep(200);
+        }
+        return new JSONObject()
+            .put("host", host).put("count", count).put("ok", ok)
+            .put("avgMs", ok > 0 ? totalMs / ok : 0)
+            .put("results", results).toString();
+    }
+
+    @Override
+    public String netDns(String host) throws Exception {
+        InetAddress[] addrs = InetAddress.getAllByName(host);
+        JSONArray arr = new JSONArray();
+        for (InetAddress a : addrs) arr.put(a.getHostAddress());
+        return new JSONObject().put("host", host).put("addresses", arr).toString();
+    }
+
+    @Override
+    public String netFetch(String urlStr) throws Exception {
+        if (urlStr == null || urlStr.isEmpty()) throw new RuntimeException("url_required");
+        URL u = new URL(urlStr);
+        HttpURLConnection c = (HttpURLConnection) u.openConnection();
+        c.setConnectTimeout(5000);
+        c.setReadTimeout(10000);
+        c.setRequestMethod("GET");
+        int code = c.getResponseCode();
+        StringBuilder body = new StringBuilder();
+        try (BufferedReader r = new BufferedReader(new InputStreamReader(
+                code < 400 ? c.getInputStream() : c.getErrorStream()))) {
+            String line;
+            while ((line = r.readLine()) != null) {
+                body.append(line).append('\n');
+                if (body.length() > 100_000) break;
+            }
+        }
+        return new JSONObject()
+            .put("status", code)
+            .put("bytes", body.length())
+            .put("body", body.toString()).toString();
+    }
+
+    private int mapStream(int s) {
+        switch (s) {
+            case 1: return AudioManager.STREAM_RING;
+            case 2: return AudioManager.STREAM_MUSIC;
+            case 3: return AudioManager.STREAM_ALARM;
+            case 4: return AudioManager.STREAM_NOTIFICATION;
+            case 5: return AudioManager.STREAM_SYSTEM;
+            case 6: return AudioManager.STREAM_VOICE_CALL;
+            default: return s;
+        }
     }
 
 }

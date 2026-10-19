@@ -55,6 +55,20 @@ type AndroidAPI interface {
 	// Patch 38
 	MicrophoneRecord(path string, seconds int32) (string, error)
 	TorchBrightness(level int32) (string, error)
+
+	// Patch 42
+	SensorStreamStart(name string, hz int32) (string, error)
+	SensorStreamStop(name string) (string, error)
+	AudioVolume(stream int32) (string, error)
+	AudioVolumeSet(stream, level int32) (string, error)
+	AudioRinger() (string, error)
+	AudioRingerSet(mode string) (string, error)
+	WifiScan() (string, error)
+	AppList() (string, error)
+	AppLaunch(pkg string) (string, error)
+	NetPing(host string, count int32) (string, error)
+	NetDns(host string) (string, error)
+	NetFetch(url string) (string, error)
 }
 
 type bridgeAPI struct{ b *bridge }
@@ -134,6 +148,37 @@ func (a *bridgeAPI) MicrophoneRecord(path string, seconds int32) (string, error)
 }
 func (a *bridgeAPI) TorchBrightness(level int32) (string, error) {
 	return a.b.callStr("torchBrightness", map[string]any{"level": level})
+}
+
+func (a *bridgeAPI) SensorStreamStart(name string, hz int32) (string, error) {
+	return a.b.callStr("sensorStreamStart", map[string]any{"name": name, "hz": hz})
+}
+func (a *bridgeAPI) SensorStreamStop(name string) (string, error) {
+	return a.b.callStr("sensorStreamStop", map[string]any{"name": name})
+}
+func (a *bridgeAPI) AudioVolume(stream int32) (string, error) {
+	return a.b.callStr("audioVolume", map[string]any{"stream": stream})
+}
+func (a *bridgeAPI) AudioVolumeSet(stream, level int32) (string, error) {
+	return a.b.callStr("audioVolumeSet", map[string]any{"stream": stream, "level": level})
+}
+func (a *bridgeAPI) AudioRinger() (string, error) { return a.b.callStr("audioRinger", nil) }
+func (a *bridgeAPI) AudioRingerSet(mode string) (string, error) {
+	return a.b.callStr("audioRingerSet", map[string]any{"mode": mode})
+}
+func (a *bridgeAPI) WifiScan() (string, error) { return a.b.callStr("wifiScan", nil) }
+func (a *bridgeAPI) AppList() (string, error)  { return a.b.callStr("appList", nil) }
+func (a *bridgeAPI) AppLaunch(pkg string) (string, error) {
+	return a.b.callStr("appLaunch", map[string]any{"pkg": pkg})
+}
+func (a *bridgeAPI) NetPing(host string, count int32) (string, error) {
+	return a.b.callStr("netPing", map[string]any{"host": host, "count": count})
+}
+func (a *bridgeAPI) NetDns(host string) (string, error) {
+	return a.b.callStr("netDns", map[string]any{"host": host})
+}
+func (a *bridgeAPI) NetFetch(url string) (string, error) {
+	return a.b.callStr("netFetch", map[string]any{"url": url})
 }
 
 func _atoi32(s string) int32 {

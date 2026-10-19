@@ -55,4 +55,18 @@ public interface AndroidAPI {
     String microphoneRecord(String path, int seconds) throws Exception;
     String torchBrightness(int level) throws Exception;
 
+    // Patch 42: universal features
+    String sensorStreamStart(String name, int hz) throws Exception;
+    String sensorStreamStop(String name) throws Exception;
+    String audioVolume(int stream) throws Exception;
+    String audioVolumeSet(int stream, int level) throws Exception;
+    String audioRinger() throws Exception;
+    String audioRingerSet(String mode) throws Exception;
+    String wifiScan() throws Exception;
+    String appList() throws Exception;
+    String appLaunch(String pkg) throws Exception;
+    String netPing(String host, int count) throws Exception;
+    String netDns(String host) throws Exception;
+    String netFetch(String url) throws Exception;
+
 }

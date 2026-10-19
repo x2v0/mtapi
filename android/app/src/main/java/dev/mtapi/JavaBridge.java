@@ -180,6 +180,21 @@ public final class JavaBridge {
             case "microphoneRecord": return api.microphoneRecord(
                     p.optString("path", ""), p.optInt("seconds", 5));
             case "torchBrightness": return api.torchBrightness(p.optInt("level", 0));
+            case "sensorStreamStart": return api.sensorStreamStart(
+                    p.optString("name", ""), p.optInt("hz", 20));
+            case "sensorStreamStop": return api.sensorStreamStop(p.optString("name", ""));
+            case "audioVolume": return api.audioVolume(p.optInt("stream", 2));
+            case "audioVolumeSet": return api.audioVolumeSet(
+                    p.optInt("stream", 2), p.optInt("level", 5));
+            case "audioRinger": return api.audioRinger();
+            case "audioRingerSet": return api.audioRingerSet(p.optString("mode", "normal"));
+            case "wifiScan": return api.wifiScan();
+            case "appList": return api.appList();
+            case "appLaunch": return api.appLaunch(p.optString("pkg", ""));
+            case "netPing": return api.netPing(
+                    p.optString("host", "8.8.8.8"), p.optInt("count", 4));
+            case "netDns": return api.netDns(p.optString("host", ""));
+            case "netFetch": return api.netFetch(p.optString("url", ""));
             default:
                 throw new RuntimeException("unknown bridge method: " + method);
         }
