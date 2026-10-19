@@ -10,12 +10,11 @@ import android.content.Intent;
 import android.os.Build;
 import android.os.IBinder;
 
-import go.mobile.mobile.Mobile;
-
 public class ApiService extends Service {
 
     public static final int NOTIF_ID = 0x4d5441;
     private boolean started = false;
+    private AndroidApiImpl api;
 
     @Override
     public void onCreate() {
@@ -28,8 +27,16 @@ public class ApiService extends Service {
         if (!started) {
             String token = Token.getOrCreate(this);
             try {
-                Mobile.start(token, new AndroidApiImpl(this));
-                started = true;
+                api = new AndroidApiImpl(this);
+                int rc = Mobile.nativeStart(token, api);
+                if (rc == 0) {
+                    started = true;
+                    android.util.Log.i("mtapi",
+                        "started ok; ping=" + Mobile.nativePing());
+                } else {
+                    android.util.Log.e("mtapi",
+                        "nativeStart failed rc=" + rc);
+                }
             } catch (Throwable t) {
                 android.util.Log.e("mtapi", "start failed", t);
             }
@@ -56,7 +63,11 @@ public class ApiService extends Service {
 
     @Override
     public void onDestroy() {
-        try { Mobile.stop(); } catch (Throwable ignored) {}
+        try {
+            if (started) Mobile.nativeStop();
+        } catch (Throwable t) {
+            android.util.Log.e("mtapi", "stop failed", t);
+        }
         started = false;
         super.onDestroy();
     }
@@ -67,7 +78,8 @@ public class ApiService extends Service {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && nm != null) {
             if (nm.getNotificationChannel(ch) == null) {
                 nm.createNotificationChannel(
-                    new NotificationChannel(ch, "mtapi daemon", NotificationManager.IMPORTANCE_LOW));
+                    new NotificationChannel(ch, "mtapi daemon",
+                        NotificationManager.IMPORTANCE_LOW));
             }
         }
 
