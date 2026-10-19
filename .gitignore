@@ -1,0 +1,14 @@
+gocore/*.aar
+android/app/libs/*.aar
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+client/dist/
+scripts/__pycache__/
+.idea/
+.vscode/
+*.swp
+*.tmp
+*.log
+tmp/

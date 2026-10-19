@@ -1,0 +1,71 @@
+# mtapi — build / test / verify
+SHELL := /bin/bash
+.DEFAULT_GOAL := help
+
+# Termux: /tmp does not exist. Redirect all temp files to $HOME/tmp.
+export TMPDIR := $(HOME)/tmp
+
+GO ?= go
+PY ?= python3
+
+.PHONY: help all aar apk client test test-go integration verify fmt vet clean git-commit tmp
+
+help:
+	@echo "mtapi targets:"
+	@echo "  make all          aar + apk + client"
+	@echo "  make aar          android/app/libs/mobile.aar via gomobile"
+	@echo "  make apk          debug apk (needs aar + Android SDK)"
+	@echo "  make client       cross-build Go client binaries"
+	@echo "  make test         go unit + verify + integration"
+	@echo "  make test-go      go test ./... in gocore + client"
+	@echo "  make integration  e2e: python mock server + client binary"
+	@echo "  make verify       check file layout of repo"
+	@echo "  make fmt vet      go fmt / go vet"
+	@echo "  make clean        remove build artifacts"
+	@echo "  make git-commit   git add -A && commit (needs MSG=...)"
+	@echo "  make tmp          ensure $$TMPDIR exists"
+
+tmp:
+	@mkdir -p $(TMPDIR)
+	@echo "TMPDIR=$(TMPDIR)"
+
+all: aar apk client
+
+aar: tmp
+	bash scripts/build_aar.sh
+
+apk: tmp
+	bash scripts/build_apk.sh
+
+client: tmp
+	bash scripts/build_client.sh
+
+test: test-go verify integration
+
+test-go: tmp
+	cd gocore && $(GO) test ./... -count=1
+	cd client && $(GO) test ./... -count=1
+
+verify: tmp
+	$(PY) scripts/verify.py
+
+integration: client
+	$(PY) scripts/integration.py
+
+fmt: tmp
+	cd gocore && $(GO) fmt ./...
+	cd client && $(GO) fmt ./...
+
+vet: tmp
+	cd gocore && $(GO) vet ./...
+	cd client && $(GO) vet ./...
+
+clean:
+	rm -rf client/dist
+	rm -f  android/app/libs/mobile.aar
+	rm -rf android/build android/app/build android/.gradle
+
+git-commit:
+	@if [ -z "$(MSG)" ]; then echo "usage: make git-commit MSG=\"message\""; exit 1; fi
+	git add -A
+	git commit -m "$(MSG)"
