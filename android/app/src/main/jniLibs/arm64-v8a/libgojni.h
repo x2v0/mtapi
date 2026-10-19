@@ -47,6 +47,9 @@ static jstring go_str_return(const char* s, JNIEnv* env) {
 static jint jni_get_java_vm(JNIEnv* env, JavaVM** vm) {
     return (*env)->GetJavaVM(env, vm);
 }
+static jint jni_get_env(JavaVM* vm, JNIEnv** env) {
+    return (*vm)->GetEnv(vm, (void**)env, JNI_VERSION_1_6);
+}
 static jint jni_attach_current_thread(JavaVM* vm, JNIEnv** env) {
     return (*vm)->AttachCurrentThread(vm, env, NULL);
 }
@@ -185,6 +188,8 @@ extern "C" {
 extern jint Java_dev_mtapi_Mobile_nativeStart(JNIEnv* env, jclass cls, jstring token, jobject apiObj);
 extern void Java_dev_mtapi_Mobile_nativeStop(JNIEnv* env, jclass cls);
 extern jstring Java_dev_mtapi_Mobile_nativePing(JNIEnv* env, jclass cls);
+extern jint Java_dev_mtapi_Mobile_nativeSmoke(JNIEnv* env, jclass cls);
+extern jstring Java_dev_mtapi_Mobile_nativeVersion(JNIEnv* env, jclass cls);
 
 #ifdef __cplusplus
 }

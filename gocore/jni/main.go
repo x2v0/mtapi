@@ -38,6 +38,9 @@ static jstring go_str_return(const char* s, JNIEnv* env) {
 static jint jni_get_java_vm(JNIEnv* env, JavaVM** vm) {
     return (*env)->GetJavaVM(env, vm);
 }
+static jint jni_get_env(JavaVM* vm, JNIEnv** env) {
+    return (*vm)->GetEnv(vm, (void**)env, JNI_VERSION_1_6);
+}
 static jint jni_attach_current_thread(JavaVM* vm, JNIEnv** env) {
     return (*vm)->AttachCurrentThread(vm, env, NULL);
 }
@@ -142,6 +145,11 @@ type jniAPI struct {
 
 func (j *jniAPI) attach() (*C.JNIEnv, func()) {
 	var env *C.JNIEnv
+	// If thread is already attached (e.g., Android main thread), use env
+	// directly and DON'T detach — DetachCurrentThread on main thread = SIGSEGV.
+	if C.jni_get_env(j.vm, &env) == C.JNI_OK && env != nil {
+		return env, func() {}
+	}
 	if C.jni_attach_current_thread(j.vm, &env) != 0 {
 		return nil, func() {}
 	}
@@ -348,6 +356,21 @@ func Java_dev_mtapi_Mobile_nativeStop(env *C.JNIEnv, cls C.jclass) {
 //export Java_dev_mtapi_Mobile_nativePing
 func Java_dev_mtapi_Mobile_nativePing(env *C.JNIEnv, cls C.jclass) C.jstring {
 	s := fmt.Sprintf("mtapi/%s", mobile.Version)
+	return goToJstring(env, s)
+}
+
+
+//export Java_dev_mtapi_Mobile_nativeSmoke
+func Java_dev_mtapi_Mobile_nativeSmoke(env *C.JNIEnv, cls C.jclass) C.jint {
+	// Pure smoke test: no JNI callbacks, no sockets, no JVM init.
+	// If this crashes, .so itself is broken.
+	return 42
+}
+
+//export Java_dev_mtapi_Mobile_nativeVersion
+func Java_dev_mtapi_Mobile_nativeVersion(env *C.JNIEnv, cls C.jclass) C.jstring {
+	// Returns a java String — exercises NewStringUTF path.
+	s := "mtapi/" + mobile.Version
 	return goToJstring(env, s)
 }
 
