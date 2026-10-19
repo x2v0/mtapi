@@ -24,10 +24,16 @@ public class ApiService extends Service {
     public void onCreate() {
         super.onCreate();
         try {
-            startForeground(NOTIF_ID, buildNotification());
-            Log.i(TAG, "startForeground ok");
+            Notification n = buildNotification();
+            if (Build.VERSION.SDK_INT >= 29) {
+                startForeground(NOTIF_ID, n, 0x1 /* FOREGROUND_SERVICE_TYPE_DATA_SYNC */);
+            } else {
+                startForeground(NOTIF_ID, n);
+            }
+            Log.i(TAG, "startForeground ok (type=dataSync)");
         } catch (Throwable t) {
             Log.e(TAG, "startForeground failed", t);
+            DiagLog.write(this, "svc: startForeground THREW " + t);
         }
     }
 

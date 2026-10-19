@@ -16,17 +16,18 @@ public final class DiagLog {
 
     private DiagLog() {}
 
+    // internal files dir: always fast, no FUSE, no scoped storage
     private static File logFile(Context ctx) {
-        File dir = ctx.getExternalFilesDir(null);
-        if (dir == null) dir = ctx.getFilesDir();
-        return new File(dir, "diag.log");
+        return new File(ctx.getFilesDir(), "diag.log");
     }
 
     public static synchronized void write(Context ctx, String msg) {
-        String line = FMT.format(new Date()) + " " + msg + "\n";
-        Log.d(TAG, msg);
+        // 1) logcat first — never blocks
+        Log.i(TAG, msg);
+        // 2) file second — best effort, swallow all errors
         try {
             FileOutputStream fos = new FileOutputStream(logFile(ctx), true);
+            String line = FMT.format(new Date()) + " " + msg + "\n";
             fos.write(line.getBytes("UTF-8"));
             fos.close();
         } catch (Throwable ignored) {}

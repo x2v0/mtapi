@@ -56,6 +56,26 @@ public class MainActivity extends Activity {
             if (cm != null) cm.setPrimaryClip(ClipData.newPlainText("mtapi", tok));
         });
 
+        Button stubBtn = new Button(this);
+        stubBtn.setText("0. Stub smoke (pure C, no Go)");
+        stubBtn.setOnClickListener(v -> {
+            DiagLog.write(this, "click: stub_smoke");
+            statusView.setText("stub: ensureLoaded...");
+            if (!StubMobile.ensureLoaded(this)) {
+                statusView.setText("stub: loadLibrary FAILED: " + StubMobile.getError());
+                return;
+            }
+            statusView.setText("stub: loaded, calling native...");
+            try {
+                int r = StubMobile.nativeSmoke();
+                DiagLog.write(this, "stub: nativeSmoke returned " + r);
+                statusView.setText("stub: " + r + " (pure C .so WORKS)");
+            } catch (Throwable t) {
+                DiagLog.write(this, "stub: nativeSmoke THREW " + t);
+                statusView.setText("stub threw: " + t);
+            }
+        });
+
         Button smokeBtn = new Button(this);
         smokeBtn.setText("1. Smoke (native int)");
         smokeBtn.setOnClickListener(v -> {
@@ -152,7 +172,8 @@ public class MainActivity extends Activity {
         root.addView(tv);
         root.addView(statusView);
         root.addView(copyBtn);
-        root.addView(smokeBtn);
+        root.addView(stubBtn);
+                root.addView(smokeBtn);
         root.addView(verBtn);
         root.addView(pingBtn);
         root.addView(startBtn);
