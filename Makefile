@@ -8,7 +8,7 @@ export TMPDIR := $(HOME)/tmp
 GO ?= go
 PY ?= python3
 
-.PHONY: help all aar apk client test test-go integration verify fmt vet clean git-commit tmp
+.PHONY: help all aar apk client test test-go integration verify fmt vet clean git-commit tmp install boot-test
 
 help:
 	@echo "mtapi targets:"
@@ -23,7 +23,9 @@ help:
 	@echo "  make fmt vet      go fmt / go vet"
 	@echo "  make clean        remove build artifacts"
 	@echo "  make git-commit   git add -A && commit (needs MSG=...)"
+	@echo "  make install      adb install -r the debug APK + launch"
 	@echo "  make tmp          ensure $$TMPDIR exists"
+	@echo "  make boot-test    adb-based BOOT_COMPLETED / receiver check"
 
 tmp:
 	@mkdir -p $(TMPDIR)
@@ -59,6 +61,15 @@ fmt: tmp
 vet: tmp
 	cd gocore && $(GO) vet ./...
 	cd client && $(GO) vet ./...
+
+install:
+	@if [ ! -f android/app/build/outputs/apk/debug/app-debug.apk ]; then \
+		echo "APK not built — run make apk first"; exit 1; fi
+	adb install -r android/app/build/outputs/apk/debug/app-debug.apk
+	adb shell am start -n dev.mtapi/.MainActivity
+
+boot-test: tmp
+	bash scripts/test_boot.sh
 
 clean:
 	rm -rf client/dist

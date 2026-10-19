@@ -1,6 +1,7 @@
 package dev.mtapi
 
 import android.app.*
+import android.app.AlarmManager
 import android.content.Intent
 import android.os.Build
 import android.os.IBinder
@@ -26,6 +27,18 @@ class ApiService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int = START_STICKY
     override fun onBind(intent: Intent?): IBinder? = null
+
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        // After user swipes app away, bring the daemon back.
+        val restart = Intent(applicationContext, ApiService::class.java)
+        val pi = PendingIntent.getService(
+            this, 1, restart,
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_ONE_SHOT
+        )
+        val am = getSystemService(AlarmManager::class.java)
+        am?.set(AlarmManager.RTC, System.currentTimeMillis() + 1500L, pi)
+        super.onTaskRemoved(rootIntent)
+    }
 
     override fun onDestroy() {
         try { Mobile.stop() } catch (_: Throwable) {}

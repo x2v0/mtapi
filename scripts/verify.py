@@ -26,10 +26,11 @@ expected = {
     "android/build.gradle.kts":                               ("com.android.application", None),
     "android/gradle.properties":                              ("android.useAndroidX=true", None),
     "android/app/build.gradle.kts":                           ('implementation(files("libs/mobile.aar"))', None),
-    "android/app/src/main/AndroidManifest.xml":               ('android:foregroundServiceType="dataSync"', None),
+    "android/app/src/main/AndroidManifest.xml":               ('android:foregroundServiceType="dataSync"', "RECEIVE_BOOT_COMPLETED"),
     "android/app/src/main/kotlin/dev/mtapi/App.kt":           ("class App : Application", None),
     "android/app/src/main/kotlin/dev/mtapi/Token.kt":         ("SecureRandom", None),
     "android/app/src/main/kotlin/dev/mtapi/ApiService.kt":    ("Mobile.start(token", "Mobile.stop"),
+    "android/app/src/main/kotlin/dev/mtapi/BootReceiver.kt":  ("class BootReceiver", "ACTION_BOOT_COMPLETED"),
     "android/app/src/main/kotlin/dev/mtapi/MainActivity.kt":  ("token:\\n", None),
     "android/app/src/main/kotlin/dev/mtapi/AndroidApiImpl.kt":("class AndroidApiImpl", "override fun tts"),
     "android/app/src/main/res/values/strings.xml":            ('<string name="app_name">', None),
@@ -38,6 +39,7 @@ expected = {
     "scripts/build_apk.sh":                                   ("assembleDebug", None),
     "scripts/build_client.sh":                                ("GOOS=android", None),
     "scripts/integration.py":                                 ("def mock_server", "def run"),
+    "scripts/test_boot.sh":                                   ("boot-test: OK", "TEST_BOOT"),
     "scripts/verify.py":                                      ("def main", None),
 }
 
