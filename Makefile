@@ -1,99 +1,71 @@
-# mtapi — build / test / verify
+# mtapi — build targets
 SHELL := /bin/bash
-.DEFAULT_GOAL := help
-
-# Termux: /tmp does not exist. Redirect all temp files to $HOME/tmp.
 export TMPDIR := $(HOME)/tmp
 
-GO ?= go
-
-.PHONY: help all aar apk client test test-go integration grpc-e2e verify fmt vet clean git-commit tmp install boot-test devserver setup-w2a apk-wta
+.PHONY: help server apk install grant verify live cli all clean
 
 help:
 	@echo "mtapi targets:"
-	@echo "  make all          aar + apk + client"
-	@echo "  make aar          android/app/libs/mobile.aar via gomobile"
-	@echo "  make apk          debug apk (needs aar + Android SDK)"
-	@echo "  make client       cross-build Go client binaries"
-	@echo "  make test         go unit + verify + integration"
-	@echo "  make test-go      go test ./... in gocore + client"
-	@echo "  make integration  e2e: Go mock JSON server + client binary"
-	@echo "  make verify       Go tool: check file layout of repo"
-	@echo "  make fmt vet      go fmt / go vet"
-	@echo "  make clean        remove build artifacts"
-	@echo "  make git-commit   git add -A && commit (needs MSG=...)"
-	@echo "  make install      adb install -r the debug APK + launch"
-	@echo "  make tmp          ensure $$TMPDIR exists"
-	@echo "  make boot-test    adb-based BOOT_COMPLETED / receiver check"
+	@echo "  make server   build Go binary (libmtapi-server.so)"
+	@echo "  make apk      build APK via w2a"
+	@echo "  make install  install via rish (fallback termux-open)"
+	@echo "  make grant    grant Android permissions via rish"
+	@echo "  make verify   static file checks"
+	@echo "  make live     live endpoints test (ping, battery, ...)"
+	@echo "  make cli      install ~/bin/mtapi"
+	@echo "  make all      apk + install + grant + cli"
+	@echo "  make clean    remove build artifacts"
 
-tmp:
-	@mkdir -p $(TMPDIR)
-	@echo "TMPDIR=$(TMPDIR)"
+server:
+	bash scripts/build_server.sh
 
-all: aar apk client
-
-aar: tmp
-	bash scripts/build_aar.sh
-
-apk: tmp
-	bash scripts/build_apk.sh
-
-client: tmp
-	bash scripts/build_client.sh
-
-test: test-go verify integration grpc-e2e
-
-test-go: tmp
-	cd gocore && $(GO) test ./... -count=1
-	cd client && $(GO) test ./... -count=1
-
-verify: tmp
-	cd tools && go run ./cmd/verify
-
-integration: client
-	cd tools && go run ./cmd/integration
-
-fmt: tmp
-	cd gocore && $(GO) fmt ./...
-	cd client && $(GO) fmt ./...
-
-vet: tmp
-	cd gocore && $(GO) vet ./...
-	cd client && $(GO) vet ./...
-
-boot-test: tmp
-	bash scripts/test_boot.sh
-
-grpc-e2e: client
-	cd tools && go run ./cmd/grpce2e
-
-clean:
-	rm -rf client/dist
-	rm -f  android/app/libs/mobile.aar
-	rm -rf android/build android/app/build android/.gradle
-
-git-commit:
-	@if [ -z "$(MSG)" ]; then echo "usage: make git-commit MSG=\"message\""; exit 1; fi
-	git add -A
-	git commit -m "$(MSG)"
-
-devserver:
-	cd tools && go run ./cmd/devserver
-
-setup-w2a:
-	bash scripts/setup_w2a.sh
-
-apk-wta:
+apk: server
 	cd ~/w2a && go run ./cmd/wta build -c ~/mtapi/mtapi.yaml
 
-install: apk-wta
-	@echo "staging APK -> /sdcard/Download/mtapi-debug.apk"
-	@cp -f android/app/build/outputs/apk/mtapi-debug.apk /sdcard/Download/ 2>/dev/null || \
-	 cp -f android/app/build/outputs/apk/mtapi-debug.apk ~/storage/downloads/
-	@echo "opening Android installer via termux-open..."
-	@termux-open /sdcard/Download/mtapi-debug.apk 2>/dev/null || \
-	 termux-open ~/storage/downloads/mtapi-debug.apk
-	@echo "→ tap INSTALL in the system dialog"
-	@echo "→ then open mtapi, copy token, run:"
-	@echo "    echo \"<token>\" > ~/.config/mtapi/token"
-	@echo "    ./client/dist/mtapi-native ping"
+install: apk
+	bash scripts/install.sh
+
+grant:
+	@for p in READ_CONTACTS READ_CALL_LOG READ_SMS SEND_SMS \
+	          ACCESS_FINE_LOCATION ACCESS_COARSE_LOCATION CAMERA \
+	          POST_NOTIFICATIONS READ_PHONE_STATE RECORD_AUDIO \
+	          BLUETOOTH_CONNECT BLUETOOTH_SCAN; do \
+	    rish -c "pm grant dev.mtapi android.permission.$$p" 2>/dev/null || true; \
+	done
+	@echo "permissions granted"
+
+cli:
+	mkdir -p ~/bin
+	cp bin/mtapi ~/bin/mtapi
+	chmod +x ~/bin/mtapi
+	@echo "installed ~/bin/mtapi — add ~/bin to PATH"
+
+verify:
+	@test -f gocore/cmd/mtapi-server/main.go && echo "  ok main.go"
+	@test -f gocore/cmd/mtapi-server/http.go && echo "  ok http.go"
+	@test -f gocore/cmd/mtapi-server/bridge.go && echo "  ok bridge.go"
+	@test -f gocore/cmd/mtapi-server/api.go && echo "  ok api.go"
+	@test -f android/app/src/main/java/dev/mtapi/GoServerLauncher.java && echo "  ok GoServerLauncher"
+	@test -f android/app/src/main/java/dev/mtapi/JavaBridge.java && echo "  ok JavaBridge"
+	@test -f android/app/src/main/java/dev/mtapi/AndroidApiImpl.java && echo "  ok AndroidApiImpl"
+	@test -f README.md && echo "  ok README"
+	@test -f ARCHITECTURE.md && echo "  ok ARCHITECTURE"
+	@test -f CHANGELOG.md && echo "  ok CHANGELOG"
+	@test -f bin/mtapi && echo "  ok bin/mtapi"
+
+live:
+	@T=$$(cat ~/.config/mtapi/token 2>/dev/null); \
+	[ -z "$$T" ] && { echo "no token"; exit 1; }; \
+	for p in ping battery device cpu/detail sensors; do \
+	  echo "--- /$$p"; \
+	  curl -s -m 3 -H "Authorization: Bearer $$T" "http://127.0.0.1:7788/$$p" | head -c 200; \
+	  echo; \
+	done
+
+all: apk install grant cli
+	@echo "mtapi installed"
+
+clean:
+	rm -f android/app/src/main/jniLibs/arm64-v8a/libmtapi-server.so
+	rm -f android/app/build/outputs/apk/mtapi-debug.apk
+	
