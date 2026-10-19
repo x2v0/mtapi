@@ -1,6 +1,8 @@
 package dev.mtapi;
 
 import android.app.Application;
+import android.content.Intent;
+import android.os.Build;
 import android.util.Log;
 
 public class App extends Application {
@@ -9,28 +11,31 @@ public class App extends Application {
     @Override
     public void onCreate() {
         super.onCreate();
-
-        // Minimal Go runtime threads/memory:
-        //   GOMAXPROCS=1        - 1 OS thread for goroutines
-        //   GOGC=off            - disable GC (no GC thread)
-        //   GOMEMLIMIT=8MiB     - hard memory limit
-        //   GODEBUG=...         - disable preemption, don't log inittrace (extra thread)
         try {
             android.system.Os.setenv("GOMAXPROCS", "1", true);
-            android.system.Os.setenv("GOGC", "off", true);
-            android.system.Os.setenv("GOMEMLIMIT", "8MiB", true);
-            android.system.Os.setenv("GODEBUG",
-                "asyncpreemptoff=1,madvdontneed=1", true);
-            DiagLog.write(this, "App: GOGC=off GOMEMLIMIT=8MiB GOMAXPROCS=1");
+            android.system.Os.setenv("GOGC", "100", true);
+            android.system.Os.setenv("GOMEMLIMIT", "64MiB", true);
+            android.system.Os.setenv("GODEBUG", "asyncpreemptoff=1,madvdontneed=1", true);
+            DiagLog.write(this, "App: GOGC=100 GOMEMLIMIT=64MiB GOMAXPROCS=1");
         } catch (Throwable t) {
             DiagLog.write(this, "App: setenv failed " + t);
         }
-
         Thread.setDefaultUncaughtExceptionHandler((t, e) -> {
             DiagLog.write(this, "UNCAUGHT: " + e);
             Log.e(TAG, "UNCAUGHT", e);
         });
-
+        try {
+            Intent svc = new Intent(this, ApiService.class);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                startForegroundService(svc);
+            } else {
+                startService(svc);
+            }
+            DiagLog.write(this, "App: startService(ApiService) OK");
+        } catch (Throwable t) {
+            DiagLog.write(this, "App: startService failed " + t);
+            Log.e(TAG, "startService failed", t);
+        }
         DiagLog.write(this, "App.onCreate");
     }
 }

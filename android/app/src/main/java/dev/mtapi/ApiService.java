@@ -27,6 +27,22 @@ public class ApiService extends Service {
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
+        // FGS-FIX-53f: Android 12+ requires startForeground() within 5s of
+        // startForegroundService(), even if onCreate already ran. Without this
+        // on a fresh startForegroundService call the system throws ANR
+        // "did not then call Service.startForeground()".
+        try {
+            Notification n = buildNotification("starting");
+            if (Build.VERSION.SDK_INT >= 29) {
+                startForeground(NOTIF_ID, n, 0x1 /* FOREGROUND_SERVICE_TYPE_DATA_SYNC */);
+            } else {
+                startForeground(NOTIF_ID, n);
+            }
+            Log.i(TAG, "onStartCommand: startForeground ok");
+        } catch (Throwable t) {
+            Log.e(TAG, "onStartCommand: startForeground failed", t);
+        }
+
         if (api != null) return START_STICKY;
 
         token = Token.getOrCreate(this);
