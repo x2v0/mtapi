@@ -7,7 +7,7 @@ export TMPDIR := $(HOME)/tmp
 
 GO ?= go
 
-.PHONY: help all aar apk client test test-go integration grpc-e2e verify fmt vet clean git-commit tmp install boot-test devserver
+.PHONY: help all aar apk client test test-go integration grpc-e2e verify fmt vet clean git-commit tmp install boot-test devserver setup-w2a
 
 help:
 	@echo "mtapi targets:"
@@ -85,3 +85,6 @@ git-commit:
 
 devserver:
 	cd tools && go run ./cmd/devserver
+
+setup-w2a:
+	bash scripts/setup_w2a.sh
