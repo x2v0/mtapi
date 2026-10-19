@@ -7,7 +7,7 @@ export TMPDIR := $(HOME)/tmp
 
 GO ?= go
 
-.PHONY: help all aar apk client test test-go integration grpc-e2e verify fmt vet clean git-commit tmp install boot-test devserver setup-w2a
+.PHONY: help all aar apk client test test-go integration grpc-e2e verify fmt vet clean git-commit tmp install boot-test devserver setup-w2a apk-wta
 
 help:
 	@echo "mtapi targets:"
@@ -88,3 +88,6 @@ devserver:
 
 setup-w2a:
 	bash scripts/setup_w2a.sh
+
+apk-wta:
+	cd ~/w2a && go run ./cmd/wta build -c ~/mtapi/mtapi.yaml

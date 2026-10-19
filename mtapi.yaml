@@ -1,0 +1,31 @@
+app:
+  name: "mtapi"
+  package: dev.mtapi
+  versionCode: 1
+  versionName: "0.1"
+
+type: custom
+
+custom:
+  sources:
+    - /data/data/com.termux/files/home/mtapi/android/app/src/main/java
+  jniLibs:
+    - /data/data/com.termux/files/home/mtapi/android/app/src/main/jniLibs
+  manifest: /data/data/com.termux/files/home/mtapi/android/app/src/main/AndroidManifest.xml
+  resources: /data/data/com.termux/files/home/mtapi/android/app/src/main/res
+  abis: [arm64-v8a]
+  minApi: 26
+  targetApi: 34
+  javaRelease: "17"
+
+output:
+  path: /data/data/com.termux/files/home/mtapi/android/app/build/outputs/apk/mtapi-debug.apk
+  align: 16384
+
+sign:
+  enabled: true
+  keystore: /data/data/com.termux/files/home/.android/debug.keystore
+  ksPass: android
+  keyAlias: androiddebugkey
+  keyPass: android
+  v2: true
