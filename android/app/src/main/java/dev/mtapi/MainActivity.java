@@ -85,9 +85,9 @@ public class MainActivity extends Activity {
             try {
                 Mobile.ensureLoaded();
                 DiagLog.write(this, "version: about to call nativeVersion");
-                String v = Mobile.nativeVersion();
-                DiagLog.write(this, "version: returned " + v);
-                statusView.setText("version: " + v);
+                String verVal = Mobile.nativeVersion();
+                DiagLog.write(this, "version: returned " + verVal);
+                statusView.setText("version: " + verVal);
             } catch (Throwable t) {
                 DiagLog.write(this, "version: threw " + t);
                 statusView.setText("version threw: " + t);
@@ -101,9 +101,9 @@ public class MainActivity extends Activity {
             try {
                 Mobile.ensureLoaded();
                 DiagLog.write(this, "ping: about to call nativePing");
-                String v = Mobile.nativePing();
-                DiagLog.write(this, "ping: returned " + v);
-                statusView.setText("ping: " + v);
+                String pingVal = Mobile.nativePing();
+                DiagLog.write(this, "ping: returned " + pingVal);
+                statusView.setText("ping: " + pingVal);
             } catch (Throwable t) {
                 DiagLog.write(this, "ping: threw " + t);
                 statusView.setText("ping threw: " + t);
