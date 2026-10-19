@@ -22,7 +22,6 @@
 
     <application
         android:name=".App"
-        android:debuggable="true"
         android:allowBackup="false"
         android:extractNativeLibs="true"
         android:label="mtapi"
