@@ -7,7 +7,7 @@ export TMPDIR := $(HOME)/tmp
 
 GO ?= go
 
-.PHONY: help all aar apk client test test-go integration grpc-e2e verify fmt vet clean git-commit tmp install boot-test
+.PHONY: help all aar apk client test test-go integration grpc-e2e verify fmt vet clean git-commit tmp install boot-test devserver
 
 help:
 	@echo "mtapi targets:"
@@ -82,3 +82,6 @@ git-commit:
 	@if [ -z "$(MSG)" ]; then echo "usage: make git-commit MSG=\"message\""; exit 1; fi
 	git add -A
 	git commit -m "$(MSG)"
+
+devserver:
+	cd tools && go run ./cmd/devserver
