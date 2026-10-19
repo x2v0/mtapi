@@ -6,9 +6,8 @@ SHELL := /bin/bash
 export TMPDIR := $(HOME)/tmp
 
 GO ?= go
-PY ?= python3
 
-.PHONY: help all aar apk client test test-go integration verify fmt vet clean git-commit tmp install boot-test
+.PHONY: help all aar apk client test test-go integration grpc-e2e verify fmt vet clean git-commit tmp install boot-test
 
 help:
 	@echo "mtapi targets:"
@@ -18,8 +17,8 @@ help:
 	@echo "  make client       cross-build Go client binaries"
 	@echo "  make test         go unit + verify + integration"
 	@echo "  make test-go      go test ./... in gocore + client"
-	@echo "  make integration  e2e: python mock server + client binary"
-	@echo "  make verify       check file layout of repo"
+	@echo "  make integration  e2e: Go mock JSON server + client binary"
+	@echo "  make verify       Go tool: check file layout of repo"
 	@echo "  make fmt vet      go fmt / go vet"
 	@echo "  make clean        remove build artifacts"
 	@echo "  make git-commit   git add -A && commit (needs MSG=...)"
@@ -42,17 +41,17 @@ apk: tmp
 client: tmp
 	bash scripts/build_client.sh
 
-test: test-go verify integration
+test: test-go verify integration grpc-e2e
 
 test-go: tmp
 	cd gocore && $(GO) test ./... -count=1
 	cd client && $(GO) test ./... -count=1
 
 verify: tmp
-	$(PY) scripts/verify.py
+	cd tools && go run ./cmd/verify
 
 integration: client
-	$(PY) scripts/integration.py
+	cd tools && go run ./cmd/integration
 
 fmt: tmp
 	cd gocore && $(GO) fmt ./...
@@ -70,6 +69,9 @@ install:
 
 boot-test: tmp
 	bash scripts/test_boot.sh
+
+grpc-e2e: client
+	cd tools && go run ./cmd/grpce2e
 
 clean:
 	rm -rf client/dist
