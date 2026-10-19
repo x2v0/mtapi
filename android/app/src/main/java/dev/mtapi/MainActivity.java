@@ -136,6 +136,31 @@ public class MainActivity extends Activity {
         root.addView(battBtn);
         root.addView(devBtn);
         root.addView(toastBtn);
+        Button sysBtn = new Button(this);
+        sysBtn.setText("Sys info");
+        sysBtn.setOnClickListener(v -> httpGetAsync("/system", "system"));
+        root.addView(sysBtn);
+
+        Button sensorBtn = new Button(this);
+        sensorBtn.setText("Sensors");
+        sensorBtn.setOnClickListener(v -> httpGetAsync("/sensors", "sensors"));
+        root.addView(sensorBtn);
+
+        Button netBtn = new Button(this);
+        netBtn.setText("Network");
+        netBtn.setOnClickListener(v -> httpGetAsync("/network", "network"));
+        root.addView(netBtn);
+
+        Button battPlusBtn = new Button(this);
+        battPlusBtn.setText("Battery+");
+        battPlusBtn.setOnClickListener(v -> httpGetAsync("/battery/detailed", "battery_det"));
+        root.addView(battPlusBtn);
+
+        Button locDetBtn = new Button(this);
+        locDetBtn.setText("Location+");
+        locDetBtn.setOnClickListener(v -> httpGetAsync("/location/detailed", "location_det"));
+        root.addView(locDetBtn);
+
         root.addView(openBtn);
         root.addView(copyBtn);
         root.addView(permBtn);
@@ -188,28 +213,40 @@ public class MainActivity extends Activity {
     }
 
     private void writeTokenToExternal() {
-        // /sdcard/Download/mtapi.token — world-readable, accessible via Termux
-        try {
-            java.io.File f = new java.io.File("/sdcard/Download/mtapi.token");
-            if (f.exists()) f.delete();  // scoped storage: FileOutputStream(f, false) fails if file exists
-            java.io.FileOutputStream fos = new java.io.FileOutputStream(f, false);
-            fos.write(token.getBytes("UTF-8"));
-            fos.close();
-            DiagLog.write(this, "token written to " + f.getAbsolutePath());
-        } catch (Throwable t) {
-            DiagLog.write(this, "writeTokenToSdcard threw " + t);
-        }
-        // Also to app external files (best-effort)
+        // Primary: getExternalFilesDir -> /sdcard/Android/data/dev.mtapi/files/token.txt
+        //          Always writable by app. Readable via `rish -c 'cat ...'`.
         try {
             java.io.File d = getExternalFilesDir(null);
             if (d != null) {
+                if (!d.exists()) d.mkdirs();
                 java.io.File f = new java.io.File(d, "token.txt");
                 if (f.exists()) f.delete();
                 java.io.FileOutputStream fos = new java.io.FileOutputStream(f, false);
                 fos.write(token.getBytes("UTF-8"));
                 fos.close();
+                DiagLog.write(this, "token written to " + f.getAbsolutePath());
             }
-        } catch (Throwable ignored) {}
+        } catch (Throwable t) {
+            DiagLog.write(this, "token write (appExternal) failed: " + t);
+        }
+
+        // Secondary: /sdcard/Download/mtapi.token (may be blocked by scoped storage)
+        try {
+            java.io.File f = new java.io.File("/sdcard/Download/mtapi.token");
+            if (f.exists()) {
+                if (!f.delete()) {
+                    f = new java.io.File(f.getParentFile(),
+                            "mtapi.token." + System.currentTimeMillis());
+                }
+            }
+            java.io.FileOutputStream fos = new java.io.FileOutputStream(f, false);
+            fos.write(token.getBytes("UTF-8"));
+            fos.close();
+            DiagLog.write(this, "token also written to " + f.getAbsolutePath());
+        } catch (Throwable t) {
+            DiagLog.write(this, "token write (/sdcard/Download) failed: " + t);
+        }
+
     }
 
     private void requestPermsIfNeeded() {
@@ -221,6 +258,8 @@ public class MainActivity extends Activity {
         perms.add(Manifest.permission.SEND_SMS);
         perms.add(Manifest.permission.ACCESS_FINE_LOCATION);
         perms.add(Manifest.permission.CAMERA);
+        perms.add(Manifest.permission.READ_PHONE_STATE);
+        perms.add(Manifest.permission.RECORD_AUDIO);
         List<String> missing = new ArrayList<>();
         for (String p : perms) {
             if (checkSelfPermission(p) != PackageManager.PERMISSION_GRANTED) {

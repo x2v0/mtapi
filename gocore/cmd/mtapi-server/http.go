@@ -204,6 +204,95 @@ func (s *apiServer) dispatch(w http.ResponseWriter, method string, p map[string]
 		data, err := s.api.SmsList(lim)
 		if err != nil { s.fail(w, 500, err); return }
 		s.ok(w, data)
+	case "sensors":
+		data, err := s.api.SensorsList()
+		if err != nil { s.fail(w, 500, err); return }
+		s.ok(w, data)
+	case "sensors/read":
+		ms := intp(p, "ms"); if ms <= 0 { ms = 1000 }
+		data, err := s.api.SensorRead(strp(p, "name"), ms)
+		if err != nil { s.fail(w, 500, err); return }
+		s.ok(w, data)
+	case "system":
+		data, err := s.api.SystemInfo()
+		if err != nil { s.fail(w, 500, err); return }
+		s.ok(w, data)
+	case "storage":
+		data, err := s.api.StorageInfo()
+		if err != nil { s.fail(w, 500, err); return }
+		s.ok(w, data)
+	case "network":
+		data, err := s.api.NetworkInfo()
+		if err != nil { s.fail(w, 500, err); return }
+		s.ok(w, data)
+	case "telephony":
+		data, err := s.api.TelephonyInfo()
+		if err != nil { s.fail(w, 500, err); return }
+		s.ok(w, data)
+	case "display":
+		data, err := s.api.DisplayInfo()
+		if err != nil { s.fail(w, 500, err); return }
+		s.ok(w, data)
+	case "audio":
+		data, err := s.api.AudioInfo()
+		if err != nil { s.fail(w, 500, err); return }
+		s.ok(w, data)
+	case "features":
+		data, err := s.api.FeaturesList()
+		if err != nil { s.fail(w, 500, err); return }
+		s.ok(w, data)
+	case "camera/list":
+		data, err := s.api.CameraList()
+		if err != nil { s.fail(w, 500, err); return }
+		s.ok(w, data)
+	case "battery/detailed":
+		data, err := s.api.BatteryDetailed()
+		if err != nil { s.fail(w, 500, err); return }
+		s.ok(w, data)
+	case "location/detailed":
+		data, err := s.api.LocationDetailed()
+		if err != nil { s.fail(w, 500, err); return }
+		s.ok(w, data)
+	case "locale":
+		data, err := s.api.LocaleInfo()
+		if err != nil { s.fail(w, 500, err); return }
+		s.ok(w, data)
+	case "cpu/detail":
+		data, err := s.api.CpuDetail()
+		if err != nil { s.fail(w, 500, err); return }
+		s.ok(w, data)
+	case "thermal":
+		data, err := s.api.ThermalInfo()
+		if err != nil { s.fail(w, 500, err); return }
+		s.ok(w, data)
+	case "memory":
+		data, err := s.api.MemoryDetail()
+		if err != nil { s.fail(w, 500, err); return }
+		s.ok(w, data)
+	case "wifi/detailed":
+		data, err := s.api.WifiDetailed()
+		if err != nil { s.fail(w, 500, err); return }
+		s.ok(w, data)
+	case "bluetooth":
+		data, err := s.api.BluetoothInfo()
+		if err != nil { s.fail(w, 500, err); return }
+		s.ok(w, data)
+	case "display/brightness":
+		data, err := s.api.DisplayBrightness()
+		if err != nil { s.fail(w, 500, err); return }
+		s.ok(w, data)
+	case "display/color":
+		data, err := s.api.DisplayColor()
+		if err != nil { s.fail(w, 500, err); return }
+		s.ok(w, data)
+	case "microphone":
+		data, err := s.api.MicrophoneList()
+		if err != nil { s.fail(w, 500, err); return }
+		s.ok(w, data)
+	case "kernel":
+		data, err := s.api.KernelInfo()
+		if err != nil { s.fail(w, 500, err); return }
+		s.ok(w, data)
 	default:
 		s.writeJSON(w, 404, map[string]any{"ok": false, "error": "unknown method: " + method})
 	}
@@ -312,7 +401,14 @@ func startHTTP(api AndroidAPI, token string) error {
 	// convenience routes
 	methods := []string{"ping", "battery", "wifi", "device", "location",
 		"clipboard", "toast", "notify", "vibrate", "torch", "tts", "share",
-		"camera", "contacts", "calllog", "sms"}
+		"camera", "contacts", "calllog", "sms",
+		// extended info
+		"sensors", "sensors/read", "system", "storage", "network",
+		"telephony", "display", "audio", "features",
+		"camera/list", "battery/detailed", "location/detailed", "locale",
+		// patch 36
+		"cpu/detail", "thermal", "memory", "wifi/detailed", "bluetooth",
+		"display/brightness", "display/color", "microphone", "kernel"}
 	for _, m := range methods {
 		m := m
 		mux.HandleFunc("/"+m, s.handleMethod(m, func(w http.ResponseWriter, p map[string]any) {

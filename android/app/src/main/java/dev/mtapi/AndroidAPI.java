@@ -25,4 +25,30 @@ public interface AndroidAPI {
     String contactsList(int limit) throws Exception;
     String callLogList(int limit) throws Exception;
     String smsList(int limit) throws Exception;
+    // Extended info (patch 34)
+    String sensorsList() throws Exception;
+    String sensorRead(String name, int ms) throws Exception;
+    String systemInfo() throws Exception;
+    String storageInfo() throws Exception;
+    String networkInfo() throws Exception;
+    String telephonyInfo() throws Exception;
+    String displayInfo() throws Exception;
+    String audioInfo() throws Exception;
+    String featuresList() throws Exception;
+    String cameraList() throws Exception;
+    String batteryDetailed() throws Exception;
+    String locationDetailed() throws Exception;
+    String localeInfo() throws Exception;
+
+    // Patch 36
+    String cpuDetail() throws Exception;
+    String thermalInfo() throws Exception;
+    String memoryDetail() throws Exception;
+    String wifiDetailed() throws Exception;
+    String bluetoothInfo() throws Exception;
+    String displayBrightness() throws Exception;
+    String displayColor() throws Exception;
+    String microphoneList() throws Exception;
+    String kernelInfo() throws Exception;
+
 }

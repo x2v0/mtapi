@@ -31,7 +31,40 @@ import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import android.hardware.Sensor;
+import android.hardware.SensorEvent;
+import android.hardware.SensorEventListener;
+import android.hardware.SensorManager;
+import android.os.SystemClock;
+import android.os.Environment;
+import android.os.StatFs;
+import android.os.storage.StorageManager;
+import android.os.storage.StorageVolume;
+import android.net.ConnectivityManager;
+import android.net.Network;
+import android.net.NetworkCapabilities;
+import android.telephony.TelephonyManager;
+import android.util.DisplayMetrics;
+import android.view.Display;
+import android.view.WindowManager;
+import android.media.AudioManager;
+import android.media.AudioDeviceInfo;
+import android.content.pm.FeatureInfo;
+import java.util.Collections;
+import java.util.TimeZone;
 
+
+import java.net.NetworkInterface;
+import java.net.InterfaceAddress;
+import android.bluetooth.BluetoothAdapter;
+import android.bluetooth.BluetoothDevice;
+import android.provider.Settings;
+import java.io.BufferedReader;
+import java.io.FileReader;
+import java.io.File;
+import java.util.Set;
+import java.util.HashMap;
+import java.util.Map;
 
 public class AndroidApiImpl implements AndroidAPI {
 
@@ -313,4 +346,814 @@ public class AndroidApiImpl implements AndroidAPI {
         if (sm == null) throw new RuntimeException("sms_manager_unavailable");
         sm.sendTextMessage(to, null, text, null, null);
     }
+    // ─── Extended info (patch 34) ───────────────────────────
+
+    @Override
+    public String sensorsList() throws Exception {
+        SensorManager sm = (SensorManager) ctx.getSystemService(Context.SENSOR_SERVICE);
+        if (sm == null) throw new RuntimeException("no_sensor_manager");
+        JSONArray arr = new JSONArray();
+        for (Sensor s : sm.getSensorList(Sensor.TYPE_ALL)) {
+            JSONObject o = new JSONObject();
+            try {
+                o.put("name", s.getName());
+                o.put("vendor", s.getVendor());
+                o.put("version", s.getVersion());
+                o.put("type", s.getType());
+                o.put("typeString", s.getStringType());
+                o.put("maxRange", (double) s.getMaximumRange());
+                o.put("resolution", (double) s.getResolution());
+                o.put("power_mA", (double) s.getPower());
+                o.put("minDelay_us", s.getMinDelay());
+                o.put("maxDelay_us", s.getMaxDelay());
+                o.put("reportingMode", s.getReportingMode());
+                o.put("wakeUp", s.isWakeUpSensor());
+                o.put("dynamic", s.isDynamicSensor());
+            } catch (Throwable ignored) {}
+            arr.put(o);
+        }
+        return arr.toString();
+    }
+
+    @Override
+    public String sensorRead(String name, int ms) throws Exception {
+        SensorManager sm = (SensorManager) ctx.getSystemService(Context.SENSOR_SERVICE);
+        if (sm == null) throw new RuntimeException("no_sensor_manager");
+        Sensor target = null;
+        for (Sensor s : sm.getSensorList(Sensor.TYPE_ALL)) {
+            if (s.getName().equalsIgnoreCase(name)
+                    || s.getStringType().equalsIgnoreCase(name)
+                    || s.getStringType().toLowerCase().endsWith(name.toLowerCase())) {
+                target = s; break;
+            }
+        }
+        if (target == null) throw new RuntimeException("sensor_not_found: " + name);
+
+        final JSONArray readings = new JSONArray();
+        final SensorEventListener listener = new SensorEventListener() {
+            @Override public void onSensorChanged(SensorEvent e) {
+                try {
+                    JSONArray vals = new JSONArray();
+                    for (float v : e.values) vals.put((double) v);
+                    JSONObject r = new JSONObject();
+                    r.put("ts_ns", e.timestamp);
+                    r.put("values", vals);
+                    if (e.accuracy >= 0) r.put("accuracy", e.accuracy);
+                    readings.put(r);
+                } catch (Throwable ignored) {}
+            }
+            @Override public void onAccuracyChanged(Sensor s, int a) {}
+        };
+
+        sm.registerListener(listener, target, SensorManager.SENSOR_DELAY_FASTEST);
+        try { Thread.sleep(Math.max(50, Math.min(ms, 10000))); }
+        finally { sm.unregisterListener(listener); }
+
+        return new JSONObject()
+            .put("sensor", target.getName())
+            .put("type", target.getStringType())
+            .put("readings", readings)
+            .toString();
+    }
+
+    @Override
+    public String systemInfo() throws Exception {
+        JSONObject o = new JSONObject();
+        o.put("cpuCores", Runtime.getRuntime().availableProcessors());
+        o.put("cpuAbi", String.join(",", Build.SUPPORTED_ABIS));
+        o.put("cpuAbi64", String.join(",", Build.SUPPORTED_64_BIT_ABIS));
+        o.put("cpuAbi32", String.join(",", Build.SUPPORTED_32_BIT_ABIS));
+
+        android.app.ActivityManager am = (android.app.ActivityManager) ctx.getSystemService(Context.ACTIVITY_SERVICE);
+        if (am != null) {
+            android.app.ActivityManager.MemoryInfo mi = new android.app.ActivityManager.MemoryInfo();
+            am.getMemoryInfo(mi);
+            JSONObject m = new JSONObject();
+            m.put("totalBytes", mi.totalMem);
+            m.put("availableBytes", mi.availMem);
+            m.put("lowMemory", mi.lowMemory);
+            m.put("thresholdBytes", mi.threshold);
+            o.put("ram", m);
+        }
+
+        JSONObject time = new JSONObject();
+        time.put("uptimeMs", SystemClock.elapsedRealtime());
+        time.put("sinceBootMs", SystemClock.uptimeMillis());
+        time.put("wallMs", System.currentTimeMillis());
+        o.put("time", time);
+
+        JSONObject build = new JSONObject();
+        try { build.put("brand", Build.BRAND); } catch (Throwable ignored) {}
+        try { build.put("manufacturer", Build.MANUFACTURER); } catch (Throwable ignored) {}
+        try { build.put("model", Build.MODEL); } catch (Throwable ignored) {}
+        try { build.put("device", Build.DEVICE); } catch (Throwable ignored) {}
+        try { build.put("product", Build.PRODUCT); } catch (Throwable ignored) {}
+        try { build.put("board", Build.BOARD); } catch (Throwable ignored) {}
+        try { build.put("hardware", Build.HARDWARE); } catch (Throwable ignored) {}
+        try { build.put("fingerprint", Build.FINGERPRINT); } catch (Throwable ignored) {}
+        try { build.put("displayId", Build.DISPLAY); } catch (Throwable ignored) {}
+        try { build.put("host", Build.HOST); } catch (Throwable ignored) {}
+        try { build.put("user", Build.USER); } catch (Throwable ignored) {}
+        try { build.put("tags", Build.TAGS); } catch (Throwable ignored) {}
+        try { build.put("type", Build.TYPE); } catch (Throwable ignored) {}
+        try { build.put("bootloader", Build.BOOTLOADER); } catch (Throwable ignored) {}
+        try { build.put("radioVersion", Build.getRadioVersion()); } catch (Throwable ignored) {}
+        try { build.put("sdkInt", Build.VERSION.SDK_INT); } catch (Throwable ignored) {}
+        try { build.put("release", Build.VERSION.RELEASE); } catch (Throwable ignored) {}
+        try { build.put("codename", Build.VERSION.CODENAME); } catch (Throwable ignored) {}
+        try { build.put("incremental", Build.VERSION.INCREMENTAL); } catch (Throwable ignored) {}
+        try { build.put("securityPatch", Build.VERSION.SECURITY_PATCH); } catch (Throwable ignored) {}
+        try { build.put("previewSdk", Build.VERSION.PREVIEW_SDK_INT); } catch (Throwable ignored) {}
+        o.put("build", build);
+
+        return o.toString();
+    }
+
+    @Override
+    public String storageInfo() throws Exception {
+        JSONObject o = new JSONObject();
+
+        StatFs data = new StatFs(Environment.getDataDirectory().getAbsolutePath());
+        JSONObject internal = new JSONObject();
+        internal.put("path", Environment.getDataDirectory().getAbsolutePath());
+        internal.put("totalBytes", data.getTotalBytes());
+        internal.put("freeBytes", data.getAvailableBytes());
+        internal.put("usedBytes", data.getTotalBytes() - data.getAvailableBytes());
+        o.put("internal", internal);
+
+        JSONArray volumes = new JSONArray();
+        StorageManager sm = (StorageManager) ctx.getSystemService(Context.STORAGE_SERVICE);
+        if (sm != null) {
+            for (StorageVolume v : sm.getStorageVolumes()) {
+                try {
+                    JSONObject vo = new JSONObject();
+                    vo.put("description", v.getDescription(ctx));
+                    vo.put("isPrimary", v.isPrimary());
+                    vo.put("isRemovable", v.isRemovable());
+                    if (Build.VERSION.SDK_INT >= 30) {
+                        vo.put("state", v.getState());
+                        vo.put("uuid", v.getUuid());
+                    }
+                    if (Build.VERSION.SDK_INT >= 30 && v.getDirectory() != null) {
+                        try {
+                            StatFs fs = new StatFs(v.getDirectory().getAbsolutePath());
+                            vo.put("totalBytes", fs.getTotalBytes());
+                            vo.put("freeBytes", fs.getAvailableBytes());
+                        } catch (Throwable ignored) {}
+                    }
+                    volumes.put(vo);
+                } catch (Throwable ignored) {}
+            }
+        }
+        o.put("volumes", volumes);
+
+        return o.toString();
+    }
+
+    @Override
+    public String networkInfo() throws Exception {
+        JSONObject o = new JSONObject();
+
+        JSONArray ifaces = new JSONArray();
+        try {
+            for (NetworkInterface ni : Collections.list(NetworkInterface.getNetworkInterfaces())) {
+                try {
+                    JSONObject io = new JSONObject();
+                    io.put("name", ni.getName());
+                    io.put("up", ni.isUp());
+                    io.put("loopback", ni.isLoopback());
+                    io.put("virtual", ni.isVirtual());
+                    io.put("mtu", ni.getMTU());
+                    JSONArray addrs = new JSONArray();
+                    for (InterfaceAddress ia : ni.getInterfaceAddresses()) {
+                        JSONObject ao = new JSONObject();
+                        ao.put("address", ia.getAddress().getHostAddress());
+                        ao.put("prefixLength", ia.getNetworkPrefixLength());
+                        if (ia.getBroadcast() != null)
+                            ao.put("broadcast", ia.getBroadcast().getHostAddress());
+                        addrs.put(ao);
+                    }
+                    io.put("addresses", addrs);
+                    ifaces.put(io);
+                } catch (Throwable ignored) {}
+            }
+        } catch (Throwable ignored) {}
+        o.put("interfaces", ifaces);
+
+        ConnectivityManager cm = (ConnectivityManager) ctx.getSystemService(Context.CONNECTIVITY_SERVICE);
+        if (cm != null && Build.VERSION.SDK_INT >= 23) {
+            try {
+                Network n = cm.getActiveNetwork();
+                NetworkCapabilities caps = cm.getNetworkCapabilities(n);
+                if (caps != null) {
+                    JSONObject no = new JSONObject();
+                    no.put("wifi", caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI));
+                    no.put("cellular", caps.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR));
+                    no.put("ethernet", caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET));
+                    no.put("vpn", caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN));
+                    no.put("bluetooth", caps.hasTransport(NetworkCapabilities.TRANSPORT_BLUETOOTH));
+                    no.put("downstreamKbps", caps.getLinkDownstreamBandwidthKbps());
+                    no.put("upstreamKbps", caps.getLinkUpstreamBandwidthKbps());
+                    no.put("validated", caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED));
+                    o.put("active", no);
+                }
+            } catch (Throwable ignored) {}
+        }
+
+        return o.toString();
+    }
+
+    @Override
+    public String telephonyInfo() throws Exception {
+        JSONObject o = new JSONObject();
+        TelephonyManager tm = (TelephonyManager) ctx.getSystemService(Context.TELEPHONY_SERVICE);
+        if (tm == null) return o.toString();
+
+        try { o.put("simState", tm.getSimState()); } catch (Throwable ignored) {}
+        try { o.put("phoneType", tm.getPhoneType()); } catch (Throwable ignored) {}
+        try { o.put("networkOperator", tm.getNetworkOperator()); } catch (Throwable ignored) {}
+        try { o.put("networkOperatorName", tm.getNetworkOperatorName()); } catch (Throwable ignored) {}
+        try { o.put("simOperator", tm.getSimOperator()); } catch (Throwable ignored) {}
+        try { o.put("simOperatorName", tm.getSimOperatorName()); } catch (Throwable ignored) {}
+        try { o.put("networkType", tm.getDataNetworkType()); } catch (Throwable ignored) {}
+        try { o.put("isNetworkRoaming", tm.isNetworkRoaming()); } catch (Throwable ignored) {}
+        try { o.put("isDataEnabled", tm.isDataEnabled()); } catch (Throwable ignored) {}
+        try { o.put("simCountryIso", tm.getSimCountryIso()); } catch (Throwable ignored) {}
+        try { o.put("networkCountryIso", tm.getNetworkCountryIso()); } catch (Throwable ignored) {}
+        try { o.put("simCarrierId", tm.getSimCarrierId()); } catch (Throwable ignored) {}
+        try { o.put("simCarrierIdName", String.valueOf(tm.getSimCarrierIdName())); } catch (Throwable ignored) {}
+        try { o.put("phoneCount", tm.getPhoneCount()); } catch (Throwable ignored) {}
+        try { o.put("isHearingAidCompatibilitySupported", tm.isHearingAidCompatibilitySupported()); } catch (Throwable ignored) {}
+
+        if (Build.VERSION.SDK_INT >= 28) {
+            try {
+                android.telephony.SignalStrength ss = tm.getSignalStrength();
+                if (ss != null) {
+                    JSONObject so = new JSONObject();
+                    so.put("level", ss.getLevel());
+                    so.put("isGsm", ss.isGsm());
+                    try { so.put("dbm", ss.getCellSignalStrengths().get(0).getDbm()); } catch (Throwable ignored) {}
+                    o.put("signal", so);
+                }
+            } catch (Throwable ignored) {}
+        }
+
+        return o.toString();
+    }
+
+    @Override
+    public String displayInfo() throws Exception {
+        JSONObject o = new JSONObject();
+        WindowManager wm = (WindowManager) ctx.getSystemService(Context.WINDOW_SERVICE);
+        if (wm == null) return o.toString();
+        Display d = wm.getDefaultDisplay();
+        DisplayMetrics m = new DisplayMetrics();
+        d.getRealMetrics(m);
+        o.put("widthPx", m.widthPixels);
+        o.put("heightPx", m.heightPixels);
+        o.put("densityDpi", m.densityDpi);
+        o.put("density", (double) m.density);
+        o.put("xdpi", (double) m.xdpi);
+        o.put("ydpi", (double) m.ydpi);
+
+        if (Build.VERSION.SDK_INT >= 23) {
+            try {
+                Display.Mode cur = d.getMode();
+                o.put("refreshRateHz", (double) cur.getRefreshRate());
+                o.put("modeId", cur.getModeId());
+                JSONArray modes = new JSONArray();
+                for (Display.Mode mm : d.getSupportedModes()) {
+                    modes.put(new JSONObject()
+                        .put("id", mm.getModeId())
+                        .put("width", mm.getPhysicalWidth())
+                        .put("height", mm.getPhysicalHeight())
+                        .put("refreshHz", (double) mm.getRefreshRate()));
+                }
+                o.put("modes", modes);
+            } catch (Throwable ignored) {}
+        }
+        if (Build.VERSION.SDK_INT >= 24) {
+            try { o.put("isHdr", d.isHdr()); } catch (Throwable ignored) {}
+            try { o.put("isWideColorGamut", d.isWideColorGamut()); } catch (Throwable ignored) {}
+        }
+        try { o.put("rotation", d.getRotation()); } catch (Throwable ignored) {}
+        try { o.put("state", d.getState()); } catch (Throwable ignored) {}
+
+        return o.toString();
+    }
+
+    @Override
+    public String audioInfo() throws Exception {
+        JSONObject o = new JSONObject();
+        AudioManager am = (AudioManager) ctx.getSystemService(Context.AUDIO_SERVICE);
+        if (am == null) return o.toString();
+
+        try {
+            JSONObject vol = new JSONObject();
+            vol.put("music", am.getStreamVolume(AudioManager.STREAM_MUSIC));
+            vol.put("musicMax", am.getStreamMaxVolume(AudioManager.STREAM_MUSIC));
+            vol.put("ring", am.getStreamVolume(AudioManager.STREAM_RING));
+            vol.put("ringMax", am.getStreamMaxVolume(AudioManager.STREAM_RING));
+            vol.put("alarm", am.getStreamVolume(AudioManager.STREAM_ALARM));
+            vol.put("notification", am.getStreamVolume(AudioManager.STREAM_NOTIFICATION));
+            o.put("volumes", vol);
+        } catch (Throwable ignored) {}
+
+        try { o.put("isMusicActive", am.isMusicActive()); } catch (Throwable ignored) {}
+        try { o.put("isSpeakerphoneOn", am.isSpeakerphoneOn()); } catch (Throwable ignored) {}
+        try { o.put("isBluetoothA2dpOn", am.isBluetoothA2dpOn()); } catch (Throwable ignored) {}
+        try { o.put("isWiredHeadsetOn", am.isWiredHeadsetOn()); } catch (Throwable ignored) {}
+        try { o.put("mode", am.getMode()); } catch (Throwable ignored) {}
+        try { o.put("ringerMode", am.getRingerMode()); } catch (Throwable ignored) {}
+        try { o.put("sampleRate", am.getProperty(AudioManager.PROPERTY_OUTPUT_SAMPLE_RATE)); } catch (Throwable ignored) {}
+        try { o.put("framesPerBuffer", am.getProperty(AudioManager.PROPERTY_OUTPUT_FRAMES_PER_BUFFER)); } catch (Throwable ignored) {}
+
+        if (Build.VERSION.SDK_INT >= 23) {
+            try {
+                JSONArray arr = new JSONArray();
+                for (AudioDeviceInfo ad : am.getDevices(AudioManager.GET_DEVICES_ALL)) {
+                    JSONObject adinfo = new JSONObject();
+                    adinfo.put("type", ad.getType());
+                    adinfo.put("name", ad.getProductName());
+                    adinfo.put("isSink", ad.isSink());
+                    adinfo.put("isSource", ad.isSource());
+                    JSONArray srArr = new JSONArray();
+                    for (int r : ad.getSampleRates()) srArr.put(r);
+                    adinfo.put("sampleRates", srArr);
+                    JSONArray ccArr = new JSONArray();
+                    for (int c : ad.getChannelCounts()) ccArr.put(c);
+                    adinfo.put("channelCounts", ccArr);
+                    arr.put(adinfo);
+                }
+                o.put("devices", arr);
+            } catch (Throwable ignored) {}
+        }
+
+        return o.toString();
+    }
+
+    @Override
+    public String featuresList() throws Exception {
+        JSONArray arr = new JSONArray();
+        try {
+            android.content.pm.PackageManager pm = ctx.getPackageManager();
+            FeatureInfo[] feats = pm.getSystemAvailableFeatures();
+            if (feats != null) {
+                for (FeatureInfo fi : feats) {
+                    try {
+                        JSONObject o = new JSONObject();
+                        if (fi.name != null) o.put("name", fi.name);
+                        if (Build.VERSION.SDK_INT >= 24) o.put("version", fi.version);
+                        arr.put(o);
+                    } catch (Throwable ignored) {}
+                }
+            }
+        } catch (Throwable ignored) {}
+        return arr.toString();
+    }
+
+    @Override
+    public String cameraList() throws Exception {
+        CameraManager cm = (CameraManager) ctx.getSystemService(Context.CAMERA_SERVICE);
+        if (cm == null) throw new RuntimeException("no_camera_manager");
+        JSONArray arr = new JSONArray();
+        for (String id : cm.getCameraIdList()) {
+            try {
+                CameraCharacteristics cc = cm.getCameraCharacteristics(id);
+                JSONObject o = new JSONObject();
+                o.put("id", id);
+                Object flash = cc.get(CameraCharacteristics.FLASH_INFO_AVAILABLE);
+                if (flash != null) o.put("flash", flash);
+                Object facing = cc.get(CameraCharacteristics.LENS_FACING);
+                if (facing != null) o.put("lensFacing", facing);
+                Object orient = cc.get(CameraCharacteristics.SENSOR_ORIENTATION);
+                if (orient != null) o.put("sensorOrientation", orient);
+
+                try {
+                    android.util.SizeF sz = cc.get(CameraCharacteristics.SENSOR_INFO_PHYSICAL_SIZE);
+                    if (sz != null) {
+                        o.put("sensorWidthMm", (double) sz.getWidth());
+                        o.put("sensorHeightMm", (double) sz.getHeight());
+                    }
+                } catch (Throwable ignored) {}
+                try {
+                    android.util.Size pix = cc.get(CameraCharacteristics.SENSOR_INFO_PIXEL_ARRAY_SIZE);
+                    if (pix != null) {
+                        o.put("pixelArrayWidth", pix.getWidth());
+                        o.put("pixelArrayHeight", pix.getHeight());
+                    }
+                } catch (Throwable ignored) {}
+                try {
+                    float[] fs = cc.get(CameraCharacteristics.LENS_INFO_AVAILABLE_FOCAL_LENGTHS);
+                    if (fs != null) {
+                        JSONArray fsa = new JSONArray();
+                        for (float f : fs) fsa.put((double) f);
+                        o.put("focalLengthsMm", fsa);
+                    }
+                } catch (Throwable ignored) {}
+                try {
+                    float[] ap = cc.get(CameraCharacteristics.LENS_INFO_AVAILABLE_APERTURES);
+                    if (ap != null) {
+                        JSONArray apa = new JSONArray();
+                        for (float a : ap) apa.put((double) a);
+                        o.put("aperturesF", apa);
+                    }
+                } catch (Throwable ignored) {}
+                try {
+                    android.util.Range<Integer> iso = cc.get(CameraCharacteristics.SENSOR_INFO_SENSITIVITY_RANGE);
+                    if (iso != null) {
+                        o.put("isoMin", iso.getLower());
+                        o.put("isoMax", iso.getUpper());
+                    }
+                } catch (Throwable ignored) {}
+                try {
+                    long expo = cc.get(CameraCharacteristics.SENSOR_INFO_EXPOSURE_TIME_RANGE).getUpper();
+                    o.put("maxExposureNs", expo);
+                } catch (Throwable ignored) {}
+
+                android.hardware.camera2.params.StreamConfigurationMap scm =
+                        cc.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP);
+                if (scm != null) {
+                    android.util.Size[] sizes = scm.getOutputSizes(android.graphics.ImageFormat.JPEG);
+                    if (sizes != null) {
+                        JSONArray sa = new JSONArray();
+                        for (android.util.Size s : sizes)
+                            sa.put(new JSONObject().put("w", s.getWidth()).put("h", s.getHeight()));
+                        o.put("jpegSizes", sa);
+                    }
+                }
+                arr.put(o);
+            } catch (Throwable ignored) {}
+        }
+        return arr.toString();
+    }
+
+    @Override
+    public String batteryDetailed() throws Exception {
+        JSONObject o = new JSONObject();
+        android.content.IntentFilter f = new android.content.IntentFilter(android.content.Intent.ACTION_BATTERY_CHANGED);
+        android.content.Intent b = ctx.registerReceiver(null, f);
+        if (b == null) return o.toString();
+        int level = b.getIntExtra(android.os.BatteryManager.EXTRA_LEVEL, -1);
+        int scale = b.getIntExtra(android.os.BatteryManager.EXTRA_SCALE, 100);
+        o.put("level", level);
+        o.put("scale", scale);
+        if (scale > 0) o.put("percentage", (int)(100.0 * level / scale));
+        o.put("status", b.getIntExtra(android.os.BatteryManager.EXTRA_STATUS, -1));
+        o.put("health", b.getIntExtra(android.os.BatteryManager.EXTRA_HEALTH, -1));
+        o.put("plugged", b.getIntExtra(android.os.BatteryManager.EXTRA_PLUGGED, -1));
+        o.put("voltage_mV", b.getIntExtra(android.os.BatteryManager.EXTRA_VOLTAGE, -1));
+        o.put("temperature_tenth_C", b.getIntExtra(android.os.BatteryManager.EXTRA_TEMPERATURE, -1));
+        o.put("technology", b.getStringExtra(android.os.BatteryManager.EXTRA_TECHNOLOGY));
+        o.put("present", b.getBooleanExtra(android.os.BatteryManager.EXTRA_PRESENT, false));
+        try {
+            android.os.BatteryManager bm = (android.os.BatteryManager)
+                    ctx.getSystemService(Context.BATTERY_SERVICE);
+            if (bm != null) {
+                o.put("current_uA", bm.getLongProperty(android.os.BatteryManager.BATTERY_PROPERTY_CURRENT_NOW));
+                o.put("chargeCounter_uAh", bm.getLongProperty(android.os.BatteryManager.BATTERY_PROPERTY_CHARGE_COUNTER));
+                o.put("capacity", bm.getIntProperty(android.os.BatteryManager.BATTERY_PROPERTY_CAPACITY));
+            }
+        } catch (Throwable ignored) {}
+        return o.toString();
+    }
+
+    @Override
+    public String locationDetailed() throws Exception {
+        need(Manifest.permission.ACCESS_FINE_LOCATION);
+        LocationManager lm = (LocationManager) ctx.getSystemService(Context.LOCATION_SERVICE);
+        if (lm == null) throw new RuntimeException("no_location_manager");
+        JSONObject o = new JSONObject();
+
+        try { o.put("isProviderEnabled", lm.isProviderEnabled(LocationManager.GPS_PROVIDER)); } catch (Throwable ignored) {}
+
+        JSONArray provs = new JSONArray();
+        for (String p : lm.getProviders(true)) {
+            try {
+                JSONObject po = new JSONObject();
+                po.put("name", p);
+                if (Build.VERSION.SDK_INT >= 28) {
+                    try { po.put("enabled", lm.isProviderEnabled(p)); } catch (Throwable ignored) {}
+                }
+                android.location.Location l = null;
+                try { l = lm.getLastKnownLocation(p); } catch (SecurityException e) { continue; }
+                if (l != null) {
+                    po.put("lat", l.getLatitude());
+                    po.put("lon", l.getLongitude());
+                    po.put("alt", l.getAltitude());
+                    po.put("accuracy", l.getAccuracy());
+                    po.put("speed_mps", l.getSpeed());
+                    po.put("bearing_deg", l.getBearing());
+                    po.put("provider", l.getProvider());
+                    po.put("ts_ms", l.getTime());
+                    if (Build.VERSION.SDK_INT >= 26) {
+                        po.put("speedAccuracy", l.getSpeedAccuracyMetersPerSecond());
+                        po.put("bearingAccuracy", l.getBearingAccuracyDegrees());
+                        po.put("verticalAccuracy", l.getVerticalAccuracyMeters());
+                    }
+                }
+                provs.put(po);
+            } catch (Throwable ignored) {}
+        }
+        o.put("providers", provs);
+
+        return o.toString();
+    }
+
+    @Override
+    public String localeInfo() throws Exception {
+        JSONObject o = new JSONObject();
+        o.put("locale", Locale.getDefault().toString());
+        o.put("language", Locale.getDefault().getLanguage());
+        o.put("country", Locale.getDefault().getCountry());
+        o.put("timezone", TimeZone.getDefault().getID());
+        o.put("timezoneOffsetMs", TimeZone.getDefault().getOffset(System.currentTimeMillis()));
+        o.put("nowMs", System.currentTimeMillis());
+        o.put("is24Hour", android.text.format.DateFormat.is24HourFormat(ctx));
+        return o.toString();
+    }
+
+    private String readFile(String path) {
+        try (BufferedReader r = new BufferedReader(new FileReader(path))) {
+            StringBuilder sb = new StringBuilder();
+            String line;
+            while ((line = r.readLine()) != null) sb.append(line).append("\n");
+            return sb.toString().trim();
+        } catch (Throwable t) {
+            return null;
+        }
+    }
+
+
+    // ─── Patch 36 ──────────────────────────────────────────
+
+    @Override
+    public String cpuDetail() throws Exception {
+        JSONObject o = new JSONObject();
+        int cores = Runtime.getRuntime().availableProcessors();
+        o.put("cores", cores);
+
+        JSONArray perCore = new JSONArray();
+        for (int i = 0; i < cores; i++) {
+            try {
+                JSONObject c = new JSONObject();
+                c.put("id", i);
+                String base = "/sys/devices/system/cpu/cpu" + i + "/cpufreq/";
+                String cur = readFile(base + "scaling_cur_freq");
+                if (cur != null) c.put("curKhz", Long.parseLong(cur.trim()));
+                String min = readFile(base + "cpuinfo_min_freq");
+                if (min != null) c.put("minKhz", Long.parseLong(min.trim()));
+                String max = readFile(base + "cpuinfo_max_freq");
+                if (max != null) c.put("maxKhz", Long.parseLong(max.trim()));
+                String gov = readFile(base + "scaling_governor");
+                if (gov != null) c.put("governor", gov);
+                perCore.put(c);
+            } catch (Throwable ignored) {}
+        }
+        o.put("perCore", perCore);
+
+        String loadavg = readFile("/proc/loadavg");
+        if (loadavg != null) o.put("loadAverage", loadavg.split("\\s+"));
+
+        String uptime = readFile("/proc/uptime");
+        if (uptime != null) {
+            String[] p = uptime.split("\\s+");
+            if (p.length > 0) o.put("uptimeSec", Double.parseDouble(p[0]));
+        }
+        return o.toString();
+    }
+
+    @Override
+    public String thermalInfo() throws Exception {
+        JSONArray arr = new JSONArray();
+        File base = new File("/sys/class/thermal");
+        File[] zones = base.listFiles((d, n) -> n.startsWith("thermal_zone"));
+        if (zones != null) {
+            for (File z : zones) {
+                try {
+                    String type = readFile(z.getAbsolutePath() + "/type");
+                    String temp = readFile(z.getAbsolutePath() + "/temp");
+                    if (type != null && temp != null) {
+                        JSONObject o = new JSONObject();
+                        o.put("zone", z.getName());
+                        o.put("type", type.trim());
+                        double t = Double.parseDouble(temp.trim()) / 1000.0;
+                        o.put("temp_c", t);
+                        arr.put(o);
+                    }
+                } catch (Throwable ignored) {}
+            }
+        }
+        return arr.toString();
+    }
+
+    @Override
+    public String memoryDetail() throws Exception {
+        JSONObject o = new JSONObject();
+        String meminfo = readFile("/proc/meminfo");
+        if (meminfo != null) {
+            JSONObject kv = new JSONObject();
+            for (String line : meminfo.split("\n")) {
+                try {
+                    int idx = line.indexOf(':');
+                    if (idx < 0) continue;
+                    String key = line.substring(0, idx).trim();
+                    String val = line.substring(idx + 1).trim();
+                    // value is like "12345 kB"
+                    String num = val.split("\\s+")[0];
+                    if (num.matches("\\d+")) {
+                        kv.put(key, Long.parseLong(num) * 1024);
+                    }
+                } catch (Throwable ignored) {}
+            }
+            o.put("meminfo", kv);
+        }
+        return o.toString();
+    }
+
+    @Override
+    public String wifiDetailed() throws Exception {
+        JSONObject o = new JSONObject();
+        WifiManager wm = (WifiManager) ctx.getApplicationContext().getSystemService(Context.WIFI_SERVICE);
+        if (wm == null) throw new RuntimeException("no_wifi");
+        WifiInfo info = wm.getConnectionInfo();
+        if (info == null) throw new RuntimeException("no_wifi_info");
+
+        try { o.put("ssid", String.valueOf(info.getSSID())); } catch (Throwable ignored) {}
+        try { o.put("bssid", String.valueOf(info.getBSSID())); } catch (Throwable ignored) {}
+        try { o.put("rssi", info.getRssi()); } catch (Throwable ignored) {}
+        try { o.put("linkSpeed_mbps", info.getLinkSpeed()); } catch (Throwable ignored) {}
+        if (Build.VERSION.SDK_INT >= 21) {
+            try { o.put("frequency_mhz", info.getFrequency()); } catch (Throwable ignored) {}
+            try { o.put("hiddenSSID", info.getHiddenSSID()); } catch (Throwable ignored) {}
+        }
+        if (Build.VERSION.SDK_INT >= 29) {
+            try { o.put("wifiStandard", info.getWifiStandard()); } catch (Throwable ignored) {}
+            try { o.put("maxSupportedRxKbps", info.getMaxSupportedRxLinkSpeedMbps()); } catch (Throwable ignored) {}
+            try { o.put("maxSupportedTxKbps", info.getMaxSupportedTxLinkSpeedMbps()); } catch (Throwable ignored) {}
+            try { o.put("currentRxKbps", info.getRxLinkSpeedMbps()); } catch (Throwable ignored) {}
+            try { o.put("currentTxKbps", info.getTxLinkSpeedMbps()); } catch (Throwable ignored) {}
+        }
+        try { o.put("ipAddress", info.getIpAddress()); } catch (Throwable ignored) {}
+        try { o.put("macAddress", info.getMacAddress()); } catch (Throwable ignored) {}
+        try { o.put("networkId", info.getNetworkId()); } catch (Throwable ignored) {}
+        try { o.put("supplicantState", String.valueOf(info.getSupplicantState())); } catch (Throwable ignored) {}
+        try { o.put("wifiEnabled", wm.isWifiEnabled()); } catch (Throwable ignored) {}
+
+        return o.toString();
+    }
+
+    @Override
+    public String bluetoothInfo() throws Exception {
+        JSONObject o = new JSONObject();
+        BluetoothAdapter ba = BluetoothAdapter.getDefaultAdapter();
+        if (ba == null) {
+            o.put("available", false);
+            return o.toString();
+        }
+        o.put("available", true);
+        try { o.put("enabled", ba.isEnabled()); } catch (Throwable ignored) {}
+        try { o.put("state", ba.getState()); } catch (Throwable ignored) {}
+        try { o.put("name", ba.getName()); } catch (Throwable t) { o.put("nameError", "permission_required: BLUETOOTH_CONNECT"); }
+        try { o.put("address", ba.getAddress()); } catch (Throwable t) {}
+
+        JSONArray devices = new JSONArray();
+        try {
+            Set<BluetoothDevice> bonded = ba.getBondedDevices();
+            if (bonded != null) {
+                for (BluetoothDevice d : bonded) {
+                    try {
+                        JSONObject dj = new JSONObject();
+                        try { dj.put("name", d.getName()); } catch (Throwable ignored) {}
+                        try { dj.put("address", d.getAddress()); } catch (Throwable ignored) {}
+                        try { dj.put("type", d.getType()); } catch (Throwable ignored) {}
+                        try { dj.put("bondState", d.getBondState()); } catch (Throwable ignored) {}
+                        if (Build.VERSION.SDK_INT >= 30) {
+                            try { dj.put("bluetoothClass", String.valueOf(d.getBluetoothClass())); } catch (Throwable ignored) {}
+                        }
+                        devices.put(dj);
+                    } catch (Throwable ignored) {}
+                }
+            }
+        } catch (Throwable t) {
+            o.put("bondedError", "permission_required: BLUETOOTH_CONNECT");
+        }
+        o.put("bondedDevices", devices);
+
+        return o.toString();
+    }
+
+    @Override
+    public String displayBrightness() throws Exception {
+        JSONObject o = new JSONObject();
+        try {
+            int cur = Settings.System.getInt(ctx.getContentResolver(), Settings.System.SCREEN_BRIGHTNESS);
+            o.put("current", cur);
+        } catch (Throwable ignored) {}
+        try {
+            int mode = Settings.System.getInt(ctx.getContentResolver(), Settings.System.SCREEN_BRIGHTNESS_MODE);
+            o.put("mode", mode);  // 0=manual, 1=auto
+            o.put("modeString", mode == 1 ? "auto" : "manual");
+        } catch (Throwable ignored) {}
+        o.put("max", 255);
+        o.put("canWrite", false);  // always false unless WRITE_SETTINGS granted
+        return o.toString();
+    }
+
+    @Override
+    public String displayColor() throws Exception {
+        JSONObject o = new JSONObject();
+        WindowManager wm = (WindowManager) ctx.getSystemService(Context.WINDOW_SERVICE);
+        if (wm == null) return o.toString();
+        Display d = wm.getDefaultDisplay();
+
+        try {
+            Display.Mode cur = d.getMode();
+            o.put("currentModeId", cur.getModeId());
+            o.put("currentWidth", cur.getPhysicalWidth());
+            o.put("currentHeight", cur.getPhysicalHeight());
+            o.put("currentRefreshHz", (double) cur.getRefreshRate());
+        } catch (Throwable ignored) {}
+
+        if (Build.VERSION.SDK_INT >= 26) {
+            try { o.put("isWideColorGamut", d.isWideColorGamut()); } catch (Throwable ignored) {}
+            try { o.put("isHdr", d.isHdr()); } catch (Throwable ignored) {}
+        }
+
+        if (Build.VERSION.SDK_INT >= 24) {
+            try {
+                Display.HdrCapabilities hdr = d.getHdrCapabilities();
+                if (hdr != null) {
+                    JSONArray types = new JSONArray();
+                    for (int t : hdr.getSupportedHdrTypes()) types.put(t);
+                    o.put("hdrTypes", types);
+                    o.put("maxLuminance", (double) hdr.getDesiredMaxLuminance());
+                    o.put("maxAverageLuminance", (double) hdr.getDesiredMaxAverageLuminance());
+                    o.put("minLuminance", (double) hdr.getDesiredMinLuminance());
+                }
+            } catch (Throwable ignored) {}
+        }
+
+        try {
+            int night = Settings.Secure.getInt(ctx.getContentResolver(), "ui_night_mode");
+            o.put("nightMode", night);
+        } catch (Throwable ignored) {}
+
+        return o.toString();
+    }
+
+    @Override
+    public String microphoneList() throws Exception {
+        JSONArray arr = new JSONArray();
+        AudioManager am = (AudioManager) ctx.getSystemService(Context.AUDIO_SERVICE);
+        if (am == null) return arr.toString();
+
+        if (Build.VERSION.SDK_INT >= 23) {
+            for (AudioDeviceInfo ad : am.getDevices(AudioManager.GET_DEVICES_INPUTS)) {
+                try {
+                    JSONObject o = new JSONObject();
+                    o.put("id", ad.getId());
+                    o.put("type", ad.getType());
+                    o.put("name", ad.getProductName());
+                    o.put("isSource", ad.isSource());
+                    o.put("isSink", ad.isSink());
+                    JSONArray sr = new JSONArray();
+                    for (int r : ad.getSampleRates()) sr.put(r);
+                    o.put("sampleRates", sr);
+                    JSONArray cc = new JSONArray();
+                    for (int c : ad.getChannelCounts()) cc.put(c);
+                    o.put("channelCounts", cc);
+                    JSONArray enc = new JSONArray();
+                    for (int e : ad.getEncodings()) enc.put(e);
+                    o.put("encodings", enc);
+                    arr.put(o);
+                } catch (Throwable ignored) {}
+            }
+        }
+        return arr.toString();
+    }
+
+    @Override
+    public String kernelInfo() throws Exception {
+        JSONObject o = new JSONObject();
+        try { o.put("os_version", System.getProperty("os.version")); } catch (Throwable ignored) {}
+        try { o.put("os_name", System.getProperty("os.name")); } catch (Throwable ignored) {}
+        try { o.put("os_arch", System.getProperty("os.arch")); } catch (Throwable ignored) {}
+        try { o.put("java_version", System.getProperty("java.version")); } catch (Throwable ignored) {}
+        try { o.put("java_vm", System.getProperty("java.vm.name")); } catch (Throwable ignored) {}
+
+        String proc = readFile("/proc/version");
+        if (proc != null) o.put("proc_version", proc);
+        String uptime = readFile("/proc/uptime");
+        if (uptime != null) {
+            String[] p = uptime.split("\\s+");
+            if (p.length > 0) {
+                double up = Double.parseDouble(p[0]);
+                o.put("uptimeSec", up);
+                o.put("bootTimeUnixMs", System.currentTimeMillis() - (long)(up * 1000));
+            }
+        }
+        return o.toString();
+    }
+
 }

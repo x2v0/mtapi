@@ -25,6 +25,32 @@ type AndroidAPI interface {
 	CallLogList(limit int32) (string, error)
 	SmsList(limit int32) (string, error)
 	SmsSend(to, text string) error
+
+	// Extended info (patch 34)
+	SensorsList() (string, error)
+	SensorRead(name string, ms int32) (string, error)
+	SystemInfo() (string, error)
+	StorageInfo() (string, error)
+	NetworkInfo() (string, error)
+	TelephonyInfo() (string, error)
+	DisplayInfo() (string, error)
+	AudioInfo() (string, error)
+	FeaturesList() (string, error)
+	CameraList() (string, error)
+	BatteryDetailed() (string, error)
+	LocationDetailed() (string, error)
+	LocaleInfo() (string, error)
+
+	// Patch 36
+	CpuDetail() (string, error)
+	ThermalInfo() (string, error)
+	MemoryDetail() (string, error)
+	WifiDetailed() (string, error)
+	BluetoothInfo() (string, error)
+	DisplayBrightness() (string, error)
+	DisplayColor() (string, error)
+	MicrophoneList() (string, error)
+	KernelInfo() (string, error)
 }
 
 type bridgeAPI struct{ b *bridge }
@@ -73,6 +99,32 @@ func (a *bridgeAPI) SmsSend(to, text string) error {
 }
 
 // int32 helper
+func (a *bridgeAPI) SensorsList() (string, error) { return a.b.callStr("sensorsList", nil) }
+func (a *bridgeAPI) SensorRead(name string, ms int32) (string, error) {
+	return a.b.callStr("sensorRead", map[string]any{"name": name, "ms": ms})
+}
+func (a *bridgeAPI) SystemInfo() (string, error)     { return a.b.callStr("systemInfo", nil) }
+func (a *bridgeAPI) StorageInfo() (string, error)    { return a.b.callStr("storageInfo", nil) }
+func (a *bridgeAPI) NetworkInfo() (string, error)    { return a.b.callStr("networkInfo", nil) }
+func (a *bridgeAPI) TelephonyInfo() (string, error)  { return a.b.callStr("telephonyInfo", nil) }
+func (a *bridgeAPI) DisplayInfo() (string, error)    { return a.b.callStr("displayInfo", nil) }
+func (a *bridgeAPI) AudioInfo() (string, error)      { return a.b.callStr("audioInfo", nil) }
+func (a *bridgeAPI) FeaturesList() (string, error)   { return a.b.callStr("featuresList", nil) }
+func (a *bridgeAPI) CameraList() (string, error)     { return a.b.callStr("cameraList", nil) }
+func (a *bridgeAPI) BatteryDetailed() (string, error){ return a.b.callStr("batteryDetailed", nil) }
+func (a *bridgeAPI) LocationDetailed() (string, error){ return a.b.callStr("locationDetailed", nil) }
+func (a *bridgeAPI) LocaleInfo() (string, error)     { return a.b.callStr("localeInfo", nil) }
+
+func (a *bridgeAPI) CpuDetail() (string, error)        { return a.b.callStr("cpuDetail", nil) }
+func (a *bridgeAPI) ThermalInfo() (string, error)      { return a.b.callStr("thermalInfo", nil) }
+func (a *bridgeAPI) MemoryDetail() (string, error)     { return a.b.callStr("memoryDetail", nil) }
+func (a *bridgeAPI) WifiDetailed() (string, error)     { return a.b.callStr("wifiDetailed", nil) }
+func (a *bridgeAPI) BluetoothInfo() (string, error)    { return a.b.callStr("bluetoothInfo", nil) }
+func (a *bridgeAPI) DisplayBrightness() (string, error){ return a.b.callStr("displayBrightness", nil) }
+func (a *bridgeAPI) DisplayColor() (string, error)     { return a.b.callStr("displayColor", nil) }
+func (a *bridgeAPI) MicrophoneList() (string, error)   { return a.b.callStr("microphoneList", nil) }
+func (a *bridgeAPI) KernelInfo() (string, error)       { return a.b.callStr("kernelInfo", nil) }
+
 func _atoi32(s string) int32 {
 	n, _ := strconv.Atoi(s)
 	return int32(n)

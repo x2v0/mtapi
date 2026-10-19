@@ -71,7 +71,14 @@ public class ApiService extends Service {
                         ch, "mtapi daemon", NotificationManager.IMPORTANCE_LOW));
             }
         }
-        Intent intent = new Intent(this, MainActivity.class);
+        Intent intent;
+        if (token != null && !token.isEmpty()) {
+            intent = new Intent(Intent.ACTION_VIEW,
+                    android.net.Uri.parse("http://127.0.0.1:7788/?token=" + token));
+        } else {
+            intent = new Intent(this, MainActivity.class);
+        }
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
         int piFlags = PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT;
         PendingIntent pi = PendingIntent.getActivity(this, 0, intent, piFlags);
         Notification.Builder b;

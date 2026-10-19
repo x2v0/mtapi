@@ -83,7 +83,23 @@ public final class JavaBridge {
         try {
             Object result = dispatch(method, params);
             resp.put("ok", true);
-            if (result != null) resp.put("data", result);
+            if (result != null) {
+                if (result instanceof String) {
+                    String s = (String) result;
+                    String trimmed = s.trim();
+                    if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
+                        try {
+                            resp.put("data", new org.json.JSONTokener(trimmed).nextValue());
+                        } catch (Throwable t) {
+                            resp.put("data", s);
+                        }
+                    } else {
+                        resp.put("data", s);
+                    }
+                } else {
+                    resp.put("data", result);
+                }
+            }
         } catch (Throwable t) {
             resp.put("ok", false);
             String msg = t.getMessage() != null ? t.getMessage() : String.valueOf(t);
@@ -139,6 +155,28 @@ public final class JavaBridge {
             case "smsSend":
                 api.smsSend(p.optString("to", ""), p.optString("text", ""));
                 return null;
+            case "sensorsList": return api.sensorsList();
+            case "sensorRead": return api.sensorRead(p.optString("name", ""), p.optInt("ms", 1000));
+            case "systemInfo": return api.systemInfo();
+            case "storageInfo": return api.storageInfo();
+            case "networkInfo": return api.networkInfo();
+            case "telephonyInfo": return api.telephonyInfo();
+            case "displayInfo": return api.displayInfo();
+            case "audioInfo": return api.audioInfo();
+            case "featuresList": return api.featuresList();
+            case "cameraList": return api.cameraList();
+            case "batteryDetailed": return api.batteryDetailed();
+            case "locationDetailed": return api.locationDetailed();
+            case "localeInfo": return api.localeInfo();
+            case "cpuDetail": return api.cpuDetail();
+            case "thermalInfo": return api.thermalInfo();
+            case "memoryDetail": return api.memoryDetail();
+            case "wifiDetailed": return api.wifiDetailed();
+            case "bluetoothInfo": return api.bluetoothInfo();
+            case "displayBrightness": return api.displayBrightness();
+            case "displayColor": return api.displayColor();
+            case "microphoneList": return api.microphoneList();
+            case "kernelInfo": return api.kernelInfo();
             default:
                 throw new RuntimeException("unknown bridge method: " + method);
         }
