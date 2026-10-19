@@ -65,7 +65,7 @@ var checks = []check{
 
 	{path: "scripts/build_aar.sh", must: []string{"gomobile bind"}},
 	{path: "scripts/build_apk.sh", must: []string{"assembleDebug"}},
-	{path: "scripts/build_client.sh", must: []string{"GOOS=android"}},
+	{path: "scripts/build_client.sh", must: []string{"GOOS=android", "GOARCH=arm64", "mtapi-linux-amd64"}},
 	{path: "scripts/test_boot.sh", must: []string{"boot-test: OK", "TEST_BOOT"}},
 
 	{path: "tools/go.mod", must: []string{"module mtapi/tools"}},
