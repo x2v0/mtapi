@@ -9,6 +9,7 @@ import android.app.Service;
 import android.content.Intent;
 import android.os.Build;
 import android.os.IBinder;
+import android.util.Log;
 
 public class ApiService extends Service {
 
@@ -24,8 +25,9 @@ public class ApiService extends Service {
         super.onCreate();
         try {
             startForeground(NOTIF_ID, buildNotification());
+            Log.i(TAG, "startForeground ok");
         } catch (Throwable t) {
-            android.util.Log.e(TAG, "startForeground failed", t);
+            Log.e(TAG, "startForeground failed", t);
         }
     }
 
@@ -34,18 +36,19 @@ public class ApiService extends Service {
         if (started) return START_STICKY;
 
         String token = Token.getOrCreate(this);
-        try {
-            api = new AndroidApiImpl(this);
-        } catch (Throwable t) {
-            android.util.Log.e(TAG, "AndroidApiImpl init failed", t);
-            status = "api_init_failed";
+
+        if (!Mobile.ensureLoaded()) {
+            status = "native_unavailable: " + Mobile.getLoadError();
+            Log.e(TAG, status);
             notifyStatus();
             return START_STICKY;
         }
 
-        if (!Mobile.isAvailable()) {
-            status = "native_unavailable";
-            android.util.Log.e(TAG, "native library unavailable: " + Mobile.getLoadError());
+        try {
+            api = new AndroidApiImpl(this);
+        } catch (Throwable t) {
+            Log.e(TAG, "AndroidApiImpl init failed", t);
+            status = "api_init_failed";
             notifyStatus();
             return START_STICKY;
         }
@@ -54,16 +57,15 @@ public class ApiService extends Service {
             int rc = Mobile.nativeStart(token, api);
             if (rc == 0) {
                 started = true;
-                String ping = Mobile.nativePing();
-                status = "running: " + ping;
-                android.util.Log.i(TAG, "nativeStart ok; ping=" + ping);
+                status = "running: " + Mobile.nativePing();
+                Log.i(TAG, status);
             } else {
                 status = "nativeStart rc=" + rc;
-                android.util.Log.e(TAG, status);
+                Log.e(TAG, status);
             }
         } catch (Throwable t) {
-            status = "nativeStart_threw";
-            android.util.Log.e(TAG, "nativeStart threw", t);
+            status = "nativeStart_threw: " + t;
+            Log.e(TAG, status, t);
         }
         notifyStatus();
         return START_STICKY;
@@ -77,26 +79,24 @@ public class ApiService extends Service {
     }
 
     @Override
-    public IBinder onBind(Intent intent) {
-        return null;
-    }
+    public IBinder onBind(Intent intent) { return null; }
 
     @Override
     public void onTaskRemoved(Intent rootIntent) {
-        Intent restart = new Intent(getApplicationContext(), ApiService.class);
-        int piFlags = PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_ONE_SHOT;
-        PendingIntent pi = PendingIntent.getService(this, 1, restart, piFlags);
-        AlarmManager am = (AlarmManager) getSystemService(ALARM_SERVICE);
-        if (am != null) {
-            am.set(AlarmManager.RTC, System.currentTimeMillis() + 1500L, pi);
-        }
+        try {
+            Intent restart = new Intent(getApplicationContext(), ApiService.class);
+            int piFlags = PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_ONE_SHOT;
+            PendingIntent pi = PendingIntent.getService(this, 1, restart, piFlags);
+            AlarmManager am = (AlarmManager) getSystemService(ALARM_SERVICE);
+            if (am != null) am.set(AlarmManager.RTC, System.currentTimeMillis() + 1500L, pi);
+        } catch (Throwable ignored) {}
         super.onTaskRemoved(rootIntent);
     }
 
     @Override
     public void onDestroy() {
         try { if (started) Mobile.nativeStop(); }
-        catch (Throwable t) { android.util.Log.e(TAG, "nativeStop", t); }
+        catch (Throwable t) { Log.e(TAG, "nativeStop", t); }
         started = false;
         super.onDestroy();
     }
@@ -107,15 +107,12 @@ public class ApiService extends Service {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && nm != null) {
             if (nm.getNotificationChannel(ch) == null) {
                 nm.createNotificationChannel(
-                    new NotificationChannel(ch, "mtapi daemon",
-                        NotificationManager.IMPORTANCE_LOW));
+                    new NotificationChannel(ch, "mtapi daemon", NotificationManager.IMPORTANCE_LOW));
             }
         }
-
         Intent intent = new Intent(this, MainActivity.class);
         int piFlags = PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT;
         PendingIntent pi = PendingIntent.getActivity(this, 0, intent, piFlags);
-
         Notification.Builder b;
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             b = new Notification.Builder(this, ch);
