@@ -1,9 +1,11 @@
 package dev.mtapi
 
+import android.Manifest
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.hardware.camera2.CameraManager
 import android.location.LocationManager
 import android.net.wifi.WifiManager
@@ -11,12 +13,24 @@ import android.os.BatteryManager
 import android.os.Build
 import android.os.VibrationEffect
 import android.os.Vibrator
+import android.provider.CallLog
+import android.provider.ContactsContract
+import android.provider.Telephony
 import android.speech.tts.TextToSpeech
+import android.telephony.SmsManager
+import androidx.core.content.ContextCompat
 import go.mobile.mobile.AndroidAPI
+import org.json.JSONArray
 import org.json.JSONObject
 import java.util.Locale
 
 class AndroidApiImpl(private val ctx: Context) : AndroidAPI {
+
+    private fun need(perm: String) {
+        if (ContextCompat.checkSelfPermission(ctx, perm) != PackageManager.PERMISSION_GRANTED) {
+            throw RuntimeException("permission_required: $perm")
+        }
+    }
 
     override fun batteryStatus(): String {
         val bm = ctx.getSystemService(Context.BATTERY_SERVICE) as BatteryManager
@@ -110,7 +124,7 @@ class AndroidApiImpl(private val ctx: Context) : AndroidAPI {
         for (p in providers) {
             @Suppress("MissingPermission")
             val l = lm.getLastKnownLocation(p) ?: continue
-            if (best == null || l.time > best.time) best = l
+            if (best == null || l.time > best!!.time) best = l
         }
         val l = best ?: throw RuntimeException("no_location")
         return JSONObject().apply {
@@ -149,5 +163,94 @@ class AndroidApiImpl(private val ctx: Context) : AndroidAPI {
 
     override fun cameraPhoto(path: String) {
         throw RuntimeException("camera_not_implemented")
+    }
+
+    // ── 10b: contacts / calllog / sms ───────────────────────
+
+    override fun contactsList(limit: Int): String {
+        need(Manifest.permission.READ_CONTACTS)
+        val uri  = ContactsContract.CommonDataKinds.Phone.CONTENT_URI
+        val proj = arrayOf(
+            ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME,
+            ContactsContract.CommonDataKinds.Phone.NUMBER,
+        )
+        val arr = JSONArray()
+        ctx.contentResolver.query(
+            uri, proj, null, null,
+            "${ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME} ASC"
+        )?.use { c ->
+            var n = 0
+            while (c.moveToNext() && n < limit) {
+                val name = c.getString(0) ?: ""
+                val num  = c.getString(1) ?: ""
+                if (num.isBlank()) continue
+                arr.put(JSONObject().put("name", name).put("phone", num))
+                n++
+            }
+        }
+        return arr.toString()
+    }
+
+    override fun callLogList(limit: Int): String {
+        need(Manifest.permission.READ_CALL_LOG)
+        val proj = arrayOf(
+            CallLog.Calls.NUMBER,
+            CallLog.Calls.TYPE,
+            CallLog.Calls.DATE,
+            CallLog.Calls.DURATION,
+        )
+        val arr = JSONArray()
+        ctx.contentResolver.query(
+            CallLog.Calls.CONTENT_URI, proj, null, null,
+            "${CallLog.Calls.DATE} DESC"
+        )?.use { c ->
+            var n = 0
+            while (c.moveToNext() && n < limit) {
+                arr.put(JSONObject()
+                    .put("number",   c.getString(0) ?: "")
+                    .put("type",     c.getInt(1))
+                    .put("ts",       c.getLong(2))
+                    .put("duration", c.getLong(3)))
+                n++
+            }
+        }
+        return arr.toString()
+    }
+
+    override fun smsList(limit: Int): String {
+        need(Manifest.permission.READ_SMS)
+        val proj = arrayOf(
+            Telephony.Sms.ADDRESS,
+            Telephony.Sms.BODY,
+            Telephony.Sms.DATE,
+            Telephony.Sms.TYPE,
+        )
+        val arr = JSONArray()
+        ctx.contentResolver.query(
+            Telephony.Sms.CONTENT_URI, proj, null, null,
+            "${Telephony.Sms.DATE} DESC"
+        )?.use { c ->
+            var n = 0
+            while (c.moveToNext() && n < limit) {
+                arr.put(JSONObject()
+                    .put("address", c.getString(0) ?: "")
+                    .put("body",    c.getString(1) ?: "")
+                    .put("ts",      c.getLong(2))
+                    .put("type",    c.getInt(3)))
+                n++
+            }
+        }
+        return arr.toString()
+    }
+
+    override fun smsSend(to: String, text: String) {
+        need(Manifest.permission.SEND_SMS)
+        val sm = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            ctx.getSystemService(SmsManager::class.java)
+        } else {
+            @Suppress("DEPRECATION")
+            SmsManager.getDefault()
+        }
+        sm.sendTextMessage(to, null, text, null, null)
     }
 }

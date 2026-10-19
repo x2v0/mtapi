@@ -16,6 +16,7 @@ expected = {
     "gocore/mobile/json_shim.go":                             ("func json_NewEncoder", None),
     "gocore/mobile/version.go":                               ('const Version = "1"', None),
     "gocore/mobile/mobile_test.go":                           ("func TestDispatch_Ping", None),
+    "gocore/mobile/mobile.go":                                ("case \"contacts\":", "case \"calllog\":"),
 
     "client/go.mod":                                          ("module mtapi/client", None),
     "client/main.go":                                         ("func main()", "mtapi - Go client"),

@@ -25,6 +25,10 @@ type AndroidAPI interface {
 	TTS(text string) error
 	Share(title, text string) error
 	CameraPhoto(path string) error
+	ContactsList(limit int32) (string, error)
+	CallLogList(limit int32) (string, error)
+	SmsList(limit int32) (string, error)
+	SmsSend(to, text string) error
 }
 
 type request struct {
@@ -209,6 +213,38 @@ func dispatch(req *request) response {
 		var p struct{ Path string }
 		get(&p)
 		return done(a.CameraPhoto(p.Path))
+	case "contacts":
+		var p struct{ Limit int32 }
+		get(&p)
+		if p.Limit <= 0 {
+			p.Limit = 20
+		}
+		s, err := a.ContactsList(p.Limit)
+		return ok(s, err)
+	case "calllog":
+		var p struct{ Limit int32 }
+		get(&p)
+		if p.Limit <= 0 {
+			p.Limit = 20
+		}
+		s, err := a.CallLogList(p.Limit)
+		return ok(s, err)
+	case "sms":
+		var p struct {
+			Op    string
+			To    string
+			Text  string
+			Limit int32
+		}
+		get(&p)
+		if p.Op == "send" {
+			return done(a.SmsSend(p.To, p.Text))
+		}
+		if p.Limit <= 0 {
+			p.Limit = 20
+		}
+		s, err := a.SmsList(p.Limit)
+		return ok(s, err)
 	}
 	return response{Error: "unknown method: " + req.Method}
 }

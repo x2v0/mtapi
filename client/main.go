@@ -25,6 +25,10 @@ func usage() {
   mtapi torch on|off
   mtapi tts <text>
   mtapi share --title <t> --text <x>
+  mtapi contacts [limit]
+  mtapi calllog  [limit]
+  mtapi sms list [limit]
+  mtapi sms send <number> <text>
   mtapi camera --out <path>
 `)
 }
@@ -79,6 +83,24 @@ func main() {
 			if args[i] == "--out" { out = args[i+1] }
 		}
 		params = map[string]string{"path": out}
+	case "contacts":
+		limit := 20
+		if len(args) > 0 { limit, _ = strconv.Atoi(args[0]) }
+		params = map[string]int{"limit": limit}
+	case "calllog":
+		limit := 20
+		if len(args) > 0 { limit, _ = strconv.Atoi(args[0]) }
+		params = map[string]int{"limit": limit}
+	case "sms":
+		if len(args) < 1 { usage(); os.Exit(1) }
+		if args[0] == "send" {
+			if len(args) < 3 { usage(); os.Exit(1) }
+			params = map[string]string{"op": "send", "to": args[1], "text": args[2]}
+		} else {
+			limit := 20
+			if len(args) > 1 { limit, _ = strconv.Atoi(args[1]) }
+			params = map[string]interface{}{"op": "list", "limit": limit}
+		}
 	default:
 		usage()
 		os.Exit(1)

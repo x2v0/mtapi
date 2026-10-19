@@ -31,6 +31,16 @@ func (m *mockAPI) LocationLast() (string, error)    { return `{"lat":1,"lon":2}`
 func (m *mockAPI) TTS(s string) error               { return nil }
 func (m *mockAPI) Share(t, x string) error          { return nil }
 func (m *mockAPI) CameraPhoto(p string) error       { return errors.New("unsupported") }
+func (m *mockAPI) ContactsList(limit int32) (string, error) {
+	return `[{"name":"Alice","phone":"+100"},{"name":"Bob","phone":"+200"}]`, nil
+}
+func (m *mockAPI) CallLogList(limit int32) (string, error) {
+	return `[{"number":"+100","type":1,"ts":1700000000,"duration":30}]`, nil
+}
+func (m *mockAPI) SmsList(limit int32) (string, error) {
+	return `[{"address":"+100","body":"hi","ts":1700000000,"type":1}]`, nil
+}
+func (m *mockAPI) SmsSend(to, text string) error { return nil }
 
 func setup(t *testing.T) *mockAPI {
 	t.Helper()
@@ -137,5 +147,46 @@ func TestDispatch_APIFailure(t *testing.T) {
 	r := dispatch(mkReq(t, "battery", nil))
 	if r.OK || r.Error != "boom" {
 		t.Fatalf("got %+v", r)
+	}
+}
+
+func TestDispatch_Contacts(t *testing.T) {
+	setup(t)
+	r := dispatch(mkReq(t, "contacts", map[string]int{"limit": 5}))
+	if !r.OK {
+		t.Fatalf("not ok: %q", r.Error)
+	}
+	if !strings.Contains(string(r.Data), "Alice") {
+		t.Fatalf("data: %s", r.Data)
+	}
+}
+
+func TestDispatch_CallLog(t *testing.T) {
+	setup(t)
+	r := dispatch(mkReq(t, "calllog", map[string]int{"limit": 5}))
+	if !r.OK {
+		t.Fatalf("not ok: %q", r.Error)
+	}
+	if !strings.Contains(string(r.Data), "duration") {
+		t.Fatalf("data: %s", r.Data)
+	}
+}
+
+func TestDispatch_SmsList(t *testing.T) {
+	setup(t)
+	r := dispatch(mkReq(t, "sms", map[string]interface{}{"op": "list", "limit": 3}))
+	if !r.OK {
+		t.Fatalf("not ok: %q", r.Error)
+	}
+	if !strings.Contains(string(r.Data), "hi") {
+		t.Fatalf("data: %s", r.Data)
+	}
+}
+
+func TestDispatch_SmsSend(t *testing.T) {
+	setup(t)
+	r := dispatch(mkReq(t, "sms", map[string]string{"op": "send", "to": "+100", "text": "yo"}))
+	if !r.OK {
+		t.Fatalf("not ok: %q", r.Error)
 	}
 }
