@@ -399,6 +399,10 @@ function run(ep,path){
   });
 }
 
+
+// MTAPI_172: safe getElementById
+function _el(id) { return document.getElementById(id); }
+
 function render(){
   var q=document.getElementById('q').value.toLowerCase();
   var main=document.getElementById('main'); main.innerHTML='';
@@ -425,11 +429,11 @@ function updateStats(){
       var b=r.json.data;
       var pct=b.percentage||0;
       var cls=pct>60?'pct-hi':pct>20?'pct-md':'pct-lo';
-      document.getElementById('st-batt').innerHTML=
+      (_el('st-batt')||{}).innerHTML=
         'battery <b>'+pct+'%</b>'+(b.charging?' ⚡':'')+
         '<span class="bar"><i class="'+cls+'" style="width:'+pct+'%"></i></span>';
     } else {
-      document.getElementById('st-batt').innerHTML='battery <b style="color:var(--err)">?</b>';
+      (_el('st-batt')||{}).innerHTML='battery <b style="color:var(--err)">?</b>';
     }
   });
   callDirect('/system').then(function(r){
@@ -438,17 +442,17 @@ function updateStats(){
       var used=rm.totalBytes-rm.availableBytes;
       var pct=Math.round(used/rm.totalBytes*100);
       var cls=pct>85?'pct-lo':pct>70?'pct-md':'pct-hi';
-      document.getElementById('st-ram').innerHTML=
+      (_el('st-ram')||{}).innerHTML=
         'ram <b>'+pct+'%</b><span class="bar"><i class="'+cls+'" style="width:'+pct+'%"></i></span>';
     } else {
-      document.getElementById('st-ram').innerHTML='ram <b style="color:var(--err)">?</b>';
+      (_el('st-ram')||{}).innerHTML='ram <b style="color:var(--err)">?</b>';
     }
   });
   callDirect('/ping').then(function(r){
     if(r.error){
-      document.getElementById('st-ping').innerHTML='ping <b style="color:var(--err)">err</b>';
+      (_el('st-ping')||{}).innerHTML='ping <b style="color:var(--err)">err</b>';
     } else {
-      document.getElementById('st-ping').innerHTML='ping <b>'+r.ms+'ms</b>'+
+      (_el('st-ping')||{}).innerHTML='ping <b>'+r.ms+'ms</b>'+
         (r.json&&r.json.ok?' <span style="color:var(--ok)">●</span>':' <span style="color:var(--err)">●</span>');
     }
   });
@@ -472,7 +476,7 @@ function updateThemeBtn(){
   var cur=document.documentElement.getAttribute('data-theme') || 'dark';
   document.getElementById('theme').textContent=cur==='light'?'\u2600\uFE0F':'\uD83C\uDF19';
 }
-document.getElementById('theme').addEventListener('click',function(){
+if (_el('theme')) _el('theme').addEventListener('click',function(){
   var cur=document.documentElement.getAttribute('data-theme') || 'dark';
   var next=cur==='light'?'dark':'light';
   document.documentElement.setAttribute('data-theme',next);
@@ -493,12 +497,12 @@ document.getElementById('copy').addEventListener('click',function(){
 document.getElementById('q').addEventListener('input',render);
 
 // reset
-document.getElementById('reset').addEventListener('click',function(){
+if (_el('reset')) _el('reset').addEventListener('click',function(){
   _queue = [];
   _inflight = 0;
-  document.getElementById('st-batt').innerHTML='battery —';
-  document.getElementById('st-ram').innerHTML='ram —';
-  document.getElementById('st-ping').innerHTML='ping —';
+  (_el('st-batt')||{}).innerHTML='battery —';
+  (_el('st-ram')||{}).innerHTML='ram —';
+  (_el('st-ping')||{}).innerHTML='ping —';
   document.querySelectorAll('.ep').forEach(function(ep){
     var st=ep.querySelector('.status');
     if(st){st.className='status';st.textContent='';}
@@ -508,7 +512,7 @@ document.getElementById('reset').addEventListener('click',function(){
 });
 
 // live toggle
-document.getElementById('live').addEventListener('click',function(){setLive(!liveOn)});
+if (_el('live')) _el('live').addEventListener('click',function(){setLive(!liveOn)});
 
 // init
 render();
