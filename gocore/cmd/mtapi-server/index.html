@@ -17,15 +17,7 @@
   --c-hw:#fb923c;--c-display:#f472b6;--c-apps:#facc15;--c-comm:#2dd4bf;
   --c-detail:#fbbf24;--c-file:#c084fc;--c-watch:#f472b6;
 }
-@media(prefers-color-scheme:light){
-  :root{--bg:#f8f8f8;--bg2:#fff;--bg3:#f0f0f0;--bg4:#e0e0e0;
-    --fg:#222;--fg2:#555;--fg3:#777;--accent:#0288d1;
-    --ok:#388e3c;--err:#c62828;--warn:#f57c00;--code:#c2185b;--border:#ddd;
-    --v-num:#00838f;--v-null:#94a3b8;--v-bool-t:#2e7d32;--v-bool-f:#64748b;
-    --c-basic:#0288d1;--c-sys:#00838f;--c-net:#0277bd;--c-sensors:#6a1b9a;
-    --c-hw:#e65100;--c-display:#c2185b;--c-apps:#f57c00;--c-comm:#00897b;
-    --c-detail:#ef6c00;--c-file:#7b1fa2;--c-watch:#c2185b}
-}
+/* MTAPI_108: @media light убран */
 html[data-theme="light"]{--bg:#f8f8f8;--bg2:#fff;--bg3:#f0f0f0;--bg4:#e0e0e0;
   --fg:#222;--fg2:#555;--fg3:#777;--accent:#0288d1;
   --ok:#388e3c;--err:#c62828;--warn:#f57c00;--code:#c2185b;--border:#ddd;
@@ -606,7 +598,7 @@ function render(){
     var filtered=g.eps.filter(function(p){return p.toLowerCase().indexOf(q)>=0});
     if(filtered.length===0)continue;
     var gd=document.createElement('details');
-    gd.className='group'; gd.dataset.group=g.group; gd.open=true;
+    gd.className='group'; gd.dataset.group=g.group; gd.open=false;
     var h=document.createElement('summary'); h.className='group-h';
     h.textContent=g.group+' ('+filtered.length+')';
     gd.appendChild(h);
@@ -664,15 +656,14 @@ function setLive(on){
 
 // ─── theme ───────────────────────────────────────────
 var savedTheme=localStorage.getItem('mtapi-theme');
-if(savedTheme)document.documentElement.setAttribute('data-theme',savedTheme);
+// MTAPI_108: тёмная по умолчанию (если нет savedTheme — dark, игнорируем system)
+document.documentElement.setAttribute('data-theme', savedTheme || 'dark');
 function updateThemeBtn(){
-  var cur=document.documentElement.getAttribute('data-theme');
-  if(!cur)cur=window.matchMedia('(prefers-color-scheme:light)').matches?'light':'dark';
+  var cur=document.documentElement.getAttribute('data-theme') || 'dark';
   document.getElementById('theme').textContent=cur==='light'?'\u2600\uFE0F':'\uD83C\uDF19';
 }
 document.getElementById('theme').addEventListener('click',function(){
-  var cur=document.documentElement.getAttribute('data-theme');
-  if(!cur)cur=window.matchMedia('(prefers-color-scheme:light)').matches?'light':'dark';
+  var cur=document.documentElement.getAttribute('data-theme') || 'dark';
   var next=cur==='light'?'dark':'light';
   document.documentElement.setAttribute('data-theme',next);
   localStorage.setItem('mtapi-theme',next);
