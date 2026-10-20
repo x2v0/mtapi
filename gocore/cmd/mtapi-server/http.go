@@ -10,8 +10,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-	"hash/fnv"
-	"compress/gzip"
 )
 
 type apiServer struct {
@@ -421,31 +419,9 @@ func (s *apiServer) handleIndex(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	html := strings.ReplaceAll(indexHTML, "{{TOKEN}}", s.token)
-	body := []byte(html)
-	
-	h := fnv.New64a()
-	h.Write(body)
-	etag := `"` + strconv.FormatUint(h.Sum64(), 16) + `"`
-	
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.Header().Set("Cache-Control", "private, no-cache")
-	w.Header().Set("ETag", etag)
-	w.Header().Set("Vary", "Accept-Encoding")
-	
-	if r.Header.Get("If-None-Match") == etag {
-		w.WriteHeader(http.StatusNotModified)
-		return
-	}
-	
-	if strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") && len(body) > 1024 {
-		w.Header().Set("Content-Encoding", "gzip")
-		gz := gzip.NewWriter(w)
-		gz.Write(body)
-		gz.Close()
-		return
-	}
-	
-	w.Write(body)
+	w.Header().Set("Cache-Control", "no-store")
+	w.Write([]byte(html))
 }
 
 func startHTTP(api AndroidAPI, token string) error {
