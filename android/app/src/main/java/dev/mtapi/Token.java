@@ -31,10 +31,18 @@ public final class Token {
 
     private static void writeToFile(Context ctx, String tok) {
         try {
-            File f = new File(ctx.getFilesDir(), "mtapi.token");
-            FileOutputStream fos = new FileOutputStream(f, false);
-            fos.write(tok.getBytes("UTF-8"));
-            fos.close();
+            File ext = ctx.getExternalFilesDir(null);
+            if (ext != null) {
+                File f = new File(ext, "token.txt");
+                FileOutputStream fos = new FileOutputStream(f, false);
+                fos.write(tok.getBytes("UTF-8"));
+                fos.close();
+            }
+            // also internal (for Node dash)
+            File f2 = new File(ctx.getFilesDir(), "mtapi.token");
+            FileOutputStream fos2 = new FileOutputStream(f2, false);
+            fos2.write(tok.getBytes("UTF-8"));
+            fos2.close();
         } catch (Throwable ignored) {}
     }
 }

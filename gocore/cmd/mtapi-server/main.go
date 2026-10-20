@@ -30,12 +30,7 @@ func main() {
 		os.Exit(0)
 	}()
 
-	log.Printf("starting HTTP server, token=%s***", func() string {
-		if len(token) > 6 {
-			return token[:6]
-		}
-		return token
-	}())
+	log.Printf("starting HTTP server, token=%s", token)
 
 	if err := startHTTP(api, token); err != nil {
 		log.Fatalf("HTTP: %v", err)
