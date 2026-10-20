@@ -12,3 +12,25 @@ scripts/__pycache__/
 *.tmp
 *.log
 tmp/
+
+# ---- Added by struct patch ----
+*.apk
+*.jar
+*.dex
+*.class
+*.o
+*.so
+!android/app/src/main/jniLibs/arm64-v8a/libmtapi-server.so
+gocore/mtapi-server
+gocore/mtapi-server-*
+/bin/mtapi
+*.bak*
+*.orig
+*.rej
+*.pyc
+*.pyo
+.DS_Store
+Thumbs.db
+*.swo
+*~
+.config/

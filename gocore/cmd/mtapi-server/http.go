@@ -10,6 +10,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"hash/fnv"
+	"compress/gzip"
 )
 
 type apiServer struct {

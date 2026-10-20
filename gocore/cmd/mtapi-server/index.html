@@ -153,6 +153,15 @@ table tbody tr:last-child th{border-bottom:none}
 .ep-b table td > table td > table td,
 .ep-b table td > table td > table th { padding:1px 3px; font-size:9px; }
 .ep-b code { font-size:10px; padding:1px 3px; }
+
+/* MTAPI_DETAILS_96: collapsible endpoint cards */
+details.ep summary{cursor:pointer;list-style:none;outline:none}
+details.ep summary::-webkit-details-marker{display:none}
+details.ep summary::before{content:'▸';color:var(--fg3);font-size:10px;
+transition:transform .15s;display:inline-block;width:12px;text-align:center;
+margin-right:2px}
+details.ep[open] summary::before{transform:rotate(90deg)}
+details.ep .ep-b{padding:0 10px 10px 20px}
 </style>
 </head>
 <body>
@@ -516,16 +525,16 @@ function call(path){
 
 
 function makeCard(path){
-  var ep=document.createElement('div');
+  var ep=document.createElement('details');
   ep.className='ep'; ep.dataset.path=path;
-  var head=document.createElement('div'); head.className='ep-h';
+  var head=document.createElement('summary'); head.className='ep-h';
   var btn=document.createElement('button'); btn.className='run'; btn.textContent='GET '+path;
-  btn.addEventListener('click',function(){run(ep,path)});
+  btn.addEventListener('click',function(e){e.preventDefault();e.stopPropagation();run(ep,path)});
   var status=document.createElement('span'); status.className='status';
   var toggle=document.createElement('button'); toggle.className='toggle';
   toggle.textContent='{ }'; toggle.title='toggle raw JSON';
   head.appendChild(btn); head.appendChild(status); head.appendChild(toggle);
-  var body=document.createElement('div'); body.className='ep-b'; body.hidden=true;
+  var body=document.createElement('div'); body.className='ep-b';
   ep.appendChild(head); ep.appendChild(body);
   return ep;
 }
@@ -534,7 +543,7 @@ function run(ep,path){
   var status=ep.querySelector('.status');
   var body=ep.querySelector('.ep-b');
   var toggle=ep.querySelector('.toggle');
-  body.hidden=false;
+  ep.open=true;
   status.className='status loading'; status.innerHTML='<span class="spin"></span>';
   body.innerHTML='<div class="empty">loading…</div>';
   call(path).then(function(res){
