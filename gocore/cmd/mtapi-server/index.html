@@ -155,6 +155,22 @@ transition:transform .15s;display:inline-block;width:12px;text-align:center;
 margin-right:2px}
 details.ep[open] summary::before{transform:rotate(90deg)}
 details.ep .ep-b{padding:0 10px 10px 20px}
+
+/* MTAPI_137: nested sub-sections */
+details.sub{margin:2px 0 4px}
+details.sub > summary{
+  cursor:pointer;list-style:none;color:var(--fg2);font-size:11px;
+  padding:3px 6px;background:var(--bg3);border-radius:4px;
+  border-left:3px solid var(--accent);user-select:none}
+details.sub > summary::-webkit-details-marker{display:none}
+details.sub > summary::before{
+  content:'▸';display:inline-block;width:10px;text-align:center;
+  margin-right:2px;color:var(--fg3);transition:transform .15s}
+details.sub[open] > summary::before{transform:rotate(90deg)}
+details.sub[open] > summary{background:var(--bg4);border-radius:4px 4px 0 0}
+details.sub > *:not(summary){padding-left:8px}
+details.sub > table{margin:4px 0 4px 8px}
+
 </style>
 </head>
 <body>
