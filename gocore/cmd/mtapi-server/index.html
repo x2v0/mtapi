@@ -185,6 +185,30 @@ details.ep .ep-b{padding:0 10px 10px 20px}
 <main id="main"></main>
 </div>
 
+/* MTAPI_105: nested collapsibles */
+details.group{margin-bottom:14px}
+details.group > summary.group-h{list-style:none;cursor:pointer}
+details.group > summary.group-h::-webkit-details-marker{display:none}
+details.group > summary.group-h::before{
+  content:'▾';color:var(--fg3);font-size:10px;display:inline-block;
+  width:12px;text-align:center;margin-right:4px;transition:transform .15s}
+details.group:not([open]) > summary.group-h::before{content:'▸'}
+details.group:not([open]){padding-bottom:0}
+
+details.sub{margin:2px 0 4px}
+details.sub > summary{
+  cursor:pointer;list-style:none;color:var(--fg2);font-size:11px;
+  padding:3px 6px;background:var(--bg3);border-radius:4px;
+  border-left:3px solid var(--accent);user-select:none}
+details.sub > summary::-webkit-details-marker{display:none}
+details.sub > summary::before{
+  content:'▸';display:inline-block;width:10px;text-align:center;
+  margin-right:2px;color:var(--fg3);transition:transform .15s}
+details.sub[open] > summary::before{transform:rotate(90deg)}
+details.sub[open] > summary{background:var(--bg4);border-radius:4px 4px 0 0}
+details.sub > *:not(summary){padding-left:8px}
+details.sub > table{margin:4px 0 4px 8px}
+
 
 <script>
 // MTAPI_HARD_RESET_76: clean slate — no SW, no auto-click, no semaphore.
@@ -303,15 +327,15 @@ function renderCell(v, depth){
   if(Array.isArray(v)){
     if(v.length === 0) return '<span class="empty">[]</span>';
     if(_isScalar(v[0])){
-      // scalar array: [1, 2, 3] → chips
+      // scalar array: [1, 2, 3] → chips (не сворачиваем — 1 строка)
       return '<span style="font-size:10px">' +
         v.map(function(x){return '<code>'+esc(cellStr(x))+'</code>';}).join(' ') +
         '</span>';
     }
-    // array of objects/arrays → mini table
+    // array of arrays / objects → <details class="sub">
     if(Array.isArray(v[0])){
-      // [[..],[..]]
-      var h = '<table style="font-size:10px;margin:2px 0"><tbody>';
+      var h = '<details class="sub"><summary>[['+v.length+']]</summary>';
+      h += '<table style="font-size:10px;margin:2px 0"><tbody>';
       v.forEach(function(row){
         h += '<tr>';
         row.forEach(function(cell){
@@ -319,9 +343,9 @@ function renderCell(v, depth){
         });
         h += '</tr>';
       });
-      return h + '</tbody></table>';
+      return h + '</tbody></table></details>';
     }
-    // array of objects → mini table with recursion
+    // array of objects → mini table
     var cols = [], seen = {};
     v.forEach(function(o){
       if(o && typeof o==='object' && !Array.isArray(o)){
@@ -330,7 +354,8 @@ function renderCell(v, depth){
         });
       }
     });
-    var h = '<table style="font-size:10px;margin:2px 0"><thead><tr>';
+    var h = '<details class="sub"><summary>[{'+v.length+'}]</summary>';
+    h += '<table style="font-size:10px;margin:2px 0"><thead><tr>';
     cols.forEach(function(c){
       h += '<th style="padding:2px 4px;font-size:9px">'+esc(c)+'</th>';
     });
@@ -343,19 +368,21 @@ function renderCell(v, depth){
       });
       h += '</tr>';
     });
-    h += '</tbody></table>';
+    h += '</tbody></table></details>';
     return h;
   }
 
   if(typeof v === 'object'){
-    // nested object → mini kv table
-    var h = '<table class="kv" style="font-size:10px;margin:2px 0"><tbody>';
+    // nested object → <details class="sub">
+    var n = Object.keys(v).length;
+    var h = '<details class="sub"><summary>{'+n+'}</summary>';
+    h += '<table class="kv" style="font-size:10px;margin:2px 0"><tbody>';
     Object.keys(v).forEach(function(k){
       var val = v[k];
       h += '<tr><th style="padding:2px 4px;font-size:9px;width:30%">'+esc(k)+'</th>' +
            '<td style="padding:2px 4px">' + renderCell(val, depth+1) + '</td></tr>';
     });
-    h += '</tbody></table>';
+    h += '</tbody></table></details>';
     return h;
   }
   return esc(cellStr(v));
@@ -375,7 +402,7 @@ function renderObj(obj, depth){
 
   var h = '';
 
-  // 1. Scalar table (30/70)
+  // 1. Scalar table (30/70) — открыта всегда
   if(scalars.length){
     h += '<table class="kv"><tbody>';
     scalars.forEach(function(it){
@@ -384,26 +411,26 @@ function renderObj(obj, depth){
     h += '</tbody></table>';
   }
 
-  // 2. Nested items (each with label + recursion)
+  // 2. Nested items — <details class="sub"> (свёрнуты по умолчанию)
   nested.forEach(function(it){
     var k = it.k, v = it.v;
-    var label = '<div class="hw-card-title" style="font-size:12px;margin:10px 0 4px;' +
-                'padding:4px 8px;background:var(--bg3);border-radius:4px;' +
-                'border-left:3px solid var(--accent)">▸ '+esc(k)+'</div>';
-
-    h += label;
+    var count = (Array.isArray(v)) ? v.length : Object.keys(v).length;
+    var label = '▸ '+esc(k)+' ('+count+')';
 
     if(Array.isArray(v)){
       if(v.length === 0){
-        h += '<span class="empty">[]</span>';
+        h += '<details class="sub"><summary>'+label+'</summary>'+
+             '<span class="empty">[]</span></details>';
       } else if(_isScalar(v[0])){
-        // scalar array → chips
-        h += '<div style="padding:4px 0 4px 12px">' + renderCell(v, depth+1) + '</div>';
+        // scalar array → chips (открыто, не сворачиваем — 1 строка)
+        h += '<details class="sub" open><summary>'+label+'</summary>'+
+             '<div style="padding:4px 0 4px 12px">' + renderCell(v, depth+1) + '</div></details>';
       } else if(Array.isArray(v[0])){
         // array of arrays
-        h += '<div style="padding-left:12px">' + renderCell(v, depth+1) + '</div>';
+        h += '<details class="sub"><summary>'+label+'</summary>'+
+             '<div style="padding-left:12px">' + renderCell(v, depth+1) + '</div></details>';
       } else {
-        // array of objects — main table, each nested cell rendered recursively
+        // array of objects — table, each cell rendered recursively
         var cols = [], seen = {};
         v.forEach(function(o){
           if(o && typeof o==='object' && !Array.isArray(o)){
@@ -412,6 +439,7 @@ function renderObj(obj, depth){
             });
           }
         });
+        h += '<details class="sub"><summary>'+label+'</summary>';
         h += '<table><thead><tr>';
         cols.forEach(function(c){ h += '<th>'+esc(c)+'</th>'; });
         h += '</tr></thead><tbody>';
@@ -423,14 +451,14 @@ function renderObj(obj, depth){
           });
           h += '</tr>';
         });
-        h += '</tbody></table>';
+        h += '</tbody></table></details>';
       }
     } else if(typeof v === 'object'){
-      // nested object
+      // nested object → <details class="sub">
       if(depth < 5){
-        h += '<div style="padding-left:12px;border-left:2px solid var(--bg4);margin-left:4px">';
+        h += '<details class="sub"><summary>'+label+'</summary>';
         h += renderObj(v, depth+1);
-        h += '</div>';
+        h += '</details>';
       } else {
         h += '<code style="font-size:10px">'+esc(JSON.stringify(v).slice(0,300))+'</code>';
       }
@@ -577,8 +605,10 @@ function render(){
     var g=ENDPOINTS[gi];
     var filtered=g.eps.filter(function(p){return p.toLowerCase().indexOf(q)>=0});
     if(filtered.length===0)continue;
-    var gd=document.createElement('div'); gd.className='group'; gd.dataset.group=g.group;
-    var h=document.createElement('div'); h.className='group-h'; h.textContent=g.group;
+    var gd=document.createElement('details');
+    gd.className='group'; gd.dataset.group=g.group; gd.open=true;
+    var h=document.createElement('summary'); h.className='group-h';
+    h.textContent=g.group+' ('+filtered.length+')';
     gd.appendChild(h);
     for(var pi=0;pi<filtered.length;pi++)gd.appendChild(makeCard(filtered[pi]));
     main.appendChild(gd);
