@@ -40,7 +40,7 @@ body{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:
   padding-top:calc(12px + env(safe-area-inset-top));
   padding-bottom:calc(24px + env(safe-area-inset-bottom))}
 header{display:flex;gap:6px;align-items:center;justify-content:space-between;
-  flex-wrap:wrap;margin-bottom:8px}
+  flex-wrap:nowrap;margin-bottom:8px;min-width:0}
 h1{font-size:18px;margin:0;color:var(--fg)}
 .head-right{display:flex;gap:4px;align-items:center;flex-wrap:wrap;flex:1;
   justify-content:flex-end;min-width:0}
@@ -159,7 +159,6 @@ details.ep .ep-b{padding:0 10px 10px 20px}
 <body>
 <div class="wrap">
 <header>
-  <h1>mtapi</h1>
   <div class="head-right">
     <button class="icon-btn" id="live" title="auto-refresh every 3s">&#9673; auto</button>
     <button class="icon-btn" id="theme" title="toggle light/dark">&#127769;</button>
