@@ -1,319 +1,141 @@
 package dev.mtapi;
 
-import android.Manifest;
+import android.annotation.SuppressLint;
 import android.app.Activity;
-import android.content.ClipData;
-import android.content.ClipboardManager;
-import android.content.Context;
 import android.content.Intent;
-import android.content.pm.PackageManager;
 import android.os.Build;
 import android.os.Bundle;
-import android.util.Log;
-import android.widget.Button;
-import android.widget.LinearLayout;
-import android.widget.ScrollView;
-import android.widget.TextView;
-
-import java.io.BufferedReader;
-import java.io.InputStreamReader;
-import java.net.HttpURLConnection;
-import java.net.URL;
-import java.util.ArrayList;
-import java.util.List;
+import android.view.ViewGroup;
+import android.webkit.WebChromeClient;
+import android.webkit.WebSettings;
+import android.webkit.WebView;
+import android.webkit.WebViewClient;
+import android.widget.FrameLayout;
 
 public class MainActivity extends Activity {
 
-    private static final String TAG = "mtapi";
-    private static final int REQ = 0x4d50;
-    private static final String BASE = "http://127.0.0.1:7788";
-    private TextView statusView;
-    private TextView logView;
-    private String token;
+    private WebView webView;
+    private volatile boolean pollActive = true;
+    private Thread pollThread;
 
+    private static final String LOADER_HTML =
+        "<!doctype html><html><head><meta charset=utf-8>" +
+        "<meta name=viewport content='width=device-width,initial-scale=1'>" +
+        "<style>body{margin:0;background:#1e1e1e;color:#666;" +
+        "font-family:ui-monospace,monospace;display:flex;align-items:center;" +
+        "justify-content:center;height:100vh}" +
+        ".s{width:16px;height:16px;border:2px solid #333;border-top-color:#4fc3f7;" +
+        "border-radius:50%;animation:r .8s linear infinite;margin-right:10px}" +
+        "@keyframes r{to{transform:rotate(360deg)}}</style></head>" +
+        "<body><div class=s></div><span>starting…</span></body></html>";
+
+    @SuppressLint("SetJavaScriptEnabled")
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        DiagLog.write(this, "MainActivity.onCreate start");
 
-        token = Token.getOrCreate(this);
-        writeTokenToExternal();
-        requestPermsIfNeeded();
-
-        TextView urlView = new TextView(this);
-        urlView.setText(BASE + "/?token=" + token.substring(0, 8) + "...");
-        urlView.setTextIsSelectable(true);
-        urlView.setTextSize(12f);
-
-        TextView tokView = new TextView(this);
-        tokView.setText("token:\n" + token);
-        tokView.setTextIsSelectable(true);
-        tokView.setTextSize(12f);
-
-        statusView = new TextView(this);
-        statusView.setTextSize(12f);
-        statusView.setPadding(0, 24, 0, 24);
-        statusView.setText("(not checked yet)");
-
-        logView = new TextView(this);
-        logView.setTextSize(10f);
-        logView.setTextIsSelectable(true);
-        logView.setPadding(0, 8, 0, 8);
-        logView.setText("(log empty)");
-
-        Button startBtn = new Button(this);
-        startBtn.setText("1. Start server");
-        startBtn.setOnClickListener(v -> {
-            DiagLog.write(this, "click: start_server");
-            try {
-                Intent i = new Intent(this, ApiService.class);
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                    startForegroundService(i);
-                    // MediaStore for /sdcard/Download/mtapi.token (Android 10+)
-        writeTokenViaMediaStore();
-    } else {
-                    startService(i);
+        webView = new WebView(this);
+        WebSettings ws = webView.getSettings();
+        ws.setJavaScriptEnabled(true);
+        ws.setDomStorageEnabled(true);
+        ws.setCacheMode(WebSettings.LOAD_NO_CACHE);
+        ws.setAllowFileAccess(false);
+        ws.setAllowContentAccess(false);
+        ws.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
+        if (Build.VERSION.SDK_INT >= 21) {
+            ws.setMediaPlaybackRequiresUserGesture(false);
+        }
+        webView.setWebViewClient(new WebViewClient() {
+            @Override
+            public boolean shouldOverrideUrlLoading(WebView view, String url) {
+                if (url.startsWith("http://127.0.0.1:7788") ||
+                    url.startsWith("http://localhost") ||
+                    url.startsWith("data:")) {
+                    return false;
                 }
-                statusView.setText("started — check notification");
-            } catch (Throwable t) {
-                statusView.setText("start failed: " + t);
+                try {
+                    startActivity(new Intent(Intent.ACTION_VIEW, android.net.Uri.parse(url)));
+                } catch (Throwable ignored) {}
+                return true;
             }
         });
+        webView.setWebChromeClient(new WebChromeClient());
 
-        Button pingBtn = new Button(this);
-        pingBtn.setText("2. HTTP ping");
-        pingBtn.setOnClickListener(v -> httpGetAsync("/ping", "ping"));
+        FrameLayout root = new FrameLayout(this);
+        root.addView(webView, new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT));
+        setContentView(root);
 
-        Button battBtn = new Button(this);
-        battBtn.setText("3. HTTP battery");
-        battBtn.setOnClickListener(v -> httpGetAsync("/battery", "battery"));
+        webView.loadDataWithBaseURL(null, LOADER_HTML, "text/html", "utf-8", null);
 
-        Button devBtn = new Button(this);
-        devBtn.setText("4. HTTP device");
-        devBtn.setOnClickListener(v -> httpGetAsync("/device", "device"));
-
-        Button toastBtn = new Button(this);
-        toastBtn.setText("5. HTTP toast");
-        toastBtn.setOnClickListener(v -> httpGetAsync("/toast?text=hello+from+http", "toast"));
-
-        Button openBtn = new Button(this);
-        openBtn.setText("6. Open in browser");
-        openBtn.setOnClickListener(v -> {
-            try {
-                String url = BASE + "/?token=" + token;
-                DiagLog.write(this, "click: open_browser " + url);
-                startActivity(new Intent(Intent.ACTION_VIEW, android.net.Uri.parse(url)));
-            } catch (Throwable t) {
-                statusView.setText("open browser failed: " + t);
-            }
-        });
-
-        Button copyBtn = new Button(this);
-        copyBtn.setText("Copy token");
-        copyBtn.setOnClickListener(v -> {
-            ClipboardManager cm = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
-            if (cm != null) cm.setPrimaryClip(ClipData.newPlainText("mtapi", token));
-        });
-
-        Button permBtn = new Button(this);
-        permBtn.setText("Grant permissions");
-        permBtn.setOnClickListener(v -> requestPermsIfNeeded());
-
-        Button showLogBtn = new Button(this);
-        showLogBtn.setText("Show log");
-        showLogBtn.setOnClickListener(v -> logView.setText(DiagLog.read(this)));
-
-        Button clearLogBtn = new Button(this);
-        clearLogBtn.setText("Clear log");
-        clearLogBtn.setOnClickListener(v -> { DiagLog.clear(this); logView.setText("(cleared)"); });
-
-        LinearLayout root = new LinearLayout(this);
-        root.setOrientation(LinearLayout.VERTICAL);
-        root.setPadding(48, 96, 48, 48);
-        root.addView(urlView);
-        root.addView(tokView);
-        root.addView(statusView);
-        root.addView(startBtn);
-        root.addView(pingBtn);
-        root.addView(battBtn);
-        root.addView(devBtn);
-        root.addView(toastBtn);
-        Button sysBtn = new Button(this);
-        sysBtn.setText("Sys info");
-        sysBtn.setOnClickListener(v -> httpGetAsync("/system", "system"));
-        root.addView(sysBtn);
-
-        Button sensorBtn = new Button(this);
-        sensorBtn.setText("Sensors");
-        sensorBtn.setOnClickListener(v -> httpGetAsync("/sensors", "sensors"));
-        root.addView(sensorBtn);
-
-        Button netBtn = new Button(this);
-        netBtn.setText("Network");
-        netBtn.setOnClickListener(v -> httpGetAsync("/network", "network"));
-        root.addView(netBtn);
-
-        Button battPlusBtn = new Button(this);
-        battPlusBtn.setText("Battery+");
-        battPlusBtn.setOnClickListener(v -> httpGetAsync("/battery/detailed", "battery_det"));
-        root.addView(battPlusBtn);
-
-        Button locDetBtn = new Button(this);
-        locDetBtn.setText("Location+");
-        locDetBtn.setOnClickListener(v -> httpGetAsync("/location/detailed", "location_det"));
-        root.addView(locDetBtn);
-
-        root.addView(openBtn);
-        root.addView(copyBtn);
-        root.addView(permBtn);
-        root.addView(showLogBtn);
-        root.addView(clearLogBtn);
-        root.addView(logView);
-
-        // Outer vertical ScrollView — вся страница скроллится
-        ScrollView outer = new ScrollView(this);
-        outer.setFillViewport(true);
-        outer.addView(root, new ScrollView.LayoutParams(
-                ScrollView.LayoutParams.MATCH_PARENT,
-                ScrollView.LayoutParams.WRAP_CONTENT));
-        setContentView(outer);
-
-        // auto-start server
         try {
-            Intent i = new Intent(this, ApiService.class);
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(i);
-            else startService(i);
+            Intent svc = new Intent(this, ApiService.class);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                startForegroundService(svc);
+            } else {
+                startService(svc);
+            }
         } catch (Throwable ignored) {}
 
-        DiagLog.write(this, "MainActivity.onCreate done");
+        startPolling();
     }
 
-    private void httpGetAsync(String path, String label) {
-        statusView.setText(label + ": ...");
-        new Thread(() -> {
-            String result;
-            try {
-                URL url = new URL(BASE + path + (path.contains("?") ? "&" : "?") + "token=" + token);
-                HttpURLConnection c = (HttpURLConnection) url.openConnection();
-                c.setConnectTimeout(3000);
-                c.setReadTimeout(5000);
-                int code = c.getResponseCode();
-                StringBuilder sb = new StringBuilder();
-                try (BufferedReader r = new BufferedReader(new InputStreamReader(
-                        code < 400 ? c.getInputStream() : c.getErrorStream()))) {
-                    String line;
-                    while ((line = r.readLine()) != null) sb.append(line).append('\n');
-                }
-                result = "HTTP " + code + "\n" + sb.toString();
-            } catch (Throwable t) {
-                result = "EXC " + t;
-            }
-            final String r = result;
-            DiagLog.write(this, label + " => " + (r.length() > 300 ? r.substring(0, 300) : r));
-            runOnUiThread(() -> statusView.setText(label + ":\n" + r));
-        }, "http-" + label).start();
-    }
-
-    private void writeTokenToExternal() {
-        // Primary: getExternalFilesDir -> /sdcard/Android/data/dev.mtapi/files/token.txt
-        //          Always writable by app. Readable via `rish -c 'cat ...'`.
-        try {
-            java.io.File d = getExternalFilesDir(null);
-            if (d != null) {
-                if (!d.exists()) d.mkdirs();
-                java.io.File f = new java.io.File(d, "token.txt");
-                if (f.exists()) f.delete();
-                java.io.FileOutputStream fos = new java.io.FileOutputStream(f, false);
-                fos.write(token.getBytes("UTF-8"));
-                fos.close();
-                DiagLog.write(this, "token written to " + f.getAbsolutePath());
-            }
-        } catch (Throwable t) {
-            DiagLog.write(this, "token write (appExternal) failed: " + t);
+    private void startPolling() {
+        if (pollThread != null) {
+            pollActive = false;
+            pollThread.interrupt();
         }
-
-        // Secondary: /sdcard/Download/mtapi.token (may be blocked by scoped storage)
-        try {
-            java.io.File f = new java.io.File("/sdcard/Download/mtapi.token");
-            if (f.exists()) {
-                if (!f.delete()) {
-                    f = new java.io.File(f.getParentFile(),
-                            "mtapi.token." + System.currentTimeMillis());
-                }
-            }
-            java.io.FileOutputStream fos = new java.io.FileOutputStream(f, false);
-            fos.write(token.getBytes("UTF-8"));
-            fos.close();
-            DiagLog.write(this, "token also written to " + f.getAbsolutePath());
-        } catch (Throwable t) {
-            DiagLog.write(this, "token write (/sdcard/Download) failed: " + t);
-        }
-
-    }
-
-
-    private void writeTokenViaMediaStore() {
-        if (Build.VERSION.SDK_INT < 29) return;
-        try {
-            android.content.ContentResolver cr = getContentResolver();
-            android.net.Uri coll = android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI;
-
-            // Query for existing "mtapi.token"
-            android.database.Cursor c = cr.query(coll,
-                    new String[]{android.provider.MediaStore.MediaColumns._ID},
-                    android.provider.MediaStore.MediaColumns.DISPLAY_NAME + "=?",
-                    new String[]{"mtapi.token"}, null);
-            if (c != null) {
+        pollActive = true;
+        pollThread = new Thread(() -> {
+            long deadline = System.currentTimeMillis() + 30000L;
+            while (pollActive && System.currentTimeMillis() < deadline) {
+                if (Thread.currentThread().isInterrupted()) return;
                 try {
-                    if (c.moveToFirst()) {
-                        long id = c.getLong(0);
-                        android.net.Uri existing = android.content.ContentUris.withAppendedId(coll, id);
-                        try (java.io.OutputStream os = cr.openOutputStream(existing, "wt")) {
-                            os.write(token.getBytes("UTF-8"));
-                        }
-                        DiagLog.write(this, "token via MediaStore (update): " + existing);
+                    java.net.HttpURLConnection c = (java.net.HttpURLConnection)
+                            new java.net.URL("http://127.0.0.1:7788/ping").openConnection();
+                    c.setConnectTimeout(500);
+                    c.setReadTimeout(500);
+                    c.setRequestMethod("GET");
+                    int code = c.getResponseCode();
+                    if (code == 200 || code == 401) {
+                        final String tok = Token.getOrCreate(MainActivity.this);
+                        runOnUiThread(() -> {
+                            if (!pollActive) return;
+                            webView.loadUrl("http://127.0.0.1:7788/?token=" + tok);
+                        });
                         return;
                     }
-                } finally { c.close(); }
+                } catch (Throwable ignored) {}
+                try { Thread.sleep(200); } catch (InterruptedException e) { return; }
             }
-
-            // Insert new
-            android.content.ContentValues cv = new android.content.ContentValues();
-            cv.put(android.provider.MediaStore.MediaColumns.DISPLAY_NAME, "mtapi.token");
-            cv.put(android.provider.MediaStore.MediaColumns.MIME_TYPE, "text/plain");
-            cv.put(android.provider.MediaStore.MediaColumns.RELATIVE_PATH,
-                    android.os.Environment.DIRECTORY_DOWNLOADS);
-            android.net.Uri uri = cr.insert(coll, cv);
-            if (uri != null) {
-                try (java.io.OutputStream os = cr.openOutputStream(uri)) {
-                    os.write(token.getBytes("UTF-8"));
-                }
-                DiagLog.write(this, "token via MediaStore (insert): " + uri);
+            if (pollActive) {
+                runOnUiThread(() -> {
+                    String tok = Token.getOrCreate(MainActivity.this);
+                    webView.loadUrl("http://127.0.0.1:7788/?token=" + tok);
+                });
             }
-        } catch (Throwable t) {
-            DiagLog.write(this, "MediaStore token write failed: " + t);
-        }
+        }, "mtapi-poll");
+        pollThread.setDaemon(true);
+        pollThread.start();
     }
 
-    private void requestPermsIfNeeded() {
-        List<String> perms = new ArrayList<>();
-        perms.add(Manifest.permission.POST_NOTIFICATIONS);
-        perms.add(Manifest.permission.READ_CONTACTS);
-        perms.add(Manifest.permission.READ_CALL_LOG);
-        perms.add(Manifest.permission.READ_SMS);
-        perms.add(Manifest.permission.SEND_SMS);
-        perms.add(Manifest.permission.ACCESS_FINE_LOCATION);
-        perms.add(Manifest.permission.CAMERA);
-        perms.add(Manifest.permission.READ_PHONE_STATE);
-        perms.add(Manifest.permission.RECORD_AUDIO);
-        List<String> missing = new ArrayList<>();
-        for (String p : perms) {
-            if (checkSelfPermission(p) != PackageManager.PERMISSION_GRANTED) {
-                missing.add(p);
-            }
+    @Override
+    public void onBackPressed() {
+        if (webView != null && webView.canGoBack()) {
+            webView.goBack();
+            return;
         }
-        if (!missing.isEmpty()) {
-            requestPermissions(missing.toArray(new String[0]), REQ);
+        super.onBackPressed();
+    }
+
+    @Override
+    protected void onDestroy() {
+        pollActive = false;
+        if (pollThread != null) pollThread.interrupt();
+        if (webView != null) {
+            try { webView.destroy(); } catch (Throwable ignored) {}
         }
+        super.onDestroy();
     }
 }
