@@ -427,6 +427,16 @@ func (s *apiServer) handleIndex(w http.ResponseWriter, r *http.Request) {
 func startHTTP(api AndroidAPI, token string) error {
 	s := &apiServer{api: api, token: token}
 	mux := http.NewServeMux()
+	mux.HandleFunc("/app.js", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/javascript; charset=utf-8")
+		w.Header().Set("Cache-Control", "public, max-age=3600")
+		fmt.Fprint(w, appJS)
+	})
+	mux.HandleFunc("/style.css", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/css; charset=utf-8")
+		w.Header().Set("Cache-Control", "public, max-age=3600")
+		fmt.Fprint(w, styleCSS)
+	})
 	mux.HandleFunc("/", s.handleIndex)
 	mux.HandleFunc("/manifest.json", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/manifest+json")
