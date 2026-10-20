@@ -5,24 +5,41 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#1e1e1e">
 <link rel="manifest" href="/manifest.json">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%234fc3f7'/%3E%3Ctext x='16' y='22' font-family='monospace' font-size='14' font-weight='700' text-anchor='middle' fill='%231e1e1e'%3Em%3C/text%3E%3C/svg%3E">
 <title>mtapi</title>
 <style>
 :root{
   --bg:#1e1e1e;--bg2:#252525;--bg3:#2a2a2a;--bg4:#333;
   --fg:#ddd;--fg2:#aaa;--fg3:#888;--accent:#4fc3f7;
   --ok:#6ad86a;--err:#f77;--warn:#fc3;--code:#ce9178;--border:#333;
+  --v-num:#22d3ee;--v-null:#64748b;--v-bool-t:#4ade80;--v-bool-f:#94a3b8;
+  --c-basic:#4fc3f7;--c-sys:#22d3ee;--c-net:#38bdf8;--c-sensors:#a78bfa;
+  --c-hw:#fb923c;--c-display:#f472b6;--c-apps:#facc15;--c-comm:#2dd4bf;
+  --c-detail:#fbbf24;--c-file:#c084fc;--c-watch:#f472b6;
 }
 @media(prefers-color-scheme:light){
   :root{--bg:#f8f8f8;--bg2:#fff;--bg3:#f0f0f0;--bg4:#e0e0e0;
     --fg:#222;--fg2:#555;--fg3:#777;--accent:#0288d1;
-    --ok:#388e3c;--err:#c62828;--warn:#f57c00;--code:#c2185b;--border:#ddd}
+    --ok:#388e3c;--err:#c62828;--warn:#f57c00;--code:#c2185b;--border:#ddd;
+    --v-num:#00838f;--v-null:#94a3b8;--v-bool-t:#2e7d32;--v-bool-f:#64748b;
+    --c-basic:#0288d1;--c-sys:#00838f;--c-net:#0277bd;--c-sensors:#6a1b9a;
+    --c-hw:#e65100;--c-display:#c2185b;--c-apps:#f57c00;--c-comm:#00897b;
+    --c-detail:#ef6c00;--c-file:#7b1fa2;--c-watch:#c2185b}
 }
 html[data-theme="light"]{--bg:#f8f8f8;--bg2:#fff;--bg3:#f0f0f0;--bg4:#e0e0e0;
   --fg:#222;--fg2:#555;--fg3:#777;--accent:#0288d1;
-  --ok:#388e3c;--err:#c62828;--warn:#f57c00;--code:#c2185b;--border:#ddd}
+  --ok:#388e3c;--err:#c62828;--warn:#f57c00;--code:#c2185b;--border:#ddd;
+  --v-num:#00838f;--v-null:#94a3b8;--v-bool-t:#2e7d32;--v-bool-f:#64748b;
+  --c-basic:#0288d1;--c-sys:#00838f;--c-net:#0277bd;--c-sensors:#6a1b9a;
+  --c-hw:#e65100;--c-display:#c2185b;--c-apps:#f57c00;--c-comm:#00897b;
+  --c-detail:#ef6c00;--c-file:#7b1fa2;--c-watch:#c2185b}
 html[data-theme="dark"]{--bg:#1e1e1e;--bg2:#252525;--bg3:#2a2a2a;--bg4:#333;
   --fg:#ddd;--fg2:#aaa;--fg3:#888;--accent:#4fc3f7;
-  --ok:#6ad86a;--err:#f77;--warn:#fc3;--code:#ce9178;--border:#333}
+  --ok:#6ad86a;--err:#f77;--warn:#fc3;--code:#ce9178;--border:#333;
+  --v-num:#22d3ee;--v-null:#64748b;--v-bool-t:#4ade80;--v-bool-f:#94a3b8;
+  --c-basic:#4fc3f7;--c-sys:#22d3ee;--c-net:#38bdf8;--c-sensors:#a78bfa;
+  --c-hw:#fb923c;--c-display:#f472b6;--c-apps:#facc15;--c-comm:#2dd4bf;
+  --c-detail:#fbbf24;--c-file:#c084fc;--c-watch:#f472b6}
 *{box-sizing:border-box}html,body{margin:0;padding:0;height:100%}
 body{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:13px;
   line-height:1.4;background:var(--bg);color:var(--fg);overflow-x:hidden;overflow-y:auto;
@@ -49,20 +66,36 @@ h1{font-size:18px;margin:0;color:var(--fg)}
 .stat .bar{display:inline-block;width:60px;height:8px;background:var(--bg4);
   border-radius:2px;overflow:hidden;vertical-align:middle;margin-left:4px}
 .stat .bar>i{display:block;height:100%;background:var(--ok);transition:width .3s}
+.stat .bar>i.pct-hi{background:var(--ok)}
+.stat .bar>i.pct-md{background:var(--warn)}
+.stat .bar>i.pct-lo{background:var(--err)}
 .search{width:100%;padding:8px 10px;background:var(--bg2);border:1px solid var(--border);
   border-radius:6px;color:var(--fg);font-family:inherit;font-size:13px;margin-bottom:10px}
 .search:focus{outline:none;border-color:var(--accent)}
 .group{margin-bottom:14px}
 .group-h{font-size:11px;color:var(--fg3);text-transform:uppercase;letter-spacing:.06em;
-  margin:0 0 6px 0;font-weight:600}
+  margin:0 0 6px 0;font-weight:600;position:relative;padding-left:10px}
+.group-h::before{content:'';position:absolute;left:0;top:2px;bottom:2px;width:3px;
+  border-radius:2px;background:var(--g,var(--accent))}
+.group[data-group="Basic"]{--g:var(--c-basic)}
+.group[data-group="System"]{--g:var(--c-sys)}
+.group[data-group="Network"]{--g:var(--c-net)}
+.group[data-group="Sensors"]{--g:var(--c-sensors)}
+.group[data-group="Hardware"]{--g:var(--c-hw)}
+.group[data-group="Display / Audio"]{--g:var(--c-display)}
+.group[data-group="Apps"]{--g:var(--c-apps)}
+.group[data-group="Contacts / SMS"]{--g:var(--c-comm)}
+.group[data-group="Detailed"]{--g:var(--c-detail)}
+.group[data-group="Files / Audio play"]{--g:var(--c-file)}
+.group[data-group="Watch (logcat)"]{--g:var(--c-watch)}
 .ep{background:var(--bg2);border-radius:6px;margin-bottom:5px;overflow:hidden;
-  border:1px solid var(--border)}
+  border:1px solid var(--border);border-left:3px solid var(--g,var(--accent));
+  content-visibility:auto;contain-intrinsic-size:80px}
 .ep-h{display:flex;align-items:center;gap:6px;padding:7px 10px}
 .ep-h .run{flex:1;text-align:left;background:none;border:none;color:var(--accent);
   padding:0;cursor:pointer;font-family:inherit;font-size:12px;word-break:break-all}
 .ep-h .run:hover{text-decoration:underline}
-.ep-h .status{font-size:10px;color:var(--fg3);min-width:44px;text-align:right;
-  white-space:nowrap}
+.ep-h .status{font-size:10px;color:var(--fg3);min-width:44px;text-align:right;white-space:nowrap}
 .ep-h .status.ok{color:var(--ok)}.ep-h .status.err{color:var(--err)}
 .ep-h .status.loading{color:var(--warn)}
 .ep-h .live{font-size:10px;color:var(--ok);margin-left:4px}
@@ -75,23 +108,51 @@ h1{font-size:18px;margin:0;color:var(--fg)}
 .ep-b .raw summary{cursor:pointer;color:var(--fg3);font-size:11px;user-select:none}
 .ep-b .raw pre{background:var(--bg);padding:8px;border-radius:4px;overflow-x:auto;
   font-size:11px;margin:6px 0 0 0;white-space:pre-wrap;word-break:break-all}
+/* Uniform 30/70 key-value table */
 table{width:100%;border-collapse:collapse;font-size:11px;margin:0}
-th,td{padding:4px 7px;border-bottom:1px solid var(--border);text-align:left;
-  vertical-align:top;word-break:break-word}
+table.kv{table-layout:fixed}
+table.kv th{width:30%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+table.kv td{width:70%;word-break:break-word;overflow-wrap:anywhere}
+th,td{padding:4px 7px;border-bottom:1px solid var(--border);text-align:left;vertical-align:top}
 th{background:var(--bg3);color:var(--fg2);font-weight:600;font-size:10px}
 tr:hover td{background:var(--bg3)}
+/* Value semantics */
+td.v-num{color:var(--v-num);font-variant-numeric:tabular-nums}
+td.v-null{color:var(--v-null);font-style:italic}
+td.v-bool-t{color:var(--v-bool-t);font-weight:600}
+td.v-bool-f{color:var(--v-bool-f)}
 .empty{color:var(--fg3);font-style:italic;padding:6px 0;font-size:11px}
-.scalar{padding:6px 0;word-break:break-all}
+.scalar{padding:6px 0;word-break:break-all;font-size:12px}
 code{background:var(--bg3);padding:1px 4px;border-radius:3px;color:var(--code);font-size:10px}
 .spin{display:inline-block;width:10px;height:10px;border:2px solid var(--border);
   border-top-color:var(--warn);border-radius:50%;animation:sp .6s linear infinite;
   vertical-align:middle}
 @keyframes sp{to{transform:rotate(360deg)}}
-canvas.graph{width:100%;height:180px;background:var(--bg);border-radius:4px;margin-top:6px;
-  border:1px solid var(--border)}
-.legend{display:flex;gap:10px;font-size:10px;color:var(--fg2);margin-top:4px}
-.legend i{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:3px;
-  vertical-align:middle}
+@media (prefers-reduced-motion: reduce) {
+  *{transition:none!important;animation:none!important}
+}
+.icon-btn.danger{background:#7f1d1d;color:#fca5a5;border-color:#7f1d1d}
+.icon-btn.danger:hover{background:#991b1b}
+.ep.dropped{opacity:.4;text-decoration:line-through}
+.ep.dropped .status{color:var(--err)}
+/* MTAPI_HARD_FIX_72 */
+/* MTAPI_TABLES_74_CSS: nested object/array visuals */
+.hw-card-title{font-weight:600;color:var(--fg2);letter-spacing:.02em}
+table.kv td.v-num{text-align:right}
+table tbody tr:last-child td,
+table tbody tr:last-child th{border-bottom:none}
+.ep-b table{margin:4px 0}
+.ep-b details > summary{cursor:pointer;font-size:11px;color:var(--fg3);padding:4px 0}
+/* MTAPI_DEEP_TABLES_77_CSS: nested table polish */
+.ep-b table.kv.nested,
+.ep-b table table.kv { border:1px solid var(--bg4); border-radius:4px; }
+.ep-b table td > table,
+.ep-b table td > table.kv { margin:0; }
+.ep-b table td > table td,
+.ep-b table td > table th { padding:2px 4px; font-size:10px; }
+.ep-b table td > table td > table td,
+.ep-b table td > table td > table th { padding:1px 3px; font-size:9px; }
+.ep-b code { font-size:10px; padding:1px 3px; }
 </style>
 </head>
 <body>
@@ -99,21 +160,26 @@ canvas.graph{width:100%;height:180px;background:var(--bg);border-radius:4px;marg
 <header>
   <h1>mtapi</h1>
   <div class="head-right">
-    <button class="icon-btn" id="live" title="auto-refresh every 3s">◉ auto</button>
-    <button class="icon-btn" id="theme" title="toggle light/dark">🌙</button>
+    <button class="icon-btn" id="live" title="auto-refresh every 3s">&#9673; auto</button>
+    <button class="icon-btn" id="theme" title="toggle light/dark">&#127769;</button>
     <div class="token" id="tok">{{TOKEN}}</div>
     <button class="icon-btn" id="copy">copy</button>
+    <button class="icon-btn danger" id="reset" title="drop all pending, clear cache">⟲ reset</button>
   </div>
 </header>
 <div class="stats">
-  <div class="stat" id="st-batt">battery —</div>
-  <div class="stat" id="st-ram">ram —</div>
-  <div class="stat" id="st-ping">ping —</div>
+  <div class="stat" id="st-batt">battery &mdash;</div>
+  <div class="stat" id="st-ram">ram &mdash;</div>
+  <div class="stat" id="st-ping">ping &mdash;</div>
 </div>
-<input class="search" id="q" placeholder="filter endpoints… (battery, sensors, net)">
+<input class="search" id="q" placeholder="filter endpoints&hellip; (battery, sensors, net)">
 <main id="main"></main>
 </div>
+
+
 <script>
+// MTAPI_HARD_RESET_76: clean slate — no SW, no auto-click, no semaphore.
+// /ping is synthetic server-side. Client only does what user clicks.
 const TOKEN = "{{TOKEN}}";
 
 const ENDPOINTS = [
@@ -168,169 +234,402 @@ const ENDPOINTS = [
   ]}
 ];
 
-const SLOW = new Set(["/camera/snapshot","/microphone/record?seconds=3",
-  "/sensors/read?name=accelerometer&ms=200"]);
-const AUTO_EPS = new Set(["/ping","/battery","/system"]);
+const SLOW = new Set([
+  "/camera/snapshot","/microphone/record?seconds=3",
+  "/sensors/read?name=accelerometer&ms=200",
+  "/contacts?limit=5","/calllog?limit=5","/sms?limit=5",
+  "/calendar?days=7","/app/list"
+]);
+
+// ─── renderers ────────────────────────────────────────
+function esc(s){return String(s).replace(/[&<>"']/g,function(c){
+  return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})}
+function cellStr(v){
+  if(v===null)return'null';
+  if(v===undefined)return'';
+  if(typeof v==='object')return JSON.stringify(v);
+  return String(v);
+}
+function classifyValue(v){
+  if(v===null||v===undefined)return'v-null';
+  if(typeof v==='boolean')return v?'v-bool-t':'v-bool-f';
+  if(typeof v==='number')return'v-num';
+  return'';
+}
+// ─── MTAPI_DEEP_TABLES_77: deep recursive renderer ────
+// object → 30/70 kv table
+// nested object → recurses with depth indent
+// array of scalars → inline chips
+// array of objects (flat) → multi-col table with scalar cells
+// array of objects (nested inside) → multi-col table + expandable sub-cell
+// array of arrays → multi-col table
 
 function esc(s){return String(s).replace(/[&<>"']/g,function(c){
   return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})}
 function cellStr(v){
-  if(v===null)return'null';if(v===undefined)return'';
-  if(typeof v==='object')return JSON.stringify(v);return String(v)}
-function renderData(data){
-  if(data===null||data===undefined)return'<div class="empty">null</div>';
-  if(Array.isArray(data)){
-    if(data.length===0)return'<div class="empty">(empty array)</div>';
-    if(typeof data[0]!=='object'||data[0]===null){
-      var h='<table><tbody>';
-      for(var i=0;i<data.length;i++)h+='<tr><td>'+esc(cellStr(data[i]))+'</td></tr>';
-      return h+'</tbody></table>';
-    }
-    var cols=[],seen={};
-    for(var ri=0;ri<data.length;ri++){var row=data[ri];
-      if(row&&typeof row==='object')for(var k in row)
-        if(Object.prototype.hasOwnProperty.call(row,k)&&!seen[k]){seen[k]=true;cols.push(k)}}
-    var h='<table><thead><tr>';
-    for(var ci=0;ci<cols.length;ci++)h+='<th>'+esc(cols[ci])+'</th>';
-    h+='</tr></thead><tbody>';
-    for(var rj=0;rj<data.length;rj++){h+='<tr>';
-      for(var cj=0;cj<cols.length;cj++)h+='<td>'+esc(cellStr(data[rj]?data[rj][cols[cj]]:null))+'</td>';
-      h+='</tr>'}
-    return h+'</tbody></table>';
-  }
-  if(typeof data==='object'){
-    var hk='<table><tbody>';
-    for(var kk in data)if(Object.prototype.hasOwnProperty.call(data,kk))
-      hk+='<tr><th>'+esc(kk)+'</th><td>'+esc(cellStr(data[kk]))+'</td></tr>';
-    return hk+'</tbody></table>';
-  }
-  return'<div class="scalar">'+esc(String(data))+'</div>';
+  if(v===null)return'null';
+  if(v===undefined)return'';
+  if(typeof v==='object')return JSON.stringify(v);
+  return String(v);
 }
-function call(path){
+function classifyValue(v){
+  if(v===null||v===undefined)return'v-null';
+  if(typeof v==='boolean')return v?'v-bool-t':'v-bool-f';
+  if(typeof v==='number')return'v-num';
+  return'';
+}
+function _isScalar(v){
+  return v===null||v===undefined||
+    typeof v==='number'||typeof v==='string'||typeof v==='boolean';
+}
+function _scalarCell(v){
+  return '<td class="'+classifyValue(v)+'">'+esc(cellStr(v))+'</td>';
+}
+
+// Render any nested value as inline HTML (used INSIDE table cells)
+function renderCell(v, depth){
+  if(_isScalar(v)) return '<span class="'+classifyValue(v)+'">'+esc(cellStr(v))+'</span>';
+  if(depth > 5) return '<code style="font-size:9px">'+esc(JSON.stringify(v).slice(0,100))+'</code>';
+
+  if(Array.isArray(v)){
+    if(v.length === 0) return '<span class="empty">[]</span>';
+    if(_isScalar(v[0])){
+      // scalar array: [1, 2, 3] → chips
+      return '<span style="font-size:10px">' +
+        v.map(function(x){return '<code>'+esc(cellStr(x))+'</code>';}).join(' ') +
+        '</span>';
+    }
+    // array of objects/arrays → mini table
+    if(Array.isArray(v[0])){
+      // [[..],[..]]
+      var h = '<table style="font-size:10px;margin:2px 0"><tbody>';
+      v.forEach(function(row){
+        h += '<tr>';
+        row.forEach(function(cell){
+          h += '<td style="padding:2px 4px;border:none">'+esc(cellStr(cell))+'</td>';
+        });
+        h += '</tr>';
+      });
+      return h + '</tbody></table>';
+    }
+    // array of objects → mini table with recursion
+    var cols = [], seen = {};
+    v.forEach(function(o){
+      if(o && typeof o==='object' && !Array.isArray(o)){
+        Object.keys(o).forEach(function(k){
+          if(!seen[k]){ seen[k]=true; cols.push(k); }
+        });
+      }
+    });
+    var h = '<table style="font-size:10px;margin:2px 0"><thead><tr>';
+    cols.forEach(function(c){
+      h += '<th style="padding:2px 4px;font-size:9px">'+esc(c)+'</th>';
+    });
+    h += '</tr></thead><tbody>';
+    v.forEach(function(row){
+      h += '<tr>';
+      cols.forEach(function(c){
+        var cell = row ? row[c] : undefined;
+        h += '<td style="padding:2px 4px;border:none">' + renderCell(cell, depth+1) + '</td>';
+      });
+      h += '</tr>';
+    });
+    h += '</tbody></table>';
+    return h;
+  }
+
+  if(typeof v === 'object'){
+    // nested object → mini kv table
+    var h = '<table class="kv" style="font-size:10px;margin:2px 0"><tbody>';
+    Object.keys(v).forEach(function(k){
+      var val = v[k];
+      h += '<tr><th style="padding:2px 4px;font-size:9px;width:30%">'+esc(k)+'</th>' +
+           '<td style="padding:2px 4px">' + renderCell(val, depth+1) + '</td></tr>';
+    });
+    h += '</tbody></table>';
+    return h;
+  }
+  return esc(cellStr(v));
+}
+
+// Top-level object renderer
+function renderObj(obj, depth){
+  var keys = Object.keys(obj);
+  if(!keys.length) return '<span class="empty">{}</span>';
+
+  var scalars = [], nested = [];
+  keys.forEach(function(k){
+    var v = obj[k];
+    if(_isScalar(v)) scalars.push({k:k, v:v});
+    else nested.push({k:k, v:v});
+  });
+
+  var h = '';
+
+  // 1. Scalar table (30/70)
+  if(scalars.length){
+    h += '<table class="kv"><tbody>';
+    scalars.forEach(function(it){
+      h += '<tr><th>'+esc(it.k)+'</th>'+_scalarCell(it.v)+'</tr>';
+    });
+    h += '</tbody></table>';
+  }
+
+  // 2. Nested items (each with label + recursion)
+  nested.forEach(function(it){
+    var k = it.k, v = it.v;
+    var label = '<div class="hw-card-title" style="font-size:12px;margin:10px 0 4px;' +
+                'padding:4px 8px;background:var(--bg3);border-radius:4px;' +
+                'border-left:3px solid var(--accent)">▸ '+esc(k)+'</div>';
+
+    h += label;
+
+    if(Array.isArray(v)){
+      if(v.length === 0){
+        h += '<span class="empty">[]</span>';
+      } else if(_isScalar(v[0])){
+        // scalar array → chips
+        h += '<div style="padding:4px 0 4px 12px">' + renderCell(v, depth+1) + '</div>';
+      } else if(Array.isArray(v[0])){
+        // array of arrays
+        h += '<div style="padding-left:12px">' + renderCell(v, depth+1) + '</div>';
+      } else {
+        // array of objects — main table, each nested cell rendered recursively
+        var cols = [], seen = {};
+        v.forEach(function(o){
+          if(o && typeof o==='object' && !Array.isArray(o)){
+            Object.keys(o).forEach(function(k2){
+              if(!seen[k2]){ seen[k2]=true; cols.push(k2); }
+            });
+          }
+        });
+        h += '<table><thead><tr>';
+        cols.forEach(function(c){ h += '<th>'+esc(c)+'</th>'; });
+        h += '</tr></thead><tbody>';
+        v.forEach(function(row){
+          h += '<tr>';
+          cols.forEach(function(c){
+            var cell = row ? row[c] : undefined;
+            h += '<td>' + renderCell(cell, depth+1) + '</td>';
+          });
+          h += '</tr>';
+        });
+        h += '</tbody></table>';
+      }
+    } else if(typeof v === 'object'){
+      // nested object
+      if(depth < 5){
+        h += '<div style="padding-left:12px;border-left:2px solid var(--bg4);margin-left:4px">';
+        h += renderObj(v, depth+1);
+        h += '</div>';
+      } else {
+        h += '<code style="font-size:10px">'+esc(JSON.stringify(v).slice(0,300))+'</code>';
+      }
+    }
+  });
+
+  return h;
+}
+
+function renderData(data){
+  if(data === null || data === undefined) return '<div class="empty">null</div>';
+
+  if(Array.isArray(data)){
+    if(data.length === 0) return '<div class="empty">(empty array)</div>';
+
+    // top-level scalar array
+    if(_isScalar(data[0])) return '<div style="padding:4px 0">'+renderCell(data, 0)+'</div>';
+
+    // top-level array of arrays
+    if(Array.isArray(data[0])) return renderCell(data, 0);
+
+    // top-level array of objects
+    var cols = [], seen = {};
+    data.forEach(function(o){
+      if(o && typeof o==='object' && !Array.isArray(o)){
+        Object.keys(o).forEach(function(k){
+          if(!seen[k]){ seen[k]=true; cols.push(k); }
+        });
+      }
+    });
+    var h = '<table><thead><tr>';
+    cols.forEach(function(c){ h += '<th>'+esc(c)+'</th>'; });
+    h += '</tr></thead><tbody>';
+    data.forEach(function(row){
+      h += '<tr>';
+      cols.forEach(function(c){
+        var cell = row ? row[c] : undefined;
+        h += '<td>' + renderCell(cell, 1) + '</td>';
+      });
+      h += '</tr>';
+    });
+    return h + '</tbody></table>';
+  }
+
+  if(typeof data === 'object') return renderObj(data, 0);
+  return '<div class="scalar">'+esc(String(data))+'</div>';
+}
+
+// MTAPI_SEMAPHORE_78: soft queue so UI never exhausts WebView pool.
+// updateStats uses `callDirect` (bypass) so header always loads.
+var _inflight = 0;
+var MAX_INFLIGHT = 3;    // WebView pool is 6; leave 3 for stats + extras
+var _queue = [];
+function _pumpQueue(){
+  while (_inflight < MAX_INFLIGHT && _queue.length) {
+    var fn = _queue.shift();
+    fn();
+  }
+}
+
+function callDirect(path) {
+  // no queue — direct fetch, used by updateStats
   var sep=path.indexOf('?')>=0?'&':'?';
   var url=path+sep+'token='+encodeURIComponent(TOKEN);
   var t0=performance.now();
+  var ms=SLOW.has(path)?15000:10000;
   var ctl=new AbortController();
-  var ms=SLOW.has(path)?40000:12000;
   var timer=setTimeout(function(){ctl.abort()},ms);
   return fetch(url,{signal:ctl.signal}).then(function(r){return r.json()}).then(function(j){
     clearTimeout(timer);
-    return{ms:Math.round(performance.now()-t0),json:j}
-  }).catch(function(e){clearTimeout(timer);
-    return{ms:Math.round(performance.now()-t0),error:String(e)}});
+    return {ms: Math.round(performance.now()-t0), json: j};
+  }).catch(function(e){
+    clearTimeout(timer);
+    return {ms: Math.round(performance.now()-t0), error: String(e)};
+  });
 }
+
+function call(path){
+  return new Promise(function(resolve){
+    var task = function(){
+      _inflight++;
+      callDirect(path).then(function(res){
+        _inflight--;
+        resolve(res);
+        _pumpQueue();
+      });
+    };
+    if (_inflight < MAX_INFLIGHT) task();
+    else _queue.push(task);
+  });
+}
+
+
 function makeCard(path){
   var ep=document.createElement('div');
-  ep.className='ep';ep.dataset.path=path;
-  var head=document.createElement('div');head.className='ep-h';
-  var btn=document.createElement('button');btn.className='run';btn.textContent='GET '+path;
+  ep.className='ep'; ep.dataset.path=path;
+  var head=document.createElement('div'); head.className='ep-h';
+  var btn=document.createElement('button'); btn.className='run'; btn.textContent='GET '+path;
   btn.addEventListener('click',function(){run(ep,path)});
-  var status=document.createElement('span');status.className='status';
-  var toggle=document.createElement('button');toggle.className='toggle';
-  toggle.textContent='{ }';toggle.title='toggle raw JSON';
-  head.appendChild(btn);head.appendChild(status);head.appendChild(toggle);
-  var body=document.createElement('div');body.className='ep-b';body.hidden=true;
-  ep.appendChild(head);ep.appendChild(body);
+  var status=document.createElement('span'); status.className='status';
+  var toggle=document.createElement('button'); toggle.className='toggle';
+  toggle.textContent='{ }'; toggle.title='toggle raw JSON';
+  head.appendChild(btn); head.appendChild(status); head.appendChild(toggle);
+  var body=document.createElement('div'); body.className='ep-b'; body.hidden=true;
+  ep.appendChild(head); ep.appendChild(body);
   return ep;
 }
+
 function run(ep,path){
   var status=ep.querySelector('.status');
   var body=ep.querySelector('.ep-b');
   var toggle=ep.querySelector('.toggle');
   body.hidden=false;
-  status.className='status loading';status.innerHTML='<span class="spin"></span>';
+  status.className='status loading'; status.innerHTML='<span class="spin"></span>';
   body.innerHTML='<div class="empty">loading…</div>';
   call(path).then(function(res){
     if(res.error){
-      status.className='status err';status.textContent=res.ms+'ms';
+      status.className='status err'; status.textContent=res.ms+'ms';
       body.innerHTML='<div class="empty" style="color:var(--err)">'+esc(res.error)+'</div>';
-      toggle.style.display='none';return
+      toggle.style.display='none'; return;
     }
     var j=res.json;
     if(j&&j.ok===false){
-      status.className='status err';status.textContent=res.ms+'ms';
+      status.className='status err'; status.textContent=res.ms+'ms';
       body.innerHTML='<div class="empty" style="color:var(--err)">error: '+esc(j.error||'unknown')+'</div>';
-      toggle.style.display='none';return
+      toggle.style.display='none'; return;
     }
-    status.className='status ok';status.textContent=res.ms+'ms';
+    status.className='status ok'; status.textContent=res.ms+'ms';
     var data=(j&&('data'in j))?j.data:j;
     body.innerHTML=renderData(data);
-    var raw=document.createElement('details');raw.className='raw';
-    var sum=document.createElement('summary');sum.textContent='raw JSON';
-    var pre=document.createElement('pre');pre.textContent=JSON.stringify(j,null,2);
-    raw.appendChild(sum);raw.appendChild(pre);body.appendChild(raw);
+    var raw=document.createElement('details'); raw.className='raw';
+    var sum=document.createElement('summary'); sum.textContent='raw JSON';
+    var pre=document.createElement('pre'); pre.textContent=JSON.stringify(j,null,2);
+    raw.appendChild(sum); raw.appendChild(pre); body.appendChild(raw);
     toggle.style.display='';
-    toggle.onclick=function(){raw.open=!raw.open;
-      if(raw.open)raw.scrollIntoView({block:'nearest',behavior:'smooth'})};
+    toggle.onclick=function(){raw.open=!raw.open;};
   });
 }
+
 function render(){
   var q=document.getElementById('q').value.toLowerCase();
-  var main=document.getElementById('main');main.innerHTML='';
+  var main=document.getElementById('main'); main.innerHTML='';
   for(var gi=0;gi<ENDPOINTS.length;gi++){
     var g=ENDPOINTS[gi];
     var filtered=g.eps.filter(function(p){return p.toLowerCase().indexOf(q)>=0});
     if(filtered.length===0)continue;
-    var gd=document.createElement('div');gd.className='group';
-    var h=document.createElement('div');h.className='group-h';h.textContent=g.group;
+    var gd=document.createElement('div'); gd.className='group'; gd.dataset.group=g.group;
+    var h=document.createElement('div'); h.className='group-h'; h.textContent=g.group;
     gd.appendChild(h);
     for(var pi=0;pi<filtered.length;pi++)gd.appendChild(makeCard(filtered[pi]));
     main.appendChild(gd);
   }
 }
 
-// ── live stats ──
+// ─── updateStats ─────────────────────────────────────
+var _statsBusy=false;
 function updateStats(){
-  call('/battery').then(function(r){
+  // MTAPI_SEMAPHORE_78: direct calls (bypass queue) so header is always fast
+  callDirect('/battery').then(function(r){
     if(r.json&&r.json.data){
       var b=r.json.data;
       var pct=b.percentage||0;
+      var cls=pct>60?'pct-hi':pct>20?'pct-md':'pct-lo';
       document.getElementById('st-batt').innerHTML=
         'battery <b>'+pct+'%</b>'+(b.charging?' ⚡':'')+
-        '<span class="bar"><i style="width:'+pct+'%;background:'+
-        (pct>20?'var(--ok)':'var(--err)')+'"></i></span>';
+        '<span class="bar"><i class="'+cls+'" style="width:'+pct+'%"></i></span>';
+    } else {
+      document.getElementById('st-batt').innerHTML='battery <b style="color:var(--err)">?</b>';
     }
   });
-  call('/system').then(function(r){
+  callDirect('/system').then(function(r){
     if(r.json&&r.json.data&&r.json.data.ram){
       var rm=r.json.data.ram;
       var used=rm.totalBytes-rm.availableBytes;
       var pct=Math.round(used/rm.totalBytes*100);
+      var cls=pct>85?'pct-lo':pct>70?'pct-md':'pct-hi';
       document.getElementById('st-ram').innerHTML=
-        'ram <b>'+pct+'%</b><span class="bar"><i style="width:'+pct+'%;"></i></span>';
+        'ram <b>'+pct+'%</b><span class="bar"><i class="'+cls+'" style="width:'+pct+'%"></i></span>';
+    } else {
+      document.getElementById('st-ram').innerHTML='ram <b style="color:var(--err)">?</b>';
     }
   });
-  var t0=performance.now();
-  call('/ping').then(function(r){
-    var ms=r.ms;
-    document.getElementById('st-ping').innerHTML='ping <b>'+ms+'ms</b>'+
-      (r.json&&r.json.ok?' <span style="color:var(--ok)">●</span>':
-       ' <span style="color:var(--err)">●</span>');
+  callDirect('/ping').then(function(r){
+    if(r.error){
+      document.getElementById('st-ping').innerHTML='ping <b style="color:var(--err)">err</b>';
+    } else {
+      document.getElementById('st-ping').innerHTML='ping <b>'+r.ms+'ms</b>'+
+        (r.json&&r.json.ok?' <span style="color:var(--ok)">●</span>':' <span style="color:var(--err)">●</span>');
+    }
   });
 }
 
-// ── auto toggle ──
+// ─── live toggle ─────────────────────────────────────
 var liveOn=false, liveTimer=null;
 function setLive(on){
   liveOn=on;
   document.getElementById('live').classList.toggle('on',on);
   if(liveTimer){clearInterval(liveTimer);liveTimer=null}
-  if(on)liveTimer=setInterval(function(){
-    updateStats();
-    document.querySelectorAll('.ep').forEach(function(ep){
-      if(AUTO_EPS.has(ep.dataset.path)&&!ep.querySelector('.ep-b').hidden)
-        run(ep,ep.dataset.path);
-    });
-  },3000);
+  if(on)liveTimer=setInterval(updateStats,5000);
 }
 
-// ── theme ──
+// ─── theme ───────────────────────────────────────────
 var savedTheme=localStorage.getItem('mtapi-theme');
 if(savedTheme)document.documentElement.setAttribute('data-theme',savedTheme);
 function updateThemeBtn(){
   var cur=document.documentElement.getAttribute('data-theme');
   if(!cur)cur=window.matchMedia('(prefers-color-scheme:light)').matches?'light':'dark';
-  document.getElementById('theme').textContent=cur==='light'?'☀️':'🌙';
+  document.getElementById('theme').textContent=cur==='light'?'\u2600\uFE0F':'\uD83C\uDF19';
 }
 document.getElementById('theme').addEventListener('click',function(){
   var cur=document.documentElement.getAttribute('data-theme');
@@ -341,7 +640,7 @@ document.getElementById('theme').addEventListener('click',function(){
   updateThemeBtn();
 });
 
-// ── copy ──
+// copy
 document.getElementById('copy').addEventListener('click',function(){
   navigator.clipboard.writeText(TOKEN).then(function(){
     var b=document.getElementById('copy');b.textContent='copied';
@@ -349,26 +648,42 @@ document.getElementById('copy').addEventListener('click',function(){
   }).catch(function(){});
 });
 
-// ── search ──
+// search
 document.getElementById('q').addEventListener('input',render);
 
-// ── live toggle ──
+// reset
+document.getElementById('reset').addEventListener('click',function(){
+  _queue = [];
+  _inflight = 0;
+  document.getElementById('st-batt').innerHTML='battery —';
+  document.getElementById('st-ram').innerHTML='ram —';
+  document.getElementById('st-ping').innerHTML='ping —';
+  document.querySelectorAll('.ep').forEach(function(ep){
+    var st=ep.querySelector('.status');
+    if(st){st.className='status';st.textContent='';}
+    ep.querySelector('.ep-b').hidden=true;
+  });
+  updateStats();
+});
+
+// live toggle
 document.getElementById('live').addEventListener('click',function(){setLive(!liveOn)});
 
-// ── init ──
+// init
 render();
 updateThemeBtn();
 updateStats();
-setLive(true);  // on by default
-setTimeout(function(){
-  var first=document.querySelector('.ep[data-path="/ping"] .run');
-  if(first)first.click();
-},200);
+setLive(false);
 
-// ── PWA ──
+// kill any old SW
 if('serviceWorker' in navigator){
-  navigator.serviceWorker.register('/sw.js').catch(function(){});
+  navigator.serviceWorker.getRegistrations().then(function(regs){
+    regs.forEach(function(r){ r.unregister(); });
+  }).catch(function(){});
 }
+
+console.log('[mtapi] MTAPI_HARD_RESET_76 loaded');
 </script>
+
 </body>
 </html>

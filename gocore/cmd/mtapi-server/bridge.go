@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"sync"
+	"time"
 	"sync/atomic"
 )
 
@@ -72,7 +73,13 @@ func (b *bridge) call(method string, params map[string]any) (*response, error) {
 		return nil, err
 	}
 
-	r := <-ch
+	var r *response
+	select {
+	case r = <-ch:
+	case <-time.After(5 * time.Second): // MTAPI_BRIDGE_TIMEOUT
+		b.pend.Delete(id)
+		return nil, fmt.Errorf("bridge timeout: %s", method)
+	}
 	if !r.OK {
 		if r.Error == "" {
 			r.Error = "unknown error"
@@ -93,4 +100,26 @@ func (b *bridge) callStr(method string, params map[string]any) (string, error) {
 func (b *bridge) callVoid(method string, params map[string]any) error {
 	_, err := b.call(method, params)
 	return err
+}
+
+// ─── MTAPI_CACHE_71: TTL cache for hot endpoints ─────────
+type cacheEntry struct {
+	data   []byte
+	expire time.Time
+}
+
+var ttlCache sync.Map
+
+func (b *bridge) cached(key string, ttl time.Duration, fn func() (string, error)) (string, error) {
+	if v, ok := ttlCache.Load(key); ok {
+		e := v.(cacheEntry)
+		if time.Now().Before(e.expire) {
+			return string(e.data), nil
+		}
+	}
+	s, err := fn()
+	if err == nil {
+		ttlCache.Store(key, cacheEntry{[]byte(s), time.Now().Add(ttl)})
+	}
+	return s, err
 }

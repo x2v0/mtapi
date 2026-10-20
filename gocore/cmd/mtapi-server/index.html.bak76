@@ -1,0 +1,687 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1e1e1e">
+<link rel="manifest" href="/manifest.json">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%234fc3f7'/%3E%3Ctext x='16' y='22' font-family='monospace' font-size='14' font-weight='700' text-anchor='middle' fill='%231e1e1e'%3Em%3C/text%3E%3C/svg%3E">
+<title>mtapi</title>
+<style>
+:root{
+  --bg:#1e1e1e;--bg2:#252525;--bg3:#2a2a2a;--bg4:#333;
+  --fg:#ddd;--fg2:#aaa;--fg3:#888;--accent:#4fc3f7;
+  --ok:#6ad86a;--err:#f77;--warn:#fc3;--code:#ce9178;--border:#333;
+  --v-num:#22d3ee;--v-null:#64748b;--v-bool-t:#4ade80;--v-bool-f:#94a3b8;
+  --c-basic:#4fc3f7;--c-sys:#22d3ee;--c-net:#38bdf8;--c-sensors:#a78bfa;
+  --c-hw:#fb923c;--c-display:#f472b6;--c-apps:#facc15;--c-comm:#2dd4bf;
+  --c-detail:#fbbf24;--c-file:#c084fc;--c-watch:#f472b6;
+}
+@media(prefers-color-scheme:light){
+  :root{--bg:#f8f8f8;--bg2:#fff;--bg3:#f0f0f0;--bg4:#e0e0e0;
+    --fg:#222;--fg2:#555;--fg3:#777;--accent:#0288d1;
+    --ok:#388e3c;--err:#c62828;--warn:#f57c00;--code:#c2185b;--border:#ddd;
+    --v-num:#00838f;--v-null:#94a3b8;--v-bool-t:#2e7d32;--v-bool-f:#64748b;
+    --c-basic:#0288d1;--c-sys:#00838f;--c-net:#0277bd;--c-sensors:#6a1b9a;
+    --c-hw:#e65100;--c-display:#c2185b;--c-apps:#f57c00;--c-comm:#00897b;
+    --c-detail:#ef6c00;--c-file:#7b1fa2;--c-watch:#c2185b}
+}
+html[data-theme="light"]{--bg:#f8f8f8;--bg2:#fff;--bg3:#f0f0f0;--bg4:#e0e0e0;
+  --fg:#222;--fg2:#555;--fg3:#777;--accent:#0288d1;
+  --ok:#388e3c;--err:#c62828;--warn:#f57c00;--code:#c2185b;--border:#ddd;
+  --v-num:#00838f;--v-null:#94a3b8;--v-bool-t:#2e7d32;--v-bool-f:#64748b;
+  --c-basic:#0288d1;--c-sys:#00838f;--c-net:#0277bd;--c-sensors:#6a1b9a;
+  --c-hw:#e65100;--c-display:#c2185b;--c-apps:#f57c00;--c-comm:#00897b;
+  --c-detail:#ef6c00;--c-file:#7b1fa2;--c-watch:#c2185b}
+html[data-theme="dark"]{--bg:#1e1e1e;--bg2:#252525;--bg3:#2a2a2a;--bg4:#333;
+  --fg:#ddd;--fg2:#aaa;--fg3:#888;--accent:#4fc3f7;
+  --ok:#6ad86a;--err:#f77;--warn:#fc3;--code:#ce9178;--border:#333;
+  --v-num:#22d3ee;--v-null:#64748b;--v-bool-t:#4ade80;--v-bool-f:#94a3b8;
+  --c-basic:#4fc3f7;--c-sys:#22d3ee;--c-net:#38bdf8;--c-sensors:#a78bfa;
+  --c-hw:#fb923c;--c-display:#f472b6;--c-apps:#facc15;--c-comm:#2dd4bf;
+  --c-detail:#fbbf24;--c-file:#c084fc;--c-watch:#f472b6}
+*{box-sizing:border-box}html,body{margin:0;padding:0;height:100%}
+body{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:13px;
+  line-height:1.4;background:var(--bg);color:var(--fg);overflow-x:hidden;overflow-y:auto;
+  -webkit-text-size-adjust:100%;transition:background .2s,color .2s}
+.wrap{max-width:960px;margin:0 auto;padding:12px;
+  padding-top:calc(12px + env(safe-area-inset-top));
+  padding-bottom:calc(24px + env(safe-area-inset-bottom))}
+header{display:flex;gap:6px;align-items:center;justify-content:space-between;
+  flex-wrap:wrap;margin-bottom:8px}
+h1{font-size:18px;margin:0;color:var(--fg)}
+.head-right{display:flex;gap:4px;align-items:center;flex-wrap:wrap;flex:1;
+  justify-content:flex-end;min-width:0}
+.token{background:var(--bg3);padding:3px 6px;border-radius:4px;font-size:10px;
+  word-break:break-all;user-select:all;-webkit-user-select:all;max-width:160px;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--fg2)}
+.icon-btn{background:var(--bg3);color:var(--accent);border:1px solid var(--border);
+  border-radius:4px;padding:3px 7px;cursor:pointer;font-size:11px;font-family:inherit;
+  white-space:nowrap;line-height:1.4}
+.icon-btn:hover{background:var(--bg4)}
+.icon-btn.on{background:var(--accent);color:var(--bg);border-color:var(--accent)}
+.stats{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;font-size:11px;color:var(--fg2)}
+.stat{background:var(--bg3);padding:4px 8px;border-radius:4px;white-space:nowrap}
+.stat b{color:var(--fg);font-weight:600}
+.stat .bar{display:inline-block;width:60px;height:8px;background:var(--bg4);
+  border-radius:2px;overflow:hidden;vertical-align:middle;margin-left:4px}
+.stat .bar>i{display:block;height:100%;background:var(--ok);transition:width .3s}
+.stat .bar>i.pct-hi{background:var(--ok)}
+.stat .bar>i.pct-md{background:var(--warn)}
+.stat .bar>i.pct-lo{background:var(--err)}
+.search{width:100%;padding:8px 10px;background:var(--bg2);border:1px solid var(--border);
+  border-radius:6px;color:var(--fg);font-family:inherit;font-size:13px;margin-bottom:10px}
+.search:focus{outline:none;border-color:var(--accent)}
+.group{margin-bottom:14px}
+.group-h{font-size:11px;color:var(--fg3);text-transform:uppercase;letter-spacing:.06em;
+  margin:0 0 6px 0;font-weight:600;position:relative;padding-left:10px}
+.group-h::before{content:'';position:absolute;left:0;top:2px;bottom:2px;width:3px;
+  border-radius:2px;background:var(--g,var(--accent))}
+.group[data-group="Basic"]{--g:var(--c-basic)}
+.group[data-group="System"]{--g:var(--c-sys)}
+.group[data-group="Network"]{--g:var(--c-net)}
+.group[data-group="Sensors"]{--g:var(--c-sensors)}
+.group[data-group="Hardware"]{--g:var(--c-hw)}
+.group[data-group="Display / Audio"]{--g:var(--c-display)}
+.group[data-group="Apps"]{--g:var(--c-apps)}
+.group[data-group="Contacts / SMS"]{--g:var(--c-comm)}
+.group[data-group="Detailed"]{--g:var(--c-detail)}
+.group[data-group="Files / Audio play"]{--g:var(--c-file)}
+.group[data-group="Watch (logcat)"]{--g:var(--c-watch)}
+.ep{background:var(--bg2);border-radius:6px;margin-bottom:5px;overflow:hidden;
+  border:1px solid var(--border);border-left:3px solid var(--g,var(--accent));
+  content-visibility:auto;contain-intrinsic-size:80px}
+.ep-h{display:flex;align-items:center;gap:6px;padding:7px 10px}
+.ep-h .run{flex:1;text-align:left;background:none;border:none;color:var(--accent);
+  padding:0;cursor:pointer;font-family:inherit;font-size:12px;word-break:break-all}
+.ep-h .run:hover{text-decoration:underline}
+.ep-h .status{font-size:10px;color:var(--fg3);min-width:44px;text-align:right;white-space:nowrap}
+.ep-h .status.ok{color:var(--ok)}.ep-h .status.err{color:var(--err)}
+.ep-h .status.loading{color:var(--warn)}
+.ep-h .live{font-size:10px;color:var(--ok);margin-left:4px}
+.ep-h .toggle{background:var(--bg3);border:none;color:var(--fg2);padding:2px 7px;
+  border-radius:3px;cursor:pointer;font-size:10px;font-family:inherit;display:none}
+.ep-h .toggle:hover{background:var(--bg4);color:var(--fg)}
+.ep-b{padding:0 10px 10px 10px;overflow-x:auto}
+.ep-b[hidden]{display:none}
+.ep-b .raw{margin-top:8px;border-top:1px solid var(--border);padding-top:8px}
+.ep-b .raw summary{cursor:pointer;color:var(--fg3);font-size:11px;user-select:none}
+.ep-b .raw pre{background:var(--bg);padding:8px;border-radius:4px;overflow-x:auto;
+  font-size:11px;margin:6px 0 0 0;white-space:pre-wrap;word-break:break-all}
+/* Uniform 30/70 key-value table */
+table{width:100%;border-collapse:collapse;font-size:11px;margin:0}
+table.kv{table-layout:fixed}
+table.kv th{width:30%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+table.kv td{width:70%;word-break:break-word;overflow-wrap:anywhere}
+th,td{padding:4px 7px;border-bottom:1px solid var(--border);text-align:left;vertical-align:top}
+th{background:var(--bg3);color:var(--fg2);font-weight:600;font-size:10px}
+tr:hover td{background:var(--bg3)}
+/* Value semantics */
+td.v-num{color:var(--v-num);font-variant-numeric:tabular-nums}
+td.v-null{color:var(--v-null);font-style:italic}
+td.v-bool-t{color:var(--v-bool-t);font-weight:600}
+td.v-bool-f{color:var(--v-bool-f)}
+.empty{color:var(--fg3);font-style:italic;padding:6px 0;font-size:11px}
+.scalar{padding:6px 0;word-break:break-all;font-size:12px}
+code{background:var(--bg3);padding:1px 4px;border-radius:3px;color:var(--code);font-size:10px}
+.spin{display:inline-block;width:10px;height:10px;border:2px solid var(--border);
+  border-top-color:var(--warn);border-radius:50%;animation:sp .6s linear infinite;
+  vertical-align:middle}
+@keyframes sp{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion: reduce) {
+  *{transition:none!important;animation:none!important}
+}
+.icon-btn.danger{background:#7f1d1d;color:#fca5a5;border-color:#7f1d1d}
+.icon-btn.danger:hover{background:#991b1b}
+.ep.dropped{opacity:.4;text-decoration:line-through}
+.ep.dropped .status{color:var(--err)}
+/* MTAPI_HARD_FIX_72 */
+/* MTAPI_TABLES_74_CSS: nested object/array visuals */
+.hw-card-title{font-weight:600;color:var(--fg2);letter-spacing:.02em}
+table.kv td.v-num{text-align:right}
+table tbody tr:last-child td,
+table tbody tr:last-child th{border-bottom:none}
+.ep-b table{margin:4px 0}
+.ep-b details > summary{cursor:pointer;font-size:11px;color:var(--fg3);padding:4px 0}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <h1>mtapi</h1>
+  <div class="head-right">
+    <button class="icon-btn" id="live" title="auto-refresh every 3s">&#9673; auto</button>
+    <button class="icon-btn" id="theme" title="toggle light/dark">&#127769;</button>
+    <div class="token" id="tok">{{TOKEN}}</div>
+    <button class="icon-btn" id="copy">copy</button>
+    <button class="icon-btn danger" id="reset" title="drop all pending, clear cache">⟲ reset</button>
+  </div>
+</header>
+<div class="stats">
+  <div class="stat" id="st-batt">battery &mdash;</div>
+  <div class="stat" id="st-ram">ram &mdash;</div>
+  <div class="stat" id="st-ping">ping &mdash;</div>
+</div>
+<input class="search" id="q" placeholder="filter endpoints&hellip; (battery, sensors, net)">
+<main id="main"></main>
+</div>
+<script>
+const TOKEN = "{{TOKEN}}";
+
+const ENDPOINTS = [
+  { group: "Basic", eps: [
+    "/ping", "/battery", "/wifi", "/device", "/location",
+    "/clipboard", "/clipboard?op=set&text=hello",
+    "/toast?text=hello", "/notify?title=Hi&body=There",
+    "/vibrate?ms=200", "/torch?on=1", "/torch?on=0",
+    "/torch/brightness?level=50", "/torch/brightness?level=0",
+    "/tts?text=hello", "/share?title=Hi&text=There"
+  ]},
+  { group: "Contacts / SMS", eps: [
+    "/contacts?limit=5", "/calllog?limit=5", "/sms?limit=5"
+  ]},
+  { group: "System", eps: [
+    "/system", "/cpu/detail", "/thermal", "/memory", "/storage", "/kernel"
+  ]},
+  { group: "Network", eps: [
+    "/network", "/wifi/detailed", "/bluetooth", "/telephony",
+    "/wifi/scan", "/net/ping?host=8.8.8.8&count=3",
+    "/net/dns?host=example.com",
+    "/net/fetch?url=https%3A%2F%2Fapi.ipify.org%3Fformat%3Djson"
+  ]},
+  { group: "Display / Audio", eps: [
+    "/display", "/display/brightness", "/display/color",
+    "/audio", "/microphone", "/audio/volume?stream=2", "/audio/ringer"
+  ]},
+  { group: "Sensors", eps: [
+    "/sensors", "/sensors/read?name=accelerometer&ms=200",
+    "/sensors/stream?name=accelerometer&hz=10",
+    "/sensors/stream/stop?name=accelerometer"
+  ]},
+  { group: "Hardware", eps: [
+    "/features", "/camera/list", "/camera/snapshot",
+    "/microphone/record?seconds=3"
+  ]},
+  { group: "Apps", eps: [
+    "/app/list", "/app/launch?pkg=com.android.settings"
+  ]},
+  { group: "Detailed", eps: [
+    "/battery/detailed", "/location/detailed", "/locale",
+    "/calendar?days=7", "/alarm/next"
+  ]},
+  { group: "Files / Audio play", eps: [
+    "/files/save?name=test.txt&data=hello",
+    "/audio/play?uri=/system/media/audio/notifications/Hello.ogg",
+    "/audio/play/stop", "/tts/voices", "/tts/stop"
+  ]},
+  { group: "Watch (logcat)", eps: [
+    "/clipboard/watch?hz=2", "/clipboard/watch/stop",
+    "/location/watch?hz=1", "/location/watch/stop"
+  ]}
+];
+
+// MTAPI_CLIENT_FIX: slow endpoints (server may block 5-15s)
+const SLOW = new Set([
+  "/camera/snapshot","/microphone/record?seconds=3",
+  "/sensors/read?name=accelerometer&ms=200",
+  "/contacts?limit=5","/calllog?limit=5","/sms?limit=5",
+  "/system","/cpu/detail","/thermal","/memory","/storage","/kernel",
+  "/network","/wifi/scan","/net/ping?host=8.8.8.8&count=3",
+  "/net/dns?host=example.com","/net/fetch?url=https%3A%2F%2Fapi.ipify.org%3Fformat%3Djson",
+  "/calendar?days=7","/alarm/next","/app/list"
+]);
+const AUTO_EPS = new Set(["/ping"]);  // MTAPI_LAZY_73: only /ping auto (5s)
+
+function esc(s){return String(s).replace(/[&<>"']/g,function(c){
+  return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})}
+
+function cellStr(v){
+  if(v===null)return'null';
+  if(v===undefined)return'';
+  if(typeof v==='object')return JSON.stringify(v);
+  return String(v);
+}
+
+function classifyValue(v){
+  if(v===null||v===undefined)return'v-null';
+  if(typeof v==='boolean')return v?'v-bool-t':'v-bool-f';
+  if(typeof v==='number')return'v-num';
+  return'';
+}
+
+// MTAPI_TABLES_74: recursive renderer with nested tables
+// - object → table.kv (30/70)
+// - nested object → <details open> + inner table
+// - array of scalars → compact inline list
+// - array of objects → multi-column table (each row = object)
+// - array of arrays / objects inside → <details>
+
+function _isScalar(v){
+  return v===null || v===undefined ||
+         typeof v==='number' || typeof v==='string' || typeof v==='boolean';
+}
+
+function _scalarCell(v){
+  return '<td class="'+classifyValue(v)+'">'+esc(cellStr(v))+'</td>';
+}
+
+function renderInlineList(arr){
+  if(!arr.length) return '<span class="empty">[]</span>';
+  return arr.map(function(x){
+    if(_isScalar(x)) return '<code>'+esc(cellStr(x))+'</code>';
+    if(Array.isArray(x)) return '<code>['+esc(x.map(cellStr).join(','))+']</code>';
+    // object in inline list — compact
+    var s=JSON.stringify(x);
+    if(s.length>80) s=s.slice(0,77)+'…';
+    return '<code>'+esc(s)+'</code>';
+  }).join(' ');
+}
+
+function renderObj(obj, depth){
+  var keys = Object.keys(obj);
+  if(!keys.length) return '<span class="empty">{}</span>';
+
+  // separate: scalar | nested-object | nested-array
+  var scalars = [];
+  var nested  = [];
+
+  keys.forEach(function(k){
+    var v = obj[k];
+    if(_isScalar(v)) scalars.push({k:k, v:v});
+    else nested.push({k:k, v:v});
+  });
+
+  var h = '';
+
+  // 1. Scalar table
+  if(scalars.length){
+    h += '<table class="kv"><tbody>';
+    for(var i=0;i<scalars.length;i++){
+      h += '<tr><th>'+esc(scalars[i].k)+'</th>' + _scalarCell(scalars[i].v) + '</tr>';
+    }
+    h += '</tbody></table>';
+  }
+
+  // 2. Nested items
+  for(var j=0;j<nested.length;j++){
+    var k = nested[j].k, v = nested[j].v;
+    var label = '<div class="hw-card-title" style="font-size:12px;margin:8px 0 4px">▸ '+esc(k)+'</div>';
+
+    if(Array.isArray(v)){
+      // array of scalars or objects
+      if(v.length === 0){
+        h += label + '<span class="empty">[]</span>';
+      } else if(_isScalar(v[0])){
+        // [1,2,3] — inline
+        h += label + '<div style="padding:4px 0">'+renderInlineList(v)+'</div>';
+      } else if(Array.isArray(v[0])){
+        // [[...], [...]] — list of rows
+        h += label;
+        h += '<table><thead><tr>';
+        var maxLen = Math.max.apply(null, v.map(function(r){ return r.length; }));
+        for(var c=0;c<maxLen;c++) h += '<th>'+c+'</th>';
+        h += '</tr></thead><tbody>';
+        v.forEach(function(row){
+          h += '<tr>';
+          for(var c=0;c<maxLen;c++){
+            if(c < row.length) h += '<td>'+esc(cellStr(row[c]))+'</td>';
+            else h += '<td></td>';
+          }
+          h += '</tr>';
+        });
+        h += '</tbody></table>';
+      } else {
+        // array of objects — multi-column table
+        var cols = [], seen = {};
+        v.forEach(function(o){
+          if(o && typeof o==='object'){
+            Object.keys(o).forEach(function(k2){
+              if(!seen[k2]){ seen[k2]=true; cols.push(k2); }
+            });
+          }
+        });
+        h += label + '<table><thead><tr>';
+        cols.forEach(function(c){ h += '<th>'+esc(c)+'</th>'; });
+        h += '</tr></thead><tbody>';
+        v.forEach(function(row){
+          h += '<tr>';
+          cols.forEach(function(c){
+            var cell = row && row[c];
+            if(_isScalar(cell)){
+              h += '<td class="'+classifyValue(cell)+'">'+esc(cellStr(cell))+'</td>';
+            } else if(cell === undefined){
+              h += '<td></td>';
+            } else {
+              var s = JSON.stringify(cell);
+              if(s.length>120) s = s.slice(0,117)+'…';
+              h += '<td style="font-size:10px;color:var(--fg2)">'+esc(s)+'</td>';
+            }
+          });
+          h += '</tr>';
+        });
+        h += '</tbody></table>';
+      }
+    } else if(typeof v === 'object'){
+      // nested object — recursive
+      if(depth < 4){
+        h += label + '<div style="padding-left:8px;border-left:2px solid var(--bg4)">';
+        h += renderObj(v, depth+1);
+        h += '</div>';
+      } else {
+        h += label + '<code style="font-size:10px">'+esc(JSON.stringify(v).slice(0,300))+'</code>';
+      }
+    }
+  }
+
+  return h;
+}
+
+function renderData(data){
+  if(data===null||data===undefined)
+    return'<div class="empty">null</div>';
+
+  if(Array.isArray(data)){
+    if(data.length===0) return'<div class="empty">(empty array)</div>';
+
+    // scalar array
+    if(_isScalar(data[0])){
+      return '<div style="padding:4px 0">'+renderInlineList(data)+'</div>';
+    }
+
+    // array of arrays
+    if(Array.isArray(data[0])){
+      var maxLen = Math.max.apply(null, data.map(function(r){ return r.length; }));
+      var h = '<table><thead><tr>';
+      for(var c=0;c<maxLen;c++) h += '<th>'+c+'</th>';
+      h += '</tr></thead><tbody>';
+      data.forEach(function(row){
+        h += '<tr>';
+        for(var c=0;c<maxLen;c++){
+          if(c < row.length) h += '<td>'+esc(cellStr(row[c]))+'</td>';
+          else h += '<td></td>';
+        }
+        h += '</tr>';
+      });
+      return h+'</tbody></table>';
+    }
+
+    // array of objects
+    var cols=[],seen={};
+    for(var ri=0;ri<data.length;ri++){
+      var row=data[ri];
+      if(row&&typeof row==='object'){
+        for(var k in row){
+          if(Object.prototype.hasOwnProperty.call(row,k)&&!seen[k]){
+            seen[k]=true; cols.push(k);
+          }
+        }
+      }
+    }
+    var h='<table><thead><tr>';
+    for(var ci=0;ci<cols.length;ci++) h+='<th>'+esc(cols[ci])+'</th>';
+    h+='</tr></thead><tbody>';
+    for(var rj=0;rj<data.length;rj++){
+      h+='<tr>';
+      for(var cj=0;cj<cols.length;cj++){
+        var vv = data[rj] ? data[rj][cols[cj]] : null;
+        if(_isScalar(vv)){
+          h += '<td class="'+classifyValue(vv)+'">'+esc(cellStr(vv))+'</td>';
+        } else if(vv === undefined){
+          h += '<td></td>';
+        } else {
+          var s = JSON.stringify(vv);
+          if(s.length > 120) s = s.slice(0,117)+'…';
+          h += '<td style="font-size:10px;color:var(--fg2)">'+esc(s)+'</td>';
+        }
+      }
+      h += '</tr>';
+    }
+    return h+'</tbody></table>';
+  }
+
+  if(typeof data==='object'){
+    return renderObj(data, 0);
+  }
+
+  return'<div class="scalar">'+esc(String(data))+'</div>';
+}
+
+function call(path){
+  if (isDropped(path)) {
+    return Promise.resolve({ ms:0, error: 'dropped (click ⟲ reset)' });
+  }
+  var isSlow = SLOW.has(path);
+  var _ms = isSlow ? SLOW_TIMEOUT : HARD_TIMEOUT;
+  return new Promise(function(resolve){
+    function tryAcquire(){
+      if (_inflight.total >= MAX_INFLIGHT) {
+        // MTAPI_HARD_FIX_72: queue full — reject FAST, not hang
+        resolve({ ms:0, error: 'queue full — try again or ⟲ reset' });
+        return;
+      }
+      _inflight.total++;
+      var t0 = performance.now();
+      var ctl = new AbortController();
+      var timer = setTimeout(function(){ ctl.abort('hard-timeout'); }, _ms);
+      var sep = path.indexOf('?')>=0 ? '&' : '?';
+      var url = path + sep + 'token=' + encodeURIComponent(TOKEN);
+      fetch(url, {signal: ctl.signal}).then(function(r){ return r.json(); }).then(function(j){
+        clearTimeout(timer);
+        _inflight.total--;
+        resolve({ ms: Math.round(performance.now()-t0), json: j });
+      }).catch(function(e){
+        clearTimeout(timer);
+        _inflight.total--;
+        // MTAPI_HARD_FIX_72: on timeout → drop endpoint, don't retry blindly
+        if (String(e).indexOf('abort') >= 0 || String(e).indexOf('AbortError') >= 0) {
+          markDropped(path);
+          resolve({ ms: Math.round(performance.now()-t0), error: 'timeout — dropped (⟲ reset to retry)' });
+        } else {
+          resolve({ ms: Math.round(performance.now()-t0), error: String(e) });
+        }
+      });
+    }
+    tryAcquire();
+  });
+}
+function makeCard(path){
+  var ep=document.createElement('div');
+  ep.className='ep';ep.dataset.path=path;
+  var head=document.createElement('div');head.className='ep-h';
+  var btn=document.createElement('button');btn.className='run';btn.textContent='GET '+path;
+  btn.addEventListener('click',function(){run(ep,path)});
+  var status=document.createElement('span');status.className='status';
+  var dropBtn=document.createElement('button');dropBtn.className='toggle';dropBtn.title='disable this endpoint';
+  dropBtn.textContent='×';dropBtn.onclick=function(e){e.stopPropagation();markDropped(path);};head.appendChild(dropBtn);
+  var toggle=document.createElement('button');toggle.className='toggle';
+  toggle.textContent='{ }';toggle.title='toggle raw JSON';
+  head.appendChild(btn);head.appendChild(status);head.appendChild(toggle);
+  var body=document.createElement('div');body.className='ep-b';body.hidden=true;
+  ep.appendChild(head);ep.appendChild(body);
+  return ep;
+}
+function run(ep,path){
+  var status=ep.querySelector('.status');
+  var body=ep.querySelector('.ep-b');
+  var toggle=ep.querySelector('.toggle');
+  body.hidden=false;
+  status.className='status loading';status.innerHTML='<span class="spin"></span>';
+  body.innerHTML='<div class="empty">loading&hellip;</div>';
+  call(path).then(function(res){
+    if(res.error){
+      status.className='status err';status.textContent=res.ms+'ms';
+      body.innerHTML='<div class="empty" style="color:var(--err)">'+esc(res.error)+'</div>';
+      toggle.style.display='none';return
+    }
+    var j=res.json;
+    if(j&&j.ok===false){
+      status.className='status err';status.textContent=res.ms+'ms';
+      body.innerHTML='<div class="empty" style="color:var(--err)">error: '+esc(j.error||'unknown')+'</div>';
+      toggle.style.display='none';return
+    }
+    status.className='status ok';status.textContent=res.ms+'ms';
+    var data=(j&&('data'in j))?j.data:j;
+    body.innerHTML=renderData(data);
+    var raw=document.createElement('details');raw.className='raw';
+    var sum=document.createElement('summary');sum.textContent='raw JSON';
+    var pre=document.createElement('pre');pre.textContent=JSON.stringify(j,null,2);
+    raw.appendChild(sum);raw.appendChild(pre);body.appendChild(raw);
+    toggle.style.display='';
+    toggle.onclick=function(){raw.open=!raw.open;
+      if(raw.open)raw.scrollIntoView({block:'nearest',behavior:'smooth'})};
+  });
+}
+function render(){
+  var q=document.getElementById('q').value.toLowerCase();
+  var main=document.getElementById('main');main.innerHTML='';
+  for(var gi=0;gi<ENDPOINTS.length;gi++){
+    var g=ENDPOINTS[gi];
+    var filtered=g.eps.filter(function(p){return p.toLowerCase().indexOf(q)>=0});
+    if(filtered.length===0)continue;
+    var gd=document.createElement('div');gd.className='group';gd.dataset.group=g.group;
+    var h=document.createElement('div');h.className='group-h';h.textContent=g.group;
+    gd.appendChild(h);
+    for(var pi=0;pi<filtered.length;pi++)gd.appendChild(makeCard(filtered[pi]));
+    main.appendChild(gd);
+  }
+}
+
+// live stats
+var statsPending=false;  // MTAPI_CLIENT_FIX: reentrancy guard
+// MTAPI_LAZY_73: skip auto-stats if UI busy
+function _uiBusy(){ return _inflight.total >= MAX_INFLIGHT; }
+function updateStats(){
+  if (_uiBusy()) return;  // MTAPI_LAZY_73
+
+  if(statsPending) return;
+  statsPending=true;
+  var done=0,total=3;function checkDone(){if(++done>=total)statsPending=false}
+  call('/battery').then(function(r){
+    if(r.json&&r.json.data){
+      var b=r.json.data;
+      var pct=b.percentage||0;
+      var cls=pct>60?'pct-hi':pct>20?'pct-md':'pct-lo';
+      document.getElementById('st-batt').innerHTML=
+        'battery <b>'+pct+'%</b>'+(b.charging?' &#9889;':'')+
+        '<span class="bar"><i class="'+cls+'" style="width:'+pct+'%"></i></span>';
+    }
+    checkDone();
+  });
+  call('/system').then(function(r){
+    if(r.json&&r.json.data&&r.json.data.ram){
+      var rm=r.json.data.ram;
+      var used=rm.totalBytes-rm.availableBytes;
+      var pct=Math.round(used/rm.totalBytes*100);
+      var cls=pct>85?'pct-lo':pct>70?'pct-md':'pct-hi';
+      document.getElementById('st-ram').innerHTML=
+        'ram <b>'+pct+'%</b><span class="bar"><i class="'+cls+'" style="width:'+pct+'%"></i></span>';
+    }
+  });
+  call('/ping').then(function(r){
+    var ms=r.ms;
+    document.getElementById('st-ping').innerHTML='ping <b>'+ms+'ms</b>'+
+      (r.json&&r.json.ok?' <span style="color:var(--ok)">&#9679;</span>':
+       ' <span style="color:var(--err)">&#9679;</span>');
+    checkDone();
+  });
+}
+
+// auto toggle
+var liveOn=false, liveTimer=null;
+function setLive(on){
+  liveOn=on;
+  document.getElementById('live').classList.toggle('on',on);
+  if(liveTimer){clearInterval(liveTimer);liveTimer=null}
+  if(on)liveTimer=setInterval(function(){
+    // MTAPI_LAZY_73: only run auto if UI is free
+    if (_uiBusy()) return;
+    updateStats();
+    document.querySelectorAll('.ep').forEach(function(ep){
+      if(AUTO_EPS.has(ep.dataset.path)&&
+         !ep.querySelector('.ep-b').hidden&&
+         !isDropped(ep.dataset.path)&&
+         !_uiBusy())
+        run(ep,ep.dataset.path);
+    });
+  },5000);
+}
+
+// theme
+var savedTheme=localStorage.getItem('mtapi-theme');
+if(savedTheme)document.documentElement.setAttribute('data-theme',savedTheme);
+function updateThemeBtn(){
+  var cur=document.documentElement.getAttribute('data-theme');
+  if(!cur)cur=window.matchMedia('(prefers-color-scheme:light)').matches?'light':'dark';
+  document.getElementById('theme').textContent=cur==='light'?'\u2600\uFE0F':'\uD83C\uDF19';
+}
+document.getElementById('theme').addEventListener('click',function(){
+  var cur=document.documentElement.getAttribute('data-theme');
+  if(!cur)cur=window.matchMedia('(prefers-color-scheme:light)').matches?'light':'dark';
+  var next=cur==='light'?'dark':'light';
+  document.documentElement.setAttribute('data-theme',next);
+  localStorage.setItem('mtapi-theme',next);
+  updateThemeBtn();
+});
+
+// copy
+document.getElementById('copy').addEventListener('click',function(){
+  navigator.clipboard.writeText(TOKEN).then(function(){
+    var b=document.getElementById('copy');b.textContent='copied';
+    setTimeout(function(){b.textContent='copy'},1500);
+  }).catch(function(){});
+});
+
+// search
+document.getElementById('q').addEventListener('input',render);
+
+// live toggle
+document.getElementById('live').addEventListener('click',function(){setLive(!liveOn)});
+// MTAPI_TIMEOUT_WATCH: periodic check — kill stuck 'loading…' cards
+setInterval(function(){
+  document.querySelectorAll('.ep-b').forEach(function(body){
+    if (body.hidden) return;
+    var ep = body.closest('.ep');
+    if (!ep) return;
+    var st = ep.querySelector('.status');
+    if (st && (st.textContent === '' || st.innerHTML === '<span class="spin"></span>')) {
+      // empty status means run() never started or hung
+      if (body.textContent.indexOf('loading…') >= 0) {
+        var age = body.dataset.loadingSince ? (Date.now() - parseInt(body.dataset.loadingSince)) : 0;
+        if (!body.dataset.loadingSince) body.dataset.loadingSince = Date.now();
+        else if (age > 11000) {
+          markDropped(ep.dataset.path);
+          st.className='status err';
+          st.textContent='stuck';
+          body.innerHTML='<div class="empty" style="color:var(--err)">stuck >11s — dropped. Click ⟲ reset</div>';
+        }
+      }
+    } else if (st && !st.classList.contains('status')) {
+      delete body.dataset.loadingSince;
+    }
+  });
+}, 2000);
+
+document.getElementById('reset').addEventListener('click',function(){
+  resetAll();
+  // re-run visible endpoints
+  document.querySelectorAll('.ep').forEach(function(ep){
+    if (!ep.querySelector('.ep-b').hidden) run(ep, ep.dataset.path);
+  });
+  updateStats();
+});
+
+// init
+render();
+updateThemeBtn();
+setLive(true);
+// MTAPI_LAZY_73: fetch stats after first paint
+setTimeout(function(){ updateStats(); }, 500);
+// MTAPI_LAZY_73: no auto-click on init — user picks what to run
+
+// PWA
+if('serviceWorker' in navigator){
+  navigator.serviceWorker.register('/sw.js').catch(function(){});
+}
+</script>
+</body>
+</html>

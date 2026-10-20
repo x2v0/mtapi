@@ -9,6 +9,9 @@ import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.nio.charset.StandardCharsets;
 
 public final class JavaBridge {
@@ -18,6 +21,13 @@ public final class JavaBridge {
     private final AndroidApiImpl api;
     private final Process process;
     private final BufferedWriter toGo;
+    // MTAPI_THREAD_POOL_71: parallel workers so slow endpoints don't block reader
+    private final ExecutorService workers = Executors.newFixedThreadPool(8, r -> {
+        Thread t = new Thread(r, "bridge-worker-" + WORKER_SEQ.incrementAndGet());
+        t.setDaemon(true);
+        return t;
+    });
+    private static final AtomicInteger WORKER_SEQ = new AtomicInteger();
     private volatile boolean running = true;
 
     public JavaBridge(Context ctx, AndroidApiImpl api, Process process) throws Exception {
@@ -35,18 +45,18 @@ public final class JavaBridge {
     }
 
     private void readerLoop() {
-        DiagLog.write(ctx, "bridge: reader start");
+        DiagLog.write(ctx, "bridge: readerLoop start (8 workers)");
         try (BufferedReader r = new BufferedReader(
                 new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
             String line;
             while (running && (line = r.readLine()) != null) {
-                try { handleRequest(line); }
-                catch (Throwable t) { DiagLog.write(ctx, "bridge: handler threw " + t); }
+                final String _l = line;
+                workers.submit(() -> handleRequest(_l));
             }
         } catch (Throwable t) {
             if (running) DiagLog.write(ctx, "bridge: reader exit " + t);
         }
-        DiagLog.write(ctx, "bridge: reader end");
+        DiagLog.write(ctx, "bridge: readerLoop end");
     }
 
     private void stderrLoop() {

@@ -1,12 +1,6 @@
-// PWA service worker for mtapi dashboard — cache shell, never cache /api
+// MTAPI_HARD_RESET_76: self-destroying SW
 self.addEventListener('install', e => self.skipWaiting());
-self.addEventListener('activate', e => self.clients.claim());
-self.addEventListener('fetch', e => {
-  const u = new URL(e.request.url);
-  // Only cache root HTML (shell); never cache API data
-  if (u.pathname === '/' && e.request.method === 'GET') {
-    e.respondWith(
-      fetch(e.request).catch(() => new Response('mtapi offline', { status: 503 }))
-    );
-  }
+self.addEventListener('activate', e => {
+  e.waitUntil(self.registration.unregister());
+  e.waitUntil(clients.claim());
 });
