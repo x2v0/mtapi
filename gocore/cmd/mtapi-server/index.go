@@ -10,3 +10,9 @@ var manifestJSON string
 
 //go:embed sw.js
 var swJS string
+
+//go:embed app.js
+var appJS string
+
+//go:embed style.css
+var styleCSS string
