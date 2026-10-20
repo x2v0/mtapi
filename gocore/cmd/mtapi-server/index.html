@@ -155,15 +155,19 @@ margin-right:2px}
 details.ep[open] summary::before{transform:rotate(90deg)}
 details.ep .ep-b{padding:0 10px 10px 20px}
 
-/* MTAPI_105: nested collapsibles */
+/* MTAPI_111: collapsible sections */
 details.group{margin-bottom:14px}
-details.group > summary.group-h{list-style:none;cursor:pointer}
+details.group > summary.group-h{
+  list-style:none;cursor:pointer;user-select:none;
+  display:flex;align-items:center;gap:4px;
+  font-size:11px;color:var(--fg3);text-transform:uppercase;
+  letter-spacing:.06em;font-weight:600;padding-left:2px;
+  position:relative}
 details.group > summary.group-h::-webkit-details-marker{display:none}
 details.group > summary.group-h::before{
-  content:'▾';color:var(--fg3);font-size:10px;display:inline-block;
-  width:12px;text-align:center;margin-right:4px;transition:transform .15s}
-details.group:not([open]) > summary.group-h::before{content:'▸'}
-details.group:not([open]){padding-bottom:0}
+  content:'▸';display:inline-block;width:12px;text-align:center;
+  color:var(--fg3);font-size:10px;transition:transform .15s}
+details.group[open] > summary.group-h::before{content:'▾'}
 
 details.sub{margin:2px 0 4px}
 details.sub > summary{
