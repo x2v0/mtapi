@@ -3,15 +3,18 @@
 // MTAPI_293: fetch с timeout (AbortController)
 function _fetch(url, opts) {
   opts = opts || {};
-  if (typeof AbortSignal !== 'undefined' && AbortSignal.timeout) {
-    opts.signal = AbortSignal.timeout(3000);
-  } else if (typeof AbortController !== 'undefined') {
-    var ctrl = new AbortController();
-    var _to = setTimeout(function(){ ctrl.abort(); }, 3000);
-    if (_to && typeof _to.unref === "function") _to.unref();
-    opts.signal = ctrl.signal;
+  // MTAPI_299: WebView-safe timeout
+  if (typeof AbortController !== 'undefined') {
+    try {
+      var ctrl = new AbortController();
+      opts.signal = ctrl.signal;
+      var _to = setTimeout(function(){ try { ctrl.abort(); } catch(e){} }, 5000);
+      if (_to && typeof _to.unref === 'function') _to.unref();
+    } catch (e) {
+      // AbortController not supported — ignore
+    }
   }
-  return _fetch(url, opts);
+  return fetch(url, opts);
 }
 // MTAPI_270: LOG_LEVEL_TITLES — в САМОМ НАЧАЛЕ (до renderDebugSections)
 var LOG_LEVEL_TITLES = {
@@ -367,7 +370,7 @@ function callDirect(path) {
   var ms=SLOW.has(path)?15000:10000;
   var ctl=new AbortController();
   var timer=setTimeout(function(){ctl.abort()},ms);
-  return _fetch(url,{signal:ctl.signal}).then(function(r){return r.json()}).then(function(j){
+  return fetch(url,{signal:ctl.signal}).then(function(r){return r.json()}).then(function(j){
     clearTimeout(timer);
     return {ms: Math.round(performance.now()-t0), json: j};
   }).catch(function(e){
