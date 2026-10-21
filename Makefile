@@ -21,22 +21,22 @@ test:
 	@echo "  MTAPI TESTS"
 	@echo "══════════════════════════════════════════════════"
 	cd $(TEST_DIR) && $(CURDIR)/$(RUNNER) "mtapi/*.test.js" \
-	  node --test $$(ls mtapi-*.test.js 2>/dev/null)
+	  node --test --test-force-exit --test-timeout=5000 $$(ls mtapi-*.test.js 2>/dev/null)
 	$(CURDIR)/$(RUNNER) "universal: dom" \
 	  env APP_JS=$(CURDIR)/$(SRV)/app.js \
 	      INDEX_HTML=$(CURDIR)/$(SRV)/index.html \
 	      STYLE_CSS=$(CURDIR)/$(SRV)/style.css \
-	      node --test $(SHARED)/universal-dom.test.js
+	      node --test --test-force-exit --test-timeout=5000 $(SHARED)/universal-dom.test.js
 	$(CURDIR)/$(RUNNER) "universal: braces" \
 	  env APP_JS=$(CURDIR)/$(SRV)/app.js \
-	      node --test $(SHARED)/universal-braces.test.js
+	      node --test --test-force-exit --test-timeout=5000 $(SHARED)/universal-braces.test.js
 	$(CURDIR)/$(RUNNER) "universal: syntax" \
 	  env APP_JS=$(CURDIR)/$(SRV)/app.js \
 	      INDEX_HTML=$(CURDIR)/$(SRV)/index.html \
-	      node --test $(SHARED)/universal-syntax.test.js
+	      node --test --test-force-exit --test-timeout=5000 $(SHARED)/universal-syntax.test.js
 	@$(CURDIR)/$(RUNNER) "universal: node" \
 	  env APP_JS=$(CURDIR)/$(SRV)/app.js \
-	      node --test $(SHARED)/universal-node.test.js
+	      node --test --test-force-exit --test-timeout=5000 $(SHARED)/universal-node.test.js
 	@echo ""
 	@echo "══════════════════════════════════════════════════"
 	@echo "  ALL TESTS COMPLETE"

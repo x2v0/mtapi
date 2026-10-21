@@ -134,3 +134,4 @@ test('jsdom: esc prevents injection', () => {
   assert.strictEqual(dom.window.document.querySelector('script'), null,
     'should not create <script>');
 });
+

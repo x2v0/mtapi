@@ -119,7 +119,7 @@ function cellStr(v){
 }
 
 // MTAPI_354: copyLogcat — копировать logcat в clipboard
-window._copyLogcat = function() {
+if (typeof window !== "undefined") window._copyLogcat = function() {
   try {
     var pre = document.getElementById('logcat-pre');
     if (!pre) { alert('logcat-pre не найден'); return; }
@@ -153,7 +153,7 @@ function _copyFallback(text) {
 
 
 // MTAPI_315: DevTools — открыть в WebView (встроенный devtools frontend)
-window._openDevtools = function(wsUrl) {
+if (typeof window !== "undefined") window._openDevtools = function(wsUrl) {
   try {
     var encoded = encodeURIComponent(wsUrl);
     // 1. попробовать Android.intent (Chrome)
@@ -173,7 +173,7 @@ window._openDevtools = function(wsUrl) {
 };
 
 // MTAPI_315: copy WebSocket URL
-window._copyDevtools = function(wsUrl) {
+if (typeof window !== "undefined") window._copyDevtools = function(wsUrl) {
   try {
     if (navigator.clipboard) {
       navigator.clipboard.writeText(wsUrl);
@@ -590,11 +590,11 @@ function setLive(on){
     var _t = (function(){ var _t = (function(){
     if (typeof window !== 'undefined' && window._statsTimer) clearInterval(window._statsTimer);
     var _t = setInterval(updateStats, 5000);
-    if (typeof window !== 'undefined') window._statsTimer = _t;
+    if (typeof window !== 'undefined') if (typeof window !== "undefined") window._statsTimer = _t;
     if (_t && typeof _t.unref === 'function') _t.unref();
     return _t;
   })(); if (_t && typeof _t.unref === "function") _t.unref(); return _t; })();
-    if (typeof window !== 'undefined') window._statsTimer = _t;
+    if (typeof window !== 'undefined') if (typeof window !== "undefined") window._statsTimer = _t;
     if (_t && typeof _t.unref === 'function') _t.unref();
   })();
 }
@@ -820,7 +820,7 @@ function loadDebugCard(ep) {
 }
 
 function renderDebugSections(data) {
-  window._debugData = data;
+  if (typeof window !== "undefined") window._debugData = data;
 
   if (!data || typeof data !== 'object') {
     return '<div class="empty">no data</div>';
@@ -1027,11 +1027,11 @@ if (typeof process !== 'undefined' && process.on) {
   process.on('beforeExit', function() {
     if (typeof window !== "undefined" && window && window._logcatLiveTimer) {
       clearInterval(window._logcatLiveTimer);
-      window._logcatLiveTimer = null;
+      if (typeof window !== "undefined") window._logcatLiveTimer = null;
     }
     if (typeof window !== "undefined" && window && window._statsTimer) {
       clearInterval(window._statsTimer);
-      window._statsTimer = null;
+      if (typeof window !== "undefined") window._statsTimer = null;
     }
   });
 }
