@@ -93,6 +93,13 @@ apk:
 	@test -f $(APK_OUT) || (echo "✗ APK not built" && exit 1)
 	@ls -lh $(APK_OUT)
 	@mkdir -p $(APKS_DIR) && cp -f $(APK_OUT) $(APKS_DIR)/mtapi-$$(date +%Y%m%d-%H%M%S).apk
+	@mkdir -p /sdcard/Download 2>/dev/null || true
+	@cp -f $(APK_OUT) /sdcard/Download/mtapi-debug.apk 2>/dev/null || true
+	@mkdir -p $(APKS_DIR) 2>/dev/null || true
+	@cp -f $(APK_OUT) $(APKS_DIR)/mtapi-$$(date +%Y%m%d-%H%M%S).apk 2>/dev/null || true
+	@echo "  APK → $(APK_OUT)"
+	@echo "  APK → /sdcard/Download/mtapi-debug.apk"
+	@echo "  APK → $(APKS_DIR)/mtapi-*.apk"
 
 install: build
 	@echo "══════════════════════════════════════════════════"

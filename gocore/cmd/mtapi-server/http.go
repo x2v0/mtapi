@@ -454,7 +454,7 @@ func startHTTP(api AndroidAPI, token string) error {
 	mux.HandleFunc("/debug", func(w http.ResponseWriter, r *http.Request) {
 		if !s.checkAuth(r) {
 			s.writeJSON(w, 401, map[string]any{"ok": false, "error": "auth_failed"})
-	// MTAPI_317: /devtools/json
+	// MTAPI_325: /devtools/json
 	mux.HandleFunc("/devtools/json", func(w http.ResponseWriter, r *http.Request) {
 		client := &http.Client{Timeout: 3 * time.Second}
 		resp, err := client.Get("http://127.0.0.1:9222/json")

@@ -118,6 +118,40 @@ function cellStr(v){
   return String(v);
 }
 
+// MTAPI_354: copyLogcat — копировать logcat в clipboard
+window._copyLogcat = function() {
+  try {
+    var pre = document.getElementById('logcat-pre');
+    if (!pre) { alert('logcat-pre не найден'); return; }
+    var text = pre.textContent || pre.innerText || '';
+    if (!text) { alert('logcat пуст'); return; }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function(){
+        console.log('[mtapi] copied ' + text.length + ' bytes');
+      }).catch(function(e){
+        _copyFallback(text);
+      });
+    } else {
+      _copyFallback(text);
+    }
+  } catch(e) { alert('error: ' + e.message); }
+};
+
+function _copyFallback(text) {
+  try {
+    var ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.left = '-9999px';
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+    console.log('[mtapi] copied (execCommand) ' + text.length + ' bytes');
+  } catch(e) { alert('fallback error: ' + e.message); }
+}
+
+
 // MTAPI_315: DevTools — открыть в WebView (встроенный devtools frontend)
 window._openDevtools = function(wsUrl) {
   try {
@@ -786,6 +820,8 @@ function loadDebugCard(ep) {
 }
 
 function renderDebugSections(data) {
+  window._debugData = data;
+
   if (!data || typeof data !== 'object') {
     return '<div class="empty">no data</div>';
   }
@@ -853,7 +889,8 @@ function renderDebugSections(data) {
     h += '</div>';
     h += '<input type="text" class="logcat-search" placeholder="search…" title="🔍 Search logcat text (case-insensitive)" >';
     h += '<button class="logcat-btn" onclick="reloadLogcat()" title="⟳ Reload /debug (manual)">⟳</button>';
-    h += '<label class="logcat-live" title="Auto-reload /debug каждые 2s"><input type="checkbox" id="logcat-live" onchange="toggleLogcatLive()"> live</label>';
+    h += '<button class="logcat-btn" style="margin-left:auto" onclick="window._copyLogcat()" title="Copy logcat to clipboard">📋</button>';
+    h += '<label class="logcat-live" style="margin-left:0" title="Auto-reload /debug каждые 2s"><input type="checkbox" id="logcat-live" onchange="toggleLogcatLive()"> live</label>';
     h += '</div>';
 
     // logcat body
@@ -896,7 +933,7 @@ function renderDebugSections(data) {
 
 // MTAPI_260: logcat levels + search
 function renderLogcatLines(logcat) {
-  var lines = logcat.split('\n');
+  var lines = logcat.split('\n').reverse();
   var out = '';
   lines.forEach(function(line, i){
     var lvl = detectLogLevel(line);
@@ -922,19 +959,7 @@ function detectLogLevel(line) {
 // MTAPI_282: вешаем addEventListener на все .logcat-search после render
 // MTAPI_281: highlightText — подсветка всех вхождений query
 // MTAPI_281: highlightText — подсветка всех вхождений query
-function toggleLogcatLive() {
-  var live = document.getElementById('logcat-live');
-  if (live && live.checked) {
-    if (window._logcatLiveTimer) clearInterval(window._logcatLiveTimer);
-    window._logcatLiveTimer = setInterval(reloadLogcat, 2000);
-    if (window._logcatLiveTimer && typeof window._logcatLiveTimer.unref === 'function') {
-      window._logcatLiveTimer.unref();
-    }
-  } else {
-    if (window._logcatLiveTimer) clearInterval(window._logcatLiveTimer);
-    window._logcatLiveTimer = null;
-  }
-}
+
 
 function reloadLogcat() {
   var pre = document.getElementById('logcat-pre');
@@ -976,15 +1001,7 @@ function detectLogLevel(line) {
   return 'V';
 }
 
-function toggleLogcatLive() {
-  var live = document.getElementById('logcat-live');
-  if (live && live.checked) {
-    window._logcatLiveTimer = (function(){ var _t = setInterval(reloadLogcat, 2000); if (_t && typeof _t.unref === "function") _t.unref(); return _t; })();
-  } else {
-    if (window._logcatLiveTimer) clearInterval(window._logcatLiveTimer);
-    window._logcatLiveTimer = null;
-  }
-}
+
 
 function reloadLogcat() {
   var pre = document.getElementById('logcat-pre');

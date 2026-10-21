@@ -59,9 +59,20 @@ public class MainActivity extends Activity {
     @SuppressLint("SetJavaScriptEnabled")
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+
         super.onCreate(savedInstanceState);
 
+
+
         webView = new WebView(this);
+        // MTAPI_328: WebView debugging (ПОСЛЕ new WebView)
+        try {
+            android.webkit.WebView.setWebContentsDebuggingEnabled(true);
+            android.util.Log.i("mtapi", "WebView debugging enabled (after new WebView)");
+        } catch (Throwable t) {
+            android.util.Log.e("mtapi", "WebView debugging failed: " + t);
+        }
+
 
         // MTAPI_247: JS interface for full app restart
         webView.addJavascriptInterface(new Object() {
