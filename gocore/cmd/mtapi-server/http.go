@@ -1,6 +1,7 @@
 package main
 
 import (
+	"io"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -453,6 +454,21 @@ func startHTTP(api AndroidAPI, token string) error {
 	mux.HandleFunc("/debug", func(w http.ResponseWriter, r *http.Request) {
 		if !s.checkAuth(r) {
 			s.writeJSON(w, 401, map[string]any{"ok": false, "error": "auth_failed"})
+	// MTAPI_317: /devtools/json
+	mux.HandleFunc("/devtools/json", func(w http.ResponseWriter, r *http.Request) {
+		client := &http.Client{Timeout: 3 * time.Second}
+		resp, err := client.Get("http://127.0.0.1:9222/json")
+		if err != nil {
+			w.Header().Set("Content-Type", "application/json")
+			w.Write([]byte(`{"ok":false,"error":"` + err.Error() + `","data":[]}`))
+			return
+		}
+		defer resp.Body.Close()
+		body, _ := io.ReadAll(resp.Body)
+		w.Header().Set("Content-Type", "application/json")
+		w.Write(body)
+	})
+
 			return
 		}
 		s.writeJSON(w, 200, map[string]any{"ok": true, "data": collectDebug()})

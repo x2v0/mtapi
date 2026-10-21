@@ -1,3 +1,4 @@
+if (typeof window === 'undefined') { globalThis.window = {}; }
 
 
 // MTAPI_293: fetch с timeout (AbortController)
@@ -116,6 +117,45 @@ function cellStr(v){
   if(typeof v==='object')return JSON.stringify(v);
   return String(v);
 }
+
+// MTAPI_315: DevTools — открыть в WebView (встроенный devtools frontend)
+window._openDevtools = function(wsUrl) {
+  try {
+    var encoded = encodeURIComponent(wsUrl);
+    // 1. попробовать Android.intent (Chrome)
+    if (typeof Android !== 'undefined' && Android.openDevtools) {
+      Android.openDevtools(wsUrl);
+      return;
+    }
+    // 2. iframe devtools frontend (встроенный)
+    var frame = document.getElementById('devtools-frame');
+    if (frame) {
+      var url = 'https://chrome-devtools-frontend.appspot.com/serve_file/@/inspector.html?ws=' + encoded;
+      frame.innerHTML = '<iframe src="' + url + '" style="width:100%;height:100%;border:none"></iframe>';
+    }
+    // 3. fallback — копировать ws и открыть chrome://inspect
+    console.log('[mtapi] devtools:', wsUrl);
+  } catch(e) { console.log('[mtapi] openDevtools err:', e.message); }
+};
+
+// MTAPI_315: copy WebSocket URL
+window._copyDevtools = function(wsUrl) {
+  try {
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(wsUrl);
+      console.log('[mtapi] copied:', wsUrl);
+    } else {
+      var ta = document.createElement('textarea');
+      ta.value = wsUrl;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+      console.log('[mtapi] copied (execCommand):', wsUrl);
+    }
+  } catch(e) { console.log('[mtapi] copy err:', e.message); }
+};
+
 
 // MTAPI_283: window.filterLogcat — глобальная функция для oninput
 
@@ -686,6 +726,53 @@ function loadDebugCard(ep) {
       status.textContent = ms + 'ms';
       var data = (j && j.data) ? j.data : j;
       body.innerHTML = renderDebugSections(data);
+      // MTAPI_315: devtools
+      setTimeout(function(){
+        try {
+          var status = body.querySelector('#devtools-status');
+          var list = body.querySelector('#devtools-list');
+          if (!status || !list) return;
+          _fetch('/devtools/json?token=' + encodeURIComponent(TOKEN)).then(function(r){ return r.json(); }).then(function(j){
+            if (j && j.ok === false) {
+              status.textContent = 'DevTools: ' + (j.error || 'not available');
+              status.style.color = 'var(--err)';
+              return;
+            }
+            var pages = Array.isArray(j) ? j : (j.data || []);
+            if (pages.length === 0) {
+              status.textContent = 'DevTools: no pages (WebView debugging off)';
+              status.style.color = 'var(--warn)';
+              return;
+            }
+            status.textContent = 'DevTools: ' + pages.length + ' page(s)';
+            status.style.color = 'var(--ok)';
+            var html = '';
+            pages.forEach(function(p, i){
+              var url = (p.url || '').replace(/[<>]/g, '');
+              var ws = (p.webSocketDebuggerUrl || '').replace(/[<>]/g, '');
+              html += '<div style="margin:4px 0;padding:4px;background:var(--bg3);border-radius:4px">';
+              html += '<b>#' + i + '</b> ' + (p.title || '(no title)') + '<br>';
+              html += '<code style="font-size:10px">' + url + '</code><br>';
+              if (ws) {
+                html += '<button class="btn" onclick="window._openDevtools(\'' + ws + '\')">DevTools</button> ';
+                html += '<button class="btn" onclick="window._copyDevtools(\'' + ws + '\')">Copy WS</button>';
+              }
+              html += '</div>';
+            });
+            list.innerHTML = html;
+          }).catch(function(e){
+            status.textContent = 'DevTools error: ' + e.message;
+            status.style.color = 'var(--err)';
+          });
+        } catch(e) { console.log('[mtapi] devtools err:', e.message); }
+      }, 300);
+      // MTAPI_313: processes-all
+      try {
+        if (typeof Android !== 'undefined' && Android.processList) {
+          var pre = body.querySelector('#processes-all');
+          if (pre) pre.textContent = Android.processList();
+        }
+      } catch(e) { console.log('[mtapi] processList err:', e.message); }
       setTimeout(attachLogcatSearch, 100);
       ep.open = true;
       // все sub — свёрнуты (по умолчанию)
@@ -784,6 +871,25 @@ function renderDebugSections(data) {
     h += '<pre class="debug-pre debug-errors">' + esc(String(data.errors)) + '</pre>';
     h += '</details>';
   }
+
+
+
+  // MTAPI_313: processes-all
+  h += '<details class="sub">';
+  h += '<summary title="All processes (ActivityManager)">Processes (all)</summary>';
+  h += '<pre class="debug-pre" id="processes-all">loading…</pre>';
+  h += '</details>';
+
+  
+  // MTAPI_315: встроенный devtools (iframe)
+  h += '<details class="sub">';
+  h += '<summary title="WebView DevTools">🔧 DevTools (встроенный)</summary>';
+  h += '<div class="debug-devtools" style="padding:8px">';
+  h += '<div id="devtools-status" style="font-size:12px;margin-bottom:6px">loading…</div>';
+  h += '<div id="devtools-list" style="font-size:12px"></div>';
+  h += '<div id="devtools-frame" style="margin-top:6px;border:1px solid var(--border);border-radius:4px;height:400px;overflow:hidden"></div>';
+  h += '</div>';
+  h += '</details>';
 
   return h || '<div class="empty">no debug info</div>';
 }

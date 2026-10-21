@@ -74,6 +74,11 @@ public class MainActivity extends Activity {
             public String saveFile(String name, String data) {
                 return MainActivity.this.saveFileToDownloads(name, data);
             }
+
+            @android.webkit.JavascriptInterface
+            public String processList() {
+                return MainActivity.this.processList();
+            }
 }, "Android");
         WebSettings ws = webView.getSettings();
         ws.setJavaScriptEnabled(true);
@@ -195,6 +200,28 @@ public class MainActivity extends Activity {
         } catch (Throwable t) {
             android.util.Log.e("mtapi", "saveFileToDownloads failed: " + t);
             return null;
+        }
+    }
+
+
+    // MTAPI_311: processList — все процессы через ActivityManager
+    @android.webkit.JavascriptInterface
+    public String processList() {
+        try {
+            android.app.ActivityManager am = (android.app.ActivityManager)
+                getSystemService(android.content.Context.ACTIVITY_SERVICE);
+            java.util.List<android.app.ActivityManager.RunningAppProcessInfo> procs =
+                am.getRunningAppProcesses();
+            StringBuilder sb = new StringBuilder();
+            sb.append("=== all processes (").append(procs.size()).append(") ===\n");
+            for (android.app.ActivityManager.RunningAppProcessInfo p : procs) {
+                sb.append(p.pid).append(" ").append(p.processName)
+                  .append(" uid=").append(p.uid)
+                  .append(" importance=").append(p.importance).append("\n");
+            }
+            return sb.toString();
+        } catch (Throwable t) {
+            return "error: " + t;
         }
     }
 
