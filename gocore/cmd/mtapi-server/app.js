@@ -1,3 +1,18 @@
+
+
+// MTAPI_293: fetch с timeout (AbortController)
+function _fetch(url, opts) {
+  opts = opts || {};
+  if (typeof AbortSignal !== 'undefined' && AbortSignal.timeout) {
+    opts.signal = AbortSignal.timeout(3000);
+  } else if (typeof AbortController !== 'undefined') {
+    var ctrl = new AbortController();
+    var _to = setTimeout(function(){ ctrl.abort(); }, 3000);
+    if (_to && typeof _to.unref === "function") _to.unref();
+    opts.signal = ctrl.signal;
+  }
+  return _fetch(url, opts);
+}
 // MTAPI_270: LOG_LEVEL_TITLES — в САМОМ НАЧАЛЕ (до renderDebugSections)
 var LOG_LEVEL_TITLES = {
   V: 'V — Verbose (все сообщения)',
@@ -40,7 +55,7 @@ const ENDPOINTS = [
     "/tts?text=hello", "/share?title=Hi&text=There"
   ]},
   { group: "Contacts / SMS", eps: [
-    "/contacts?limit=5", "/calllog?limit=5", "/sms?limit=5"
+    "/contacts?limit=0", "/calllog?limit=0", "/sms?limit=0"
   ]},
   { group: "System", eps: [
     "/system", "/cpu/detail", "/thermal", "/memory", "/storage", "/kernel"
@@ -85,7 +100,7 @@ const ENDPOINTS = [
 const SLOW = new Set([
   "/camera/snapshot","/microphone/record?seconds=3",
   "/sensors/read?name=accelerometer&ms=200",
-  "/contacts?limit=5","/calllog?limit=5","/sms?limit=5",
+  "/contacts?limit=0","/calllog?limit=0","/sms?limit=0",
   "/calendar?days=7","/app/list"
 ]);
 
@@ -100,115 +115,13 @@ function cellStr(v){
 }
 
 // MTAPI_283: window.filterLogcat — глобальная функция для oninput
-window.filterLogcat = function() {
-  try {
-    var searches = document.querySelectorAll('.logcat-search');
-    var pre = document.getElementById('logcat-pre');
-    if (!pre) {
-      // fallback — первый .logcat-pre
-      var pres = document.querySelectorAll('.logcat-pre');
-      if (pres.length > 0) pre = pres[0];
-    }
-    if (!searches.length || !pre) {
-      console.log('[mtapi] filterLogcat: no search or pre');
-      return;
-    }
-    var q = (searches[0].value || '').trim();
-    var ql = q.toLowerCase();
 
-    // уровни
-    var levels = {};
-    document.querySelectorAll('.logcat-lvl input').forEach(function(cb){
-      levels[cb.dataset.lvl] = cb.checked;
-    });
-
-    var visible = 0, total = 0;
-    var lines = pre.querySelectorAll('.logcat-line');
-    for (var i = 0; i < lines.length; i++) {
-      var span = lines[i];
-      total++;
-      var lvl = 'V';
-      var cls = span.className || '';
-      if (typeof cls === 'string') {
-        var parts = cls.split(' ');
-        for (var k = 0; k < parts.length; k++) {
-          if (parts[k].indexOf('lvl-') === 0) lvl = parts[k].substring(4).toUpperCase();
-        }
-      }
-      var orig = span.getAttribute('data-orig');
-      if (orig === null) {
-        orig = span.textContent || '';
-        span.setAttribute('data-orig', orig);
-      }
-      var low = orig.toLowerCase();
-      var matchLvl = levels[lvl] !== false;
-      var matchSearch = !ql || low.indexOf(ql) >= 0;
-      var show = matchLvl && matchSearch;
-      span.style.display = show ? '' : 'none';
-      if (show) visible++;
-
-      if (ql) {
-        if (matchSearch) {
-          span.innerHTML = window.highlightText(orig, q);
-        } else {
-          span.innerHTML = esc(orig);
-        }
-      } else {
-        span.innerHTML = esc(orig);
-      }
-    }
-    var status = document.querySelector('.logcat-status');
-    if (status) {
-      status.textContent = ql ? (visible + '/' + total + ' 🔍') : (visible + '/' + total);
-    }
-    console.log('[mtapi] filterLogcat: q=' + JSON.stringify(q) + ' visible=' + visible + '/' + total);
-  } catch (e) {
-    console.log('[mtapi] filterLogcat ERROR: ' + e.message);
-  }
-};
 
 // MTAPI_283: highlightText — глобальная
-window.highlightText = function(text, query) {
-  if (!query) return esc(text);
-  var lower = text.toLowerCase();
-  var q = query.toLowerCase();
-  var out = '';
-  var idx = 0;
-  var pos;
-  var n = 0;
-  while ((pos = lower.indexOf(q, idx)) !== -1) {
-    out += esc(text.slice(idx, pos));
-    out += '<mark class="logcat-hl">' + esc(text.slice(pos, pos + q.length)) + '</mark>';
-    idx = pos + q.length;
-    n++;
-    if (n > 500) break;
-  }
-  out += esc(text.slice(idx));
-  return out;
-};
+
 
 // MTAPI_283: attachLogcatSearch — навешиваем addEventListener
-window.attachLogcatSearch = function() {
-  var searches = document.querySelectorAll('.logcat-search');
-  var bound = 0;
-  for (var i = 0; i < searches.length; i++) {
-    var s = searches[i];
-    if (s.getAttribute('data-bound') === '1') continue;
-    s.setAttribute('data-bound', '1');
-    s.addEventListener('input', window.filterLogcat);
-    s.addEventListener('keyup', window.filterLogcat);
-    bound++;
-  }
-  var cbs = document.querySelectorAll('.logcat-lvl input');
-  for (var j = 0; j < cbs.length; j++) {
-    var cb = cbs[j];
-    if (cb.getAttribute('data-bound') === '1') continue;
-    cb.setAttribute('data-bound', '1');
-    cb.addEventListener('change', window.filterLogcat);
-    bound++;
-  }
-  console.log('[mtapi] attachLogcatSearch: bound=' + bound + ' searches=' + searches.length);
-};
+
 
 function classifyValue(v){
   if(v===null||v===undefined)return'v-null';
@@ -454,7 +367,7 @@ function callDirect(path) {
   var ms=SLOW.has(path)?15000:10000;
   var ctl=new AbortController();
   var timer=setTimeout(function(){ctl.abort()},ms);
-  return fetch(url,{signal:ctl.signal}).then(function(r){return r.json()}).then(function(j){
+  return _fetch(url,{signal:ctl.signal}).then(function(r){return r.json()}).then(function(j){
     clearTimeout(timer);
     return {ms: Math.round(performance.now()-t0), json: j};
   }).catch(function(e){
@@ -595,7 +508,18 @@ function setLive(on){
   liveOn=on;
   var liveEl=document.getElementById('live'); if(liveEl)liveEl.classList.toggle('on',on);
   if(liveTimer){clearInterval(liveTimer);liveTimer=null}
-  if(on)liveTimer=setInterval(updateStats,5000);
+  if(on)liveTimer=(function(){
+    if (typeof window !== 'undefined' && window._statsTimer) clearInterval(window._statsTimer);
+    var _t = (function(){ var _t = (function(){
+    if (typeof window !== 'undefined' && window._statsTimer) clearInterval(window._statsTimer);
+    var _t = setInterval(updateStats, 5000);
+    if (typeof window !== 'undefined') window._statsTimer = _t;
+    if (_t && typeof _t.unref === 'function') _t.unref();
+    return _t;
+  })(); if (_t && typeof _t.unref === "function") _t.unref(); return _t; })();
+    if (typeof window !== 'undefined') window._statsTimer = _t;
+    if (_t && typeof _t.unref === 'function') _t.unref();
+  })();
 }
 
 // ─── theme ───────────────────────────────────────────
@@ -633,7 +557,7 @@ if (_el('reset')) _el('reset').addEventListener('click',function(){
 
   // fallback: POST /restart → Go exit → Java restart
   console.log('[mtapi] fallback: POST /restart');
-  fetch('/restart?token=' + encodeURIComponent(TOKEN), { method: 'POST' })
+  _fetch('/restart?token=' + encodeURIComponent(TOKEN), { method: 'POST' })
     .then(function(r){ return r.json(); })
     .then(function(j){ console.log('[mtapi] restart:', j); })
     .catch(function(e){ console.error('[mtapi] restart error:', e); })
@@ -745,7 +669,7 @@ function loadDebugCard(ep) {
   status.className = 'status loading';
   status.innerHTML = '<span class="spin"></span>';
 
-  fetch('/debug?token=' + encodeURIComponent(TOKEN))
+  _fetch('/debug?token=' + encodeURIComponent(TOKEN))
     .then(function(r){ return r.json(); })
     .then(function(j){
       var ms = Date.now() - t0;
@@ -892,7 +816,11 @@ function detectLogLevel(line) {
 function toggleLogcatLive() {
   var live = document.getElementById('logcat-live');
   if (live && live.checked) {
+    if (window._logcatLiveTimer) clearInterval(window._logcatLiveTimer);
     window._logcatLiveTimer = setInterval(reloadLogcat, 2000);
+    if (window._logcatLiveTimer && typeof window._logcatLiveTimer.unref === 'function') {
+      window._logcatLiveTimer.unref();
+    }
   } else {
     if (window._logcatLiveTimer) clearInterval(window._logcatLiveTimer);
     window._logcatLiveTimer = null;
@@ -902,7 +830,7 @@ function toggleLogcatLive() {
 function reloadLogcat() {
   var pre = document.getElementById('logcat-pre');
   if (!pre) return;
-  fetch('/debug?token=' + encodeURIComponent(TOKEN))
+  _fetch('/debug?token=' + encodeURIComponent(TOKEN))
     .then(function(r){ return r.json(); })
     .then(function(j){
       var data = (j && j.data) ? j.data : j;
@@ -942,7 +870,7 @@ function detectLogLevel(line) {
 function toggleLogcatLive() {
   var live = document.getElementById('logcat-live');
   if (live && live.checked) {
-    window._logcatLiveTimer = setInterval(reloadLogcat, 2000);
+    window._logcatLiveTimer = (function(){ var _t = setInterval(reloadLogcat, 2000); if (_t && typeof _t.unref === "function") _t.unref(); return _t; })();
   } else {
     if (window._logcatLiveTimer) clearInterval(window._logcatLiveTimer);
     window._logcatLiveTimer = null;
@@ -952,7 +880,7 @@ function toggleLogcatLive() {
 function reloadLogcat() {
   var pre = document.getElementById('logcat-pre');
   if (!pre) return;
-  fetch('/debug?token=' + encodeURIComponent(TOKEN))
+  _fetch('/debug?token=' + encodeURIComponent(TOKEN))
     .then(function(r){ return r.json(); })
     .then(function(j){
       var data = (j && j.data) ? j.data : j;
@@ -966,7 +894,23 @@ function reloadLogcat() {
 
 // ─── MTAPI_140: exports для тестов (node) ───
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = {
+  
+
+// MTAPI_291: beforeExit — очистка таймеров (для node --test)
+if (typeof process !== 'undefined' && process.on) {
+  process.on('beforeExit', function() {
+    if (typeof window !== "undefined" && window && window._logcatLiveTimer) {
+      clearInterval(window._logcatLiveTimer);
+      window._logcatLiveTimer = null;
+    }
+    if (typeof window !== "undefined" && window && window._statsTimer) {
+      clearInterval(window._statsTimer);
+      window._statsTimer = null;
+    }
+  });
+}
+
+module.exports = {
     render: typeof render === 'function' ? render : null,
     renderData: typeof renderData === 'function' ? renderData : null,
     renderObj: typeof renderObj === 'function' ? renderObj : null,
@@ -984,11 +928,102 @@ if (typeof module !== 'undefined' && module.exports) {
     makeDebugCard: typeof makeDebugCard === 'function' ? makeDebugCard : null,
     loadDebugCard: typeof loadDebugCard === 'function' ? loadDebugCard : null,
     renderDebugSections: typeof renderDebugSections === 'function' ? renderDebugSections : null,
-    attachLogcatSearch: (typeof window.attachLogcatSearch === 'function') ? window.attachLogcatSearch : null,
-    highlightText: (typeof window.highlightText === 'function') ? window.highlightText : null,
-    filterLogcat: (typeof window.filterLogcat === 'function') ? window.filterLogcat : null,
-    makeDebugCard: typeof makeDebugCard === 'function' ? makeDebugCard : null,
-    loadDebugCard: typeof loadDebugCard === 'function' ? loadDebugCard : null,
-    renderDebugSections: typeof renderDebugSections === 'function' ? renderDebugSections : null
+  };
+}
+
+// MTAPI_287: window functions — с проверкой
+if (typeof window !== 'undefined') {
+  window.filterLogcat = function() {
+    try {
+      var searches = document.querySelectorAll('.logcat-search');
+      var pre = document.getElementById('logcat-pre');
+      if (!pre) {
+        var pres = document.querySelectorAll('.logcat-pre');
+        if (pres.length > 0) pre = pres[0];
+      }
+      if (!searches.length || !pre) { return; }
+      var q = (searches[0].value || '').trim();
+      var ql = q.toLowerCase();
+      var levels = {};
+      document.querySelectorAll('.logcat-lvl input').forEach(function(cb){
+        levels[cb.dataset.lvl] = cb.checked;
+      });
+      var visible = 0, total = 0;
+      var lines = pre.querySelectorAll('.logcat-line');
+      for (var i = 0; i < lines.length; i++) {
+        var span = lines[i];
+        total++;
+        var lvl = 'V';
+        var cls = span.className || '';
+        if (typeof cls === 'string') {
+          var parts = cls.split(' ');
+          for (var k = 0; k < parts.length; k++) {
+            if (parts[k].indexOf('lvl-') === 0) lvl = parts[k].substring(4).toUpperCase();
+          }
+        }
+        var orig = span.getAttribute('data-orig');
+        if (orig === null) {
+          orig = span.textContent || '';
+          span.setAttribute('data-orig', orig);
+        }
+        var low = orig.toLowerCase();
+        var matchLvl = levels[lvl] !== false;
+        var matchSearch = !ql || low.indexOf(ql) >= 0;
+        var show = matchLvl && matchSearch;
+        span.style.display = show ? '' : 'none';
+        if (show) visible++;
+        if (ql && matchSearch) {
+          span.innerHTML = window.highlightText(orig, q);
+        } else {
+          span.innerHTML = esc(orig);
+        }
+      }
+      var status = document.querySelector('.logcat-status');
+      if (status) {
+        status.textContent = ql ? (visible + '/' + total + ' 🔍') : (visible + '/' + total);
+      }
+    } catch (e) {
+      console.log('[mtapi] filterLogcat ERROR: ' + e.message);
+    }
+  };
+
+  window.highlightText = function(text, query) {
+    if (!query) return esc(text);
+    var lower = text.toLowerCase();
+    var q = query.toLowerCase();
+    var out = '';
+    var idx = 0;
+    var pos;
+    var n = 0;
+    while ((pos = lower.indexOf(q, idx)) !== -1) {
+      out += esc(text.slice(idx, pos));
+      out += '<mark class="logcat-hl">' + esc(text.slice(pos, pos + q.length)) + '</mark>';
+      idx = pos + q.length;
+      n++;
+      if (n > 500) break;
+    }
+    out += esc(text.slice(idx));
+    return out;
+  };
+
+  window.attachLogcatSearch = function() {
+    var searches = document.querySelectorAll('.logcat-search');
+    var bound = 0;
+    for (var i = 0; i < searches.length; i++) {
+      var s = searches[i];
+      if (s.getAttribute('data-bound') === '1') continue;
+      s.setAttribute('data-bound', '1');
+      s.addEventListener('input', window.filterLogcat);
+      s.addEventListener('keyup', window.filterLogcat);
+      bound++;
+    }
+    var cbs = document.querySelectorAll('.logcat-lvl input');
+    for (var j = 0; j < cbs.length; j++) {
+      var cb = cbs[j];
+      if (cb.getAttribute('data-bound') === '1') continue;
+      cb.setAttribute('data-bound', '1');
+      cb.addEventListener('change', window.filterLogcat);
+      bound++;
+    }
   };
 }

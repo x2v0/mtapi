@@ -42,6 +42,15 @@ test:
 	@echo "  ALL TESTS COMPLETE"
 	@echo "══════════════════════════════════════════════════"
 
+.PHONY: test-fast
+test-fast:
+	@echo "══════════════════════════════════════════════════"
+	@echo "  MTAPI TEST-FAST (без jsdom/eslint)"
+	@echo "══════════════════════════════════════════════════"
+	@cd $(TEST_DIR) && node --test mtapi-app.test.js mtapi-acorn.test.js 2>&1 | tail -20
+	@echo ""
+	@echo "  (пропущены: jsdom, eslint — запусти 'make test' для всех)"
+
 build: so apk
 
 so:

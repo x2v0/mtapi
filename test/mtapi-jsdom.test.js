@@ -82,7 +82,7 @@ test('renderCell: array of objects → details.sub', () => {
 test('jsdom: renderData({a:1}) → DOM table', () => {
   assert.ok(app, 'app not loaded');
   const html = app.renderData({a: 1});
-  const dom = new JSDOM(`<div id="x">${html}</div>`);
+  var dom = new JSDOM(`<div id="x">${html}</div>`);
   const doc = dom.window.document;
   const table = doc.querySelector('table');
   assert.ok(table, 'should have <table>');
@@ -96,7 +96,7 @@ test('jsdom: renderData({a:1}) → DOM table', () => {
 test('jsdom: renderData([{x:1},{x:2}]) → 2 rows', () => {
   assert.ok(app, 'app not loaded');
   const html = app.renderData([{x: 1}, {x: 2}]);
-  const dom = new JSDOM(`<div id="x">${html}</div>`);
+  var dom = new JSDOM(`<div id="x">${html}</div>`);
   const rows = dom.window.document.querySelectorAll('tbody tr');
   assert.strictEqual(rows.length, 2, `expected 2 rows, got ${rows.length}`);
 });
@@ -107,7 +107,7 @@ test('jsdom: renderData([{x:1},{x:2}]) → 2 rows', () => {
 test('jsdom: renderObj({nested:{}}) → details.sub', () => {
   assert.ok(app, 'app not loaded');
   const html = app.renderObj({nested: {a: 1}}, 0);
-  const dom = new JSDOM(`<div id="x">${html}</div>`);
+  var dom = new JSDOM(`<div id="x">${html}</div>`);
   const details = dom.window.document.querySelectorAll('details.sub');
   assert.ok(details.length >= 1, 'should have details.sub');
   assert.ok(details[0].querySelector('summary'), 'should have summary');
@@ -119,7 +119,7 @@ test('jsdom: renderObj({nested:{}}) → details.sub', () => {
 test('jsdom: renderObj nested array → details.sub', () => {
   assert.ok(app, 'app not loaded');
   const html = app.renderObj({items: [{a: 1}, {a: 2}]}, 0);
-  const dom = new JSDOM(`<div id="x">${html}</div>`);
+  var dom = new JSDOM(`<div id="x">${html}</div>`);
   const details = dom.window.document.querySelectorAll('details.sub');
   assert.ok(details.length >= 1, 'should have details.sub');
 });
@@ -130,7 +130,7 @@ test('jsdom: renderObj nested array → details.sub', () => {
 test('jsdom: esc prevents injection', () => {
   assert.ok(app, 'app not loaded');
   const html = app.esc('<script>alert(1)</script>');
-  const dom = new JSDOM(`<div>${html}</div>`);
+  var dom = new JSDOM(`<div>${html}</div>`);
   assert.strictEqual(dom.window.document.querySelector('script'), null,
     'should not create <script>');
 });
