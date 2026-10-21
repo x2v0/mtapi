@@ -16,3 +16,6 @@ var appJS string
 
 //go:embed style.css
 var styleCSS string
+
+//go:embed me.jpg
+var meJPG []byte

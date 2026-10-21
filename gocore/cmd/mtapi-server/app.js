@@ -1,3 +1,14 @@
+// MTAPI_270: LOG_LEVEL_TITLES — в САМОМ НАЧАЛЕ (до renderDebugSections)
+var LOG_LEVEL_TITLES = {
+  V: 'V — Verbose (все сообщения)',
+  D: 'D — Debug (отладочная информация)',
+  I: 'I — Info (обычные события)',
+  W: 'W — Warn (предупреждения)',
+  E: 'E — Error (ошибки)',
+  F: 'F — Fatal (критические, краш)',
+};
+
+// MTAPI_270: LOG_LEVEL_TITLES — в САМОМ НАЧАЛЕ (до renderDebugSections)
 // ─── MTAPI_145: localStorage polyfill ───
 (function() {
   if (typeof localStorage === 'undefined') {
@@ -15,7 +26,9 @@
 
 // MTAPI_HARD_RESET_76: clean slate — no SW, no auto-click, no semaphore.
 // /ping is synthetic server-side. Client only does what user clicks.
-const TOKEN = "{{TOKEN}}";
+// TOKEN берётся из window (index.html)
+if (typeof document !== 'undefined') document.title = "[mtapi] loaded " + (TOKEN ? TOKEN.slice(0,8) : "empty");
+try { document.title = "L:" + (TOKEN ? TOKEN.slice(0,4) : "null"); } catch(e) {}
 
 const ENDPOINTS = [
   { group: "Basic", eps: [
@@ -85,6 +98,118 @@ function cellStr(v){
   if(typeof v==='object')return JSON.stringify(v);
   return String(v);
 }
+
+// MTAPI_283: window.filterLogcat — глобальная функция для oninput
+window.filterLogcat = function() {
+  try {
+    var searches = document.querySelectorAll('.logcat-search');
+    var pre = document.getElementById('logcat-pre');
+    if (!pre) {
+      // fallback — первый .logcat-pre
+      var pres = document.querySelectorAll('.logcat-pre');
+      if (pres.length > 0) pre = pres[0];
+    }
+    if (!searches.length || !pre) {
+      console.log('[mtapi] filterLogcat: no search or pre');
+      return;
+    }
+    var q = (searches[0].value || '').trim();
+    var ql = q.toLowerCase();
+
+    // уровни
+    var levels = {};
+    document.querySelectorAll('.logcat-lvl input').forEach(function(cb){
+      levels[cb.dataset.lvl] = cb.checked;
+    });
+
+    var visible = 0, total = 0;
+    var lines = pre.querySelectorAll('.logcat-line');
+    for (var i = 0; i < lines.length; i++) {
+      var span = lines[i];
+      total++;
+      var lvl = 'V';
+      var cls = span.className || '';
+      if (typeof cls === 'string') {
+        var parts = cls.split(' ');
+        for (var k = 0; k < parts.length; k++) {
+          if (parts[k].indexOf('lvl-') === 0) lvl = parts[k].substring(4).toUpperCase();
+        }
+      }
+      var orig = span.getAttribute('data-orig');
+      if (orig === null) {
+        orig = span.textContent || '';
+        span.setAttribute('data-orig', orig);
+      }
+      var low = orig.toLowerCase();
+      var matchLvl = levels[lvl] !== false;
+      var matchSearch = !ql || low.indexOf(ql) >= 0;
+      var show = matchLvl && matchSearch;
+      span.style.display = show ? '' : 'none';
+      if (show) visible++;
+
+      if (ql) {
+        if (matchSearch) {
+          span.innerHTML = window.highlightText(orig, q);
+        } else {
+          span.innerHTML = esc(orig);
+        }
+      } else {
+        span.innerHTML = esc(orig);
+      }
+    }
+    var status = document.querySelector('.logcat-status');
+    if (status) {
+      status.textContent = ql ? (visible + '/' + total + ' 🔍') : (visible + '/' + total);
+    }
+    console.log('[mtapi] filterLogcat: q=' + JSON.stringify(q) + ' visible=' + visible + '/' + total);
+  } catch (e) {
+    console.log('[mtapi] filterLogcat ERROR: ' + e.message);
+  }
+};
+
+// MTAPI_283: highlightText — глобальная
+window.highlightText = function(text, query) {
+  if (!query) return esc(text);
+  var lower = text.toLowerCase();
+  var q = query.toLowerCase();
+  var out = '';
+  var idx = 0;
+  var pos;
+  var n = 0;
+  while ((pos = lower.indexOf(q, idx)) !== -1) {
+    out += esc(text.slice(idx, pos));
+    out += '<mark class="logcat-hl">' + esc(text.slice(pos, pos + q.length)) + '</mark>';
+    idx = pos + q.length;
+    n++;
+    if (n > 500) break;
+  }
+  out += esc(text.slice(idx));
+  return out;
+};
+
+// MTAPI_283: attachLogcatSearch — навешиваем addEventListener
+window.attachLogcatSearch = function() {
+  var searches = document.querySelectorAll('.logcat-search');
+  var bound = 0;
+  for (var i = 0; i < searches.length; i++) {
+    var s = searches[i];
+    if (s.getAttribute('data-bound') === '1') continue;
+    s.setAttribute('data-bound', '1');
+    s.addEventListener('input', window.filterLogcat);
+    s.addEventListener('keyup', window.filterLogcat);
+    bound++;
+  }
+  var cbs = document.querySelectorAll('.logcat-lvl input');
+  for (var j = 0; j < cbs.length; j++) {
+    var cb = cbs[j];
+    if (cb.getAttribute('data-bound') === '1') continue;
+    cb.setAttribute('data-bound', '1');
+    cb.addEventListener('change', window.filterLogcat);
+    bound++;
+  }
+  console.log('[mtapi] attachLogcatSearch: bound=' + bound + ' searches=' + searches.length);
+};
+
 function classifyValue(v){
   if(v===null||v===undefined)return'v-null';
   if(typeof v==='boolean')return v?'v-bool-t':'v-bool-f';
@@ -357,7 +482,7 @@ function makeCard(path){
   var ep=document.createElement('details');
   ep.className='ep'; ep.dataset.path=path;
   var head=document.createElement('summary'); head.className='ep-h';
-  var btn=document.createElement('button'); btn.className='run'; btn.textContent='GET '+path;
+  var btn=document.createElement('button'); btn.className='run'; btn.textContent='GET '+path; btn.title='Click to fetch '+path+' (single request, no queue)';
   btn.addEventListener('click',function(e){e.preventDefault();e.stopPropagation();run(ep,path)});
   var status=document.createElement('span'); status.className='status';
   var toggle=document.createElement('button'); toggle.className='toggle';
@@ -401,11 +526,11 @@ function run(ep,path){
 
 
 // MTAPI_172: safe getElementById
-function _el(id) { return document.getElementById(id); }
+function _el(id) { return (typeof document !== 'undefined') ? document.getElementById(id) : null; }
 
 function render(){
-  var q=document.getElementById('q').value.toLowerCase();
-  var main=document.getElementById('main'); main.innerHTML='';
+  var qEl=document.getElementById('q'); var q=qEl?qEl.value.toLowerCase():'';
+  var main=document.getElementById('main'); if(!main)return; main.innerHTML='';
   for(var gi=0;gi<ENDPOINTS.length;gi++){
     var g=ENDPOINTS[gi];
     var filtered=g.eps.filter(function(p){return p.toLowerCase().indexOf(q)>=0});
@@ -413,11 +538,25 @@ function render(){
     var gd=document.createElement('details');
     gd.className='group'; gd.dataset.group=g.group; gd.open=false;
     var h=document.createElement('summary'); h.className='group-h';
-    h.textContent=g.group+' ('+filtered.length+')';
+    h.textContent=g.group+' ('+filtered.length+')'; h.title=g.group+': '+filtered.length+' endpoint'+(filtered.length!==1?'s':'')+' (click to expand/collapse)';
     gd.appendChild(h);
     for(var pi=0;pi<filtered.length;pi++)gd.appendChild(makeCard(filtered[pi]));
     main.appendChild(gd);
   }
+
+  // MTAPI_255: debug section (как группа, с подотделами)
+  var debugGroup = document.createElement('details');
+  debugGroup.className = 'group';
+  debugGroup.dataset.group = 'Debug';
+  debugGroup.open = false;
+
+  var debugHead = document.createElement('summary');
+  debugHead.className = 'group-h';
+  debugHead.textContent = 'Debug'; debugHead.title = 'Debug info: processes, port, uptime, memory, logcat (with filters), errors';
+  debugGroup.appendChild(debugHead);
+
+  debugGroup.appendChild(makeDebugCard());
+  main.appendChild(debugGroup);
 }
 
 // ─── updateStats ─────────────────────────────────────
@@ -448,21 +587,13 @@ function updateStats(){
       (_el('st-ram')||{}).innerHTML='ram <b style="color:var(--err)">?</b>';
     }
   });
-  callDirect('/ping').then(function(r){
-    if(r.error){
-      (_el('st-ping')||{}).innerHTML='ping <b style="color:var(--err)">err</b>';
-    } else {
-      (_el('st-ping')||{}).innerHTML='ping <b>'+r.ms+'ms</b>'+
-        (r.json&&r.json.ok?' <span style="color:var(--ok)">●</span>':' <span style="color:var(--err)">●</span>');
-    }
-  });
 }
 
 // ─── live toggle ─────────────────────────────────────
 var liveOn=false, liveTimer=null;
 function setLive(on){
   liveOn=on;
-  document.getElementById('live').classList.toggle('on',on);
+  var liveEl=document.getElementById('live'); if(liveEl)liveEl.classList.toggle('on',on);
   if(liveTimer){clearInterval(liveTimer);liveTimer=null}
   if(on)liveTimer=setInterval(updateStats,5000);
 }
@@ -470,11 +601,10 @@ function setLive(on){
 // ─── theme ───────────────────────────────────────────
 var savedTheme=localStorage.getItem('mtapi-theme');
 // MTAPI_108: тёмная по умолчанию (если нет savedTheme — dark, игнорируем system)
-if (typeof document !== 'undefined') {
-document.documentElement.setAttribute('data-theme', savedTheme || 'dark');
+if (typeof document !== 'undefined') document.documentElement.setAttribute('data-theme', savedTheme || 'dark');
 function updateThemeBtn(){
   var cur=document.documentElement.getAttribute('data-theme') || 'dark';
-  document.getElementById('theme').textContent=cur==='light'?'\u2600\uFE0F':'\uD83C\uDF19';
+  var themeEl=document.getElementById('theme'); if(themeEl)themeEl.textContent=cur==='light'?'\u2600\uFE0F':'\uD83C\uDF19';
 }
 if (_el('theme')) _el('theme').addEventListener('click',function(){
   var cur=document.documentElement.getAttribute('data-theme') || 'dark';
@@ -484,40 +614,45 @@ if (_el('theme')) _el('theme').addEventListener('click',function(){
   updateThemeBtn();
 });
 
-// copy
-if (typeof document !== 'undefined') {
-document.getElementById('copy').addEventListener('click',function(){
-  navigator.clipboard.writeText(TOKEN).then(function(){
-    var b=document.getElementById('copy');b.textContent='copied';
-    setTimeout(function(){b.textContent='copy'},1500);
-  }).catch(function(){});
-});
 
 // search
-document.getElementById('q').addEventListener('input',render);
+var qEl2=(typeof document !== 'undefined') ? document.getElementById('q') : null; if(qEl2)qEl2.addEventListener('input',render);
 
 // reset
 if (_el('reset')) _el('reset').addEventListener('click',function(){
-  _queue = [];
-  _inflight = 0;
-  (_el('st-batt')||{}).innerHTML='battery —';
-  (_el('st-ram')||{}).innerHTML='ram —';
-  (_el('st-ping')||{}).innerHTML='ping —';
-  document.querySelectorAll('.ep').forEach(function(ep){
-    var st=ep.querySelector('.status');
-    if(st){st.className='status';st.textContent='';}
-    ep.querySelector('.ep-b').hidden=true;
-  });
-  updateStats();
+  var btn = _el('reset');
+  btn.textContent = '⟳ restarting…';
+  btn.disabled = true;
+
+  // MTAPI_247: full app restart via Android JS interface
+  if (typeof Android !== 'undefined' && Android.restartApp) {
+    console.log('[mtapi] full app restart (Android.restartApp)');
+    setTimeout(function(){ Android.restartApp(); }, 200);
+    return;
+  }
+
+  // fallback: POST /restart → Go exit → Java restart
+  console.log('[mtapi] fallback: POST /restart');
+  fetch('/restart?token=' + encodeURIComponent(TOKEN), { method: 'POST' })
+    .then(function(r){ return r.json(); })
+    .then(function(j){ console.log('[mtapi] restart:', j); })
+    .catch(function(e){ console.error('[mtapi] restart error:', e); })
+    .finally(function(){
+      setTimeout(function(){ location.reload(); }, 2000);
+    });
 });
 
 // live toggle
 if (_el('live')) _el('live').addEventListener('click',function(){setLive(!liveOn)});
 
 // init
+if (typeof document !== 'undefined') {
 render();
+try {
+  var m = document.getElementById("main");
+  document.title = document.title + " R:" + (m ? m.innerHTML.length : -1);
+} catch(e) {}
 
-} // MTAPI_143
 
 
 // MTAPI_145
@@ -525,7 +660,7 @@ render();
 updateThemeBtn();
 updateStats();
 setLive(false);
-} // MTAPI_150
+} // MTAPI_242: DOM init
 
 
 // kill any old SW
@@ -553,6 +688,282 @@ function isStatic(path) {
   return false;
 }
 
+
+
+// MTAPI_255: debug card — как endpoint, но с подотделами
+function makeDebugCard() {
+  var ep = document.createElement('details');
+  ep.className = 'ep';
+  ep.dataset.path = '/debug';
+  ep.open = false;
+
+  var head = document.createElement('summary');
+  head.className = 'ep-h';
+
+  var btn = document.createElement('button');
+  btn.className = 'run';
+  btn.textContent = 'GET /debug'; btn.title = 'Debug info: processes, port, uptime, memory, logcat, errors';
+  // клик на кнопку — только загрузка, без toggle
+  btn.addEventListener('click', function(e){
+    e.preventDefault();
+    e.stopPropagation();
+    ep.open = true;
+    loadDebugCard(ep);
+  });
+
+  var status = document.createElement('span');
+  status.className = 'status';
+  status.textContent = 'loading…';
+
+  head.appendChild(btn);
+  head.appendChild(status);
+
+  // клик на summary → раскрыть + автозагрузка (если ещё не грузили)
+  head.addEventListener('click', function(e){
+    if (e.target === btn) return; // btn сам обрабатывает
+    if (!ep.open) {
+      ep.open = true;
+      loadDebugCard(ep);
+    }
+  });
+
+  var body = document.createElement('div');
+  body.className = 'ep-b';
+  body.innerHTML = '<div class="empty">click GET /debug to load</div>';
+
+  ep.appendChild(head);
+  ep.appendChild(body);
+
+  return ep;
+}
+
+function loadDebugCard(ep) {
+  var status = ep.querySelector('.status');
+  var body = ep.querySelector('.ep-b');
+  var t0 = Date.now();
+
+  status.className = 'status loading';
+  status.innerHTML = '<span class="spin"></span>';
+
+  fetch('/debug?token=' + encodeURIComponent(TOKEN))
+    .then(function(r){ return r.json(); })
+    .then(function(j){
+      var ms = Date.now() - t0;
+      if (j && j.ok === false) {
+        status.className = 'status err';
+        status.textContent = ms + 'ms';
+        body.innerHTML = '<div class="empty" style="color:var(--err)">' + esc(j.error || 'error') + '</div>';
+        return;
+      }
+      status.className = 'status ok';
+      status.textContent = ms + 'ms';
+      var data = (j && j.data) ? j.data : j;
+      body.innerHTML = renderDebugSections(data);
+      setTimeout(attachLogcatSearch, 100);
+      ep.open = true;
+      // все sub — свёрнуты (по умолчанию)
+    })
+    .catch(function(e){
+      var ms = Date.now() - t0;
+      status.className = 'status err';
+      status.textContent = ms + 'ms';
+      body.innerHTML = '<div class="empty" style="color:var(--err)">' + esc(String(e)) + '</div>';
+    });
+}
+
+function renderDebugSections(data) {
+  if (!data || typeof data !== 'object') {
+    return '<div class="empty">no data</div>';
+  }
+
+  var h = '';
+
+  // ═══════════════════════════════════════════════════════
+  // 1. Processes
+  // ═══════════════════════════════════════════════════════
+  if (data.processes) {
+    h += '<details class="sub">';
+    h += '<summary title="ps -A | grep mtapi — какие процессы mtapi живы">Processes (ps -A | grep mtapi)</summary>';
+    h += '<pre class="debug-pre">' + esc(String(data.processes)) + '</pre>';
+    h += '</details>';
+  }
+
+  // ═══════════════════════════════════════════════════════
+  // 2. Port
+  // ═══════════════════════════════════════════════════════
+  if (data.port) {
+    h += '<details class="sub">';
+    h += '<summary title="Порт, на котором слушает Go-сервер">Port 7788</summary>';
+    h += '<pre class="debug-pre">' + esc(String(data.port)) + '</pre>';
+    h += '</details>';
+  }
+
+  // ═══════════════════════════════════════════════════════
+  // 3. Uptime
+  // ═══════════════════════════════════════════════════════
+  if (data.uptime) {
+    h += '<details class="sub">';
+    h += '<summary title="Сколько секунд работает Go-сервер (с последнего restart)">Uptime</summary>';
+    h += '<pre class="debug-pre">' + esc(String(data.uptime)) + '</pre>';
+    h += '</details>';
+  }
+
+  // ═══════════════════════════════════════════════════════
+  // 4. Memory
+  // ═══════════════════════════════════════════════════════
+  if (data.memory) {
+    h += '<details class="sub">';
+    h += '<summary title="Go runtime: heap, sys, GC count">Memory (Go)</summary>';
+    h += '<pre class="debug-pre">' + esc(String(data.memory)) + '</pre>';
+    h += '</details>';
+  }
+
+  // ═══════════════════════════════════════════════════════
+  // 5. Logcat — search + levels + live
+  // ═══════════════════════════════════════════════════════
+  if (data.logcat) {
+    var logcat = String(data.logcat);
+
+    h += '<details class="sub" id="logcat-sub">';
+    h += '<summary title="Android logcat, last 50 lines. Используй уровни V/D/I/W/E/F и search">Logcat (last 50)</summary>';
+
+    // toolbar: levels + search
+    h += '<div class="logcat-toolbar">';
+    h += '<div class="logcat-levels">';
+    ['V', 'D', 'I', 'W', 'E', 'F'].forEach(function(lvl){
+      h += '<label class="logcat-lvl">';
+      h += '<input type="checkbox" data-lvl="' + lvl + '" checked >';
+      h += '<span class="lvl-' + lvl.toLowerCase() + '" title="' + (typeof LOG_LEVEL_TITLES !== 'undefined' ? (typeof LOG_LEVEL_TITLES !== 'undefined' && (typeof LOG_LEVEL_TITLES !== 'undefined' && LOG_LEVEL_TITLES[lvl]) ? LOG_LEVEL_TITLES[lvl] : lvl) ? (typeof LOG_LEVEL_TITLES !== 'undefined' && LOG_LEVEL_TITLES[lvl]) ? LOG_LEVEL_TITLES[lvl] : lvl : lvl : lvl) + '">' + lvl + '</span>';
+      h += '</label>';
+    });
+    h += '</div>';
+    h += '<input type="text" class="logcat-search" placeholder="search…" title="🔍 Search logcat text (case-insensitive)" >';
+    h += '<button class="logcat-btn" onclick="reloadLogcat()" title="⟳ Reload /debug (manual)">⟳</button>';
+    h += '<label class="logcat-live" title="Auto-reload /debug каждые 2s"><input type="checkbox" id="logcat-live" onchange="toggleLogcatLive()"> live</label>';
+    h += '</div>';
+
+    // logcat body
+    h += '<pre class="debug-pre logcat-pre" id="logcat-pre">' + renderLogcatLines(logcat) + '</pre>';
+
+    h += '</details>';
+  }
+
+  // ═══════════════════════════════════════════════════════
+  // 6. Errors (FATAL / ANR)
+  // ═══════════════════════════════════════════════════════
+  if (data.errors) {
+    h += '<details class="sub">';
+    h += '<summary title="Критические: FATAL exception или ANR in dev.mtapi">Errors (FATAL / ANR)</summary>';
+    h += '<pre class="debug-pre debug-errors">' + esc(String(data.errors)) + '</pre>';
+    h += '</details>';
+  }
+
+  return h || '<div class="empty">no debug info</div>';
+}
+
+// MTAPI_260: logcat levels + search
+function renderLogcatLines(logcat) {
+  var lines = logcat.split('\n');
+  var out = '';
+  lines.forEach(function(line, i){
+    var lvl = detectLogLevel(line);
+    var cls = 'logcat-line lvl-' + lvl.toLowerCase();
+    out += '<span class="' + cls + '" data-line="' + i + '">' + esc(line) + '</span>\n';
+  });
+  return out;
+}
+
+function detectLogLevel(line) {
+  // logcat format: "10-20 12:34:56.789  PID  TID LEVEL TAG: message"
+  var m = line.match(/\s([VDIWEF])\s/);
+  if (m) return m[1];
+  // fallback — искать в тексте
+  if (/\bFATAL\b/.test(line)) return 'F';
+  if (/\bERROR\b|\bE\s/.test(line)) return 'E';
+  if (/\bWARN\b|\bW\s/.test(line)) return 'W';
+  if (/\bDEBUG\b/.test(line)) return 'D';
+  if (/\bINFO\b/.test(line)) return 'I';
+  return 'V';
+}
+
+// MTAPI_282: вешаем addEventListener на все .logcat-search после render
+// MTAPI_281: highlightText — подсветка всех вхождений query
+// MTAPI_281: highlightText — подсветка всех вхождений query
+function toggleLogcatLive() {
+  var live = document.getElementById('logcat-live');
+  if (live && live.checked) {
+    window._logcatLiveTimer = setInterval(reloadLogcat, 2000);
+  } else {
+    if (window._logcatLiveTimer) clearInterval(window._logcatLiveTimer);
+    window._logcatLiveTimer = null;
+  }
+}
+
+function reloadLogcat() {
+  var pre = document.getElementById('logcat-pre');
+  if (!pre) return;
+  fetch('/debug?token=' + encodeURIComponent(TOKEN))
+    .then(function(r){ return r.json(); })
+    .then(function(j){
+      var data = (j && j.data) ? j.data : j;
+      if (data.logcat) {
+        pre.innerHTML = renderLogcatLines(String(data.logcat));
+        filterLogcat();
+      }
+    })
+    .catch(function(){});
+}
+
+// MTAPI_260: logcat levels + search
+function renderLogcatLines(logcat) {
+  var lines = logcat.split('\n');
+  var out = '';
+  lines.forEach(function(line, i){
+    var lvl = detectLogLevel(line);
+    var cls = 'logcat-line lvl-' + lvl.toLowerCase();
+    out += '<span class="' + cls + '" data-line="' + i + '">' + esc(line) + '</span>\n';
+  });
+  return out;
+}
+
+function detectLogLevel(line) {
+  // logcat format: "10-20 12:34:56.789  PID  TID LEVEL TAG: message"
+  var m = line.match(/\s([VDIWEF])\s/);
+  if (m) return m[1];
+  // fallback — искать в тексте
+  if (/\bFATAL\b/.test(line)) return 'F';
+  if (/\bERROR\b|\bE\s/.test(line)) return 'E';
+  if (/\bWARN\b|\bW\s/.test(line)) return 'W';
+  if (/\bDEBUG\b/.test(line)) return 'D';
+  if (/\bINFO\b/.test(line)) return 'I';
+  return 'V';
+}
+
+function toggleLogcatLive() {
+  var live = document.getElementById('logcat-live');
+  if (live && live.checked) {
+    window._logcatLiveTimer = setInterval(reloadLogcat, 2000);
+  } else {
+    if (window._logcatLiveTimer) clearInterval(window._logcatLiveTimer);
+    window._logcatLiveTimer = null;
+  }
+}
+
+function reloadLogcat() {
+  var pre = document.getElementById('logcat-pre');
+  if (!pre) return;
+  fetch('/debug?token=' + encodeURIComponent(TOKEN))
+    .then(function(r){ return r.json(); })
+    .then(function(j){
+      var data = (j && j.data) ? j.data : j;
+      if (data.logcat) {
+        pre.innerHTML = renderLogcatLines(String(data.logcat));
+        filterLogcat();
+      }
+    })
+    .catch(function(){});
+}
+
 // ─── MTAPI_140: exports для тестов (node) ───
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
@@ -569,6 +980,15 @@ if (typeof module !== 'undefined' && module.exports) {
     cellStr: typeof cellStr === 'function' ? cellStr : null,
     ENDPOINTS: typeof ENDPOINTS !== 'undefined' ? ENDPOINTS : null,
     STATIC_ENDPOINTS: typeof STATIC_ENDPOINTS !== 'undefined' ? STATIC_ENDPOINTS : null,
-    isStatic: typeof isStatic === 'function' ? isStatic : null
+    isStatic: typeof isStatic === 'function' ? isStatic : null,
+    makeDebugCard: typeof makeDebugCard === 'function' ? makeDebugCard : null,
+    loadDebugCard: typeof loadDebugCard === 'function' ? loadDebugCard : null,
+    renderDebugSections: typeof renderDebugSections === 'function' ? renderDebugSections : null,
+    attachLogcatSearch: (typeof window.attachLogcatSearch === 'function') ? window.attachLogcatSearch : null,
+    highlightText: (typeof window.highlightText === 'function') ? window.highlightText : null,
+    filterLogcat: (typeof window.filterLogcat === 'function') ? window.filterLogcat : null,
+    makeDebugCard: typeof makeDebugCard === 'function' ? makeDebugCard : null,
+    loadDebugCard: typeof loadDebugCard === 'function' ? loadDebugCard : null,
+    renderDebugSections: typeof renderDebugSections === 'function' ? renderDebugSections : null
   };
 }

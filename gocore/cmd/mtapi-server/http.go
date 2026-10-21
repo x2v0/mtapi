@@ -10,7 +10,9 @@ import (
 	"strconv"
 	"strings"
 	"time"
-)
+
+	"os/exec"
+	"runtime")
 
 type apiServer struct {
 	api   AndroidAPI
@@ -448,6 +450,27 @@ func startHTTP(api AndroidAPI, token string) error {
 		fmt.Fprint(w, swJS)
 	})
 	mux.HandleFunc("/call", s.handleCall)
+	mux.HandleFunc("/debug", func(w http.ResponseWriter, r *http.Request) {
+		if !s.checkAuth(r) {
+			s.writeJSON(w, 401, map[string]any{"ok": false, "error": "auth_failed"})
+			return
+		}
+		s.writeJSON(w, 200, map[string]any{"ok": true, "data": collectDebug()})
+	})
+	mux.HandleFunc("/restart", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "POST" {
+			s.writeJSON(w, 405, map[string]any{"ok": false, "error": "POST only"})
+			return
+		}
+		if ba, ok := s.api.(*bridgeAPI); ok {
+			ba.b.Reset()
+		}
+		s.writeJSON(w, 200, map[string]any{"ok": true, "data": "restarting"})
+		go func() {
+			time.Sleep(500 * time.Millisecond)
+			os.Exit(0)
+		}()
+	})
 
 	// convenience routes
 	methods := []string{"ping", "battery", "wifi", "device", "location",
@@ -497,3 +520,52 @@ func startHTTP(api AndroidAPI, token string) error {
 	}()
 	return srv.Serve(ln)
 }
+
+// MTAPI_278: collectDebug — debug info
+func collectDebug() map[string]any {
+	info := map[string]any{}
+
+	// processes
+	cmd := exec.Command("ps", "-A")
+	if out, err := cmd.Output(); err == nil {
+		var lines []string
+		for _, l := range strings.Split(string(out), "\n") {
+			if strings.Contains(l, "mtapi") {
+				lines = append(lines, l)
+			}
+		}
+		info["processes"] = strings.Join(lines, "\n")
+	} else {
+		info["processes"] = "error: " + err.Error()
+	}
+
+	info["port"] = "7788 (127.0.0.1)"
+
+	// uptime
+	info["uptime"] = fmt.Sprintf("%.1f seconds", time.Since(startTime).Seconds())
+
+	// memory
+	var m runtime.MemStats
+	runtime.ReadMemStats(&m)
+	info["memory"] = fmt.Sprintf("Go: %d KB heap, %d KB sys, %d GC",
+		m.HeapAlloc/1024, m.Sys/1024, m.NumGC)
+
+	// logcat
+	if out, err := exec.Command("logcat", "-d", "-t", "50").Output(); err == nil {
+		info["logcat"] = string(out)
+	} else {
+		info["logcat"] = "logcat error: " + err.Error()
+	}
+
+	// errors (FATAL/ANR)
+	if out, err := exec.Command("sh", "-c",
+		"logcat -d 2>&1 | grep -iE 'FATAL|ANR' | tail -20").Output(); err == nil {
+		info["errors"] = string(out)
+	} else {
+		info["errors"] = "(none)"
+	}
+
+	return info
+}
+
+var startTime = time.Now()

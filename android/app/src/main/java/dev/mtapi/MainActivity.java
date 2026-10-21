@@ -14,6 +14,33 @@ import android.widget.FrameLayout;
 
 public class MainActivity extends Activity {
 
+    // MTAPI_247: restart whole app (MainActivity + ApiService + Go subprocess)
+    public void restartApp() {
+        android.util.Log.i("mtapi", "restartApp() called");
+        try {
+            // 1. stop ApiService (kills Go subprocess)
+            Intent svc = new Intent(this, ApiService.class);
+            stopService(svc);
+            android.util.Log.i("mtapi", "restartApp: stopService OK");
+
+            // 2. restart via AlarmManager + finishAffinity (без killProcess — MIUI блокирует)
+            android.app.AlarmManager am = (android.app.AlarmManager) getSystemService(ALARM_SERVICE);
+            android.app.PendingIntent pi = android.app.PendingIntent.getActivity(
+                this, 0,
+                new Intent(this, MainActivity.class),
+                android.app.PendingIntent.FLAG_CANCEL_CURRENT | android.app.PendingIntent.FLAG_IMMUTABLE
+            );
+            am.set(android.app.AlarmManager.RTC, System.currentTimeMillis() + 500, pi);
+            android.util.Log.i("mtapi", "restartApp: AlarmManager set +500ms");
+
+            // 3. finishAffinity + killProcess (fallback)
+            finishAffinity();
+            android.os.Process.killProcess(android.os.Process.myPid());
+        } catch (Throwable t) {
+            android.util.Log.e("mtapi", "restartApp failed: " + t);
+        }
+    }
+
     private WebView webView;
     private volatile boolean pollActive = true;
     private Thread pollThread;
@@ -35,6 +62,19 @@ public class MainActivity extends Activity {
         super.onCreate(savedInstanceState);
 
         webView = new WebView(this);
+
+        // MTAPI_247: JS interface for full app restart
+        webView.addJavascriptInterface(new Object() {
+            @android.webkit.JavascriptInterface
+            public void restartApp() {
+                MainActivity.this.restartApp();
+            }
+        
+            @android.webkit.JavascriptInterface
+            public String saveFile(String name, String data) {
+                return MainActivity.this.saveFileToDownloads(name, data);
+            }
+}, "Android");
         WebSettings ws = webView.getSettings();
         ws.setJavaScriptEnabled(true);
         ws.setDomStorageEnabled(true);
@@ -138,4 +178,24 @@ public class MainActivity extends Activity {
         }
         super.onDestroy();
     }
+
+    // MTAPI_264: сохранить файл в Downloads
+    @android.webkit.JavascriptInterface
+    public String saveFileToDownloads(String name, String data) {
+        try {
+            java.io.File dir = android.os.Environment.getExternalStoragePublicDirectory(
+                android.os.Environment.DIRECTORY_DOWNLOADS);
+            if (!dir.exists()) dir.mkdirs();
+            java.io.File f = new java.io.File(dir, name);
+            java.io.FileOutputStream fos = new java.io.FileOutputStream(f);
+            fos.write(data.getBytes("UTF-8"));
+            fos.close();
+            android.util.Log.i("mtapi", "saveFileToDownloads: " + f.getAbsolutePath() + " (" + data.length() + "b)");
+            return f.getAbsolutePath();
+        } catch (Throwable t) {
+            android.util.Log.e("mtapi", "saveFileToDownloads failed: " + t);
+            return null;
+        }
+    }
+
 }

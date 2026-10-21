@@ -1,71 +1,111 @@
-# mtapi — build targets
-SHELL := /bin/bash
-export TMPDIR := $(HOME)/tmp
+# mtapi Makefile
 
-.PHONY: help server apk install grant verify live cli all clean
+SRV      := gocore/cmd/mtapi-server
+TEST_DIR := test
+SHARED   := $(HOME)/dwn/shared-tests
+RUNNER   := scripts/test-runner.sh
+SO       := android/app/src/main/jniLibs/arm64-v8a/libmtapi-server.so
+APK_CFG  := $(HOME)/tmp/mtapi-standalone.yaml
+APK_OUT  := $(CURDIR)/build/mtapi-debug.apk
+APKS_DIR := $(HOME)/dwn/apks
+W2A      := $(HOME)/w2a
 
-help:
-	@echo "mtapi targets:"
-	@echo "  make server   build Go binary (libmtapi-server.so)"
-	@echo "  make apk      build APK via w2a"
-	@echo "  make install  install via rish (fallback termux-open)"
-	@echo "  make grant    grant Android permissions via rish"
-	@echo "  make verify   static file checks"
-	@echo "  make live     live endpoints test (ping, battery, ...)"
-	@echo "  make cli      install ~/bin/mtapi"
-	@echo "  make all      apk + install + grant + cli"
-	@echo "  make clean    remove build artifacts"
+.PHONY: all test build install so apk clean help
 
-server:
-	bash scripts/build_server.sh
+all: test build
 
-apk: server
-	cd ~/w2a && go run ./cmd/wta build -c ~/mtapi/mtapi.yaml
+# ── test: unit + universal с прогрессом ──
+test:
+	@echo ""
+	@echo "══════════════════════════════════════════════════"
+	@echo "  MTAPI TESTS"
+	@echo "══════════════════════════════════════════════════"
+	cd $(TEST_DIR) && $(CURDIR)/$(RUNNER) "mtapi/*.test.js" \
+	  node --test $$(ls mtapi-*.test.js 2>/dev/null)
+	$(CURDIR)/$(RUNNER) "universal: dom" \
+	  env APP_JS=$(CURDIR)/$(SRV)/app.js \
+	      INDEX_HTML=$(CURDIR)/$(SRV)/index.html \
+	      STYLE_CSS=$(CURDIR)/$(SRV)/style.css \
+	      node --test $(SHARED)/universal-dom.test.js
+	$(CURDIR)/$(RUNNER) "universal: braces" \
+	  env APP_JS=$(CURDIR)/$(SRV)/app.js \
+	      node --test $(SHARED)/universal-braces.test.js
+	$(CURDIR)/$(RUNNER) "universal: syntax" \
+	  env APP_JS=$(CURDIR)/$(SRV)/app.js \
+	      INDEX_HTML=$(CURDIR)/$(SRV)/index.html \
+	      node --test $(SHARED)/universal-syntax.test.js
+	@$(CURDIR)/$(RUNNER) "universal: node" \
+	  env APP_JS=$(CURDIR)/$(SRV)/app.js \
+	      node --test $(SHARED)/universal-node.test.js
+	@echo ""
+	@echo "══════════════════════════════════════════════════"
+	@echo "  ALL TESTS COMPLETE"
+	@echo "══════════════════════════════════════════════════"
 
-install: apk
-	bash scripts/install.sh
+build: so apk
 
-grant:
-	@for p in READ_CONTACTS READ_CALL_LOG READ_SMS SEND_SMS \
-	          ACCESS_FINE_LOCATION ACCESS_COARSE_LOCATION CAMERA \
-	          POST_NOTIFICATIONS READ_PHONE_STATE RECORD_AUDIO \
-	          BLUETOOTH_CONNECT BLUETOOTH_SCAN; do \
-	    rish -c "pm grant dev.mtapi android.permission.$$p" 2>/dev/null || true; \
-	done
-	@echo "permissions granted"
+so:
+	@echo "══════════════════════════════════════════════════"
+	@echo "  BUILD .so"
+	@echo "══════════════════════════════════════════════════"
+	rm -f $(SO)
+	cd $(CURDIR) && bash scripts/build_server.sh 2>&1 | tail -5
+	@test -f $(SO) || (echo "✗ .so not built" && exit 1)
+	@ls -lh $(SO)
 
-cli:
-	mkdir -p ~/bin
-	cp bin/mtapi ~/bin/mtapi
-	chmod +x ~/bin/mtapi
-	@echo "installed ~/bin/mtapi — add ~/bin to PATH"
+apk:
+	@echo "══════════════════════════════════════════════════"
+	@echo "  BUILD APK"
+	@echo "══════════════════════════════════════════════════"
+	@mkdir -p $(HOME)/tmp $(CURDIR)/build
+	@printf '%s\n' \
+	 'app:' \
+	 '  name: "mtapi"' \
+	 '  package: dev.mtapi' \
+	 '  targetSdk: 29' \
+	 '  versionCode: 1' \
+	 '  versionName: "1.6.0"' \
+	 'type: custom' \
+	 'custom:' \
+	 '  sources:' \
+	 '    - "$(CURDIR)/android/app/src/main/java"' \
+	 '  jniLibs:' \
+	 '    - "$(CURDIR)/android/app/src/main/jniLibs"' \
+	 '  manifest: "$(CURDIR)/android/app/src/main/AndroidManifest.xml"' \
+	 '  resources: "$(CURDIR)/android/app/src/main/res"' \
+	 '  abis: [arm64-v8a]' \
+	 '  minApi: 26' \
+	 '  targetApi: 34' \
+	 '  javaRelease: "17"' \
+	 'output:' \
+	 '  path: "$(CURDIR)/build/mtapi-debug.apk"' \
+	 > $(APK_CFG)
+	cd $(W2A) && go run ./cmd/wta build -c $(APK_CFG) 2>&1 | tail -8
+	@test -f $(APK_OUT) || (echo "✗ APK not built" && exit 1)
+	@ls -lh $(APK_OUT)
+	@mkdir -p $(APKS_DIR) && cp -f $(APK_OUT) $(APKS_DIR)/mtapi-$$(date +%Y%m%d-%H%M%S).apk
 
-verify:
-	@test -f gocore/cmd/mtapi-server/main.go && echo "  ok main.go"
-	@test -f gocore/cmd/mtapi-server/http.go && echo "  ok http.go"
-	@test -f gocore/cmd/mtapi-server/bridge.go && echo "  ok bridge.go"
-	@test -f gocore/cmd/mtapi-server/api.go && echo "  ok api.go"
-	@test -f android/app/src/main/java/dev/mtapi/GoServerLauncher.java && echo "  ok GoServerLauncher"
-	@test -f android/app/src/main/java/dev/mtapi/JavaBridge.java && echo "  ok JavaBridge"
-	@test -f android/app/src/main/java/dev/mtapi/AndroidApiImpl.java && echo "  ok AndroidApiImpl"
-	@test -f README.md && echo "  ok README"
-	@test -f ARCHITECTURE.md && echo "  ok ARCHITECTURE"
-	@test -f CHANGELOG.md && echo "  ok CHANGELOG"
-	@test -f bin/mtapi && echo "  ok bin/mtapi"
-
-live:
-	@T=$$(cat ~/.config/mtapi/token 2>/dev/null); \
-	[ -z "$$T" ] && { echo "no token"; exit 1; }; \
-	for p in ping battery device cpu/detail sensors; do \
-	  echo "--- /$$p"; \
-	  curl -s -m 3 -H "Authorization: Bearer $$T" "http://127.0.0.1:7788/$$p" | head -c 200; \
-	  echo; \
-	done
-
-all: apk install grant cli
-	@echo "mtapi installed"
+install: build
+	@echo "══════════════════════════════════════════════════"
+	@echo "  INSTALL"
+	@echo "══════════════════════════════════════════════════"
+	ls -t $(APKS_DIR)/*.apk | head -1 | xargs -I {} cp -f {} /sdcard/Download/mtapi.apk
+	rish -c 'am force-stop dev.mtapi' || true
+	rish -c 'cp /sdcard/Download/mtapi.apk /data/local/tmp/mtapi.apk'
+	rish -c 'pm install -r -t --user 0 /data/local/tmp/mtapi.apk'
+	rish -c 'am start -W -n dev.mtapi/.MainActivity'
 
 clean:
-	rm -f android/app/src/main/jniLibs/arm64-v8a/libmtapi-server.so
-	rm -f android/app/build/outputs/apk/mtapi-debug.apk
-	
+	rm -f $(SO) $(APK_OUT)
+	@echo "✓ cleaned"
+
+help:
+	@echo "mtapi Makefile"
+	@echo ""
+	@echo "  make test       — все тесты (mtapi + universal) с прогрессом"
+	@echo "  make build      — .so + APK"
+	@echo "  make all        — test → build"
+	@echo "  make so         — только .so"
+	@echo "  make apk        — только APK"
+	@echo "  make install    — build + install"
+	@echo "  make clean      — удалить .so + APK"

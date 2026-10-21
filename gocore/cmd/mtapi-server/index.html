@@ -5,28 +5,28 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#1e1e1e">
 <link rel="manifest" href="/manifest.json">
-<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%234fc3f7'/%3E%3Ctext x='16' y='22' font-family='monospace' font-size='14' font-weight='700' text-anchor='middle' fill='%231e1e1e'%3Em%3C/text%3E%3C/svg%3E">
+<link rel="icon" type="image/jpeg" href="/me.jpg">
 <title>mtapi</title>
 <link rel="stylesheet" href="/style.css">
 </head>
 <body>
 <div class="wrap">
 <header>
-  <div class="head-right">
-    <button class="icon-btn" id="theme" title="toggle light/dark">&#127769;</button>
-        <button class="icon-btn" id="live" title="auto">◉ auto</button>
-    <button class="icon-btn danger" id="reset" title="drop all pending, clear cache">⟲ reset</button>
-  </div>
-</header>
+      <div class="head-right">
+        <button class="icon-btn" id="theme" title="🌙 Light / Dark theme (localStorage: mtapi-theme)" aria-label="toggle theme">&#127769;</button>
+        <button class="icon-btn" id="live" title="◉ Auto-refresh: обновляет battery/ram каждые 5s" aria-label="toggle auto-refresh">◉ auto</button>
+      </div>
+        <button class="icon-btn danger" id="reset" title="⟳ Restart: полный перезапуск Go-сервера + сброс кэша" aria-label="restart server">⟲ reset</button>
+    </header>
 <div class="stats">
-  <div class="stat" id="st-batt">battery &mdash;</div>
-  <div class="stat" id="st-ram">ram &mdash;</div>
-      <div class="stat" id="st-ping">ping &mdash;</div>
-</div>
-<input class="search" id="q" placeholder="filter endpoints&hellip; (battery, sensors, net)">
+      <div class="stat" id="st-batt" >battery &mdash;</div>
+      <div class="stat" id="st-ram" >ram &mdash;</div>
+    </div>
+<input class="search" id="q" placeholder="filter endpoints… (battery, sensors, net)" title="🔍 Filter endpoints by path (live, case-insensitive)" aria-label="filter endpoints">
 <main id="main"></main>
 </div>
 
+<script>var TOKEN="{{TOKEN}}";</script>
 <script src="/app.js"></script>
 
 </body>

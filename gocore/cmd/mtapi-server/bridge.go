@@ -123,3 +123,24 @@ func (b *bridge) cached(key string, ttl time.Duration, fn func() (string, error)
 	}
 	return s, err
 }
+
+// MTAPI_252: Reset bridge — clear pending, ttlCache, seq
+func (b *bridge) Reset() {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.pend.Range(func(k, v any) bool {
+		ch := v.(chan *response)
+		select {
+		case ch <- nil:
+		default:
+		}
+		b.pend.Delete(k)
+		return true
+	})
+	ttlCache.Range(func(k, v any) bool {
+		ttlCache.Delete(k)
+		return true
+	})
+	b.seq.Store(0)
+	log.Printf("[mtapi] bridge: RESET — pend=0, seq=0, ttlCache=0")
+}
