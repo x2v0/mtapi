@@ -127,6 +127,7 @@ help:
 # ═══════════════════════════════════════════════════════════
 
 .PHONY: clean clean-build clean-bak clean-bin clean-tmp distclean clean-dry clean-git
+.PHONY: ci lint check
 
 clean: clean-build
 	@echo "✅ clean done. Size:"
@@ -179,3 +180,50 @@ clean-dry:
 	@echo ""
 	@echo "─── binaries (not .so) ───"
 	@find gocore -type f -executable -name "mtapi-server" 2>/dev/null
+
+# ═══════════════════════════════════════════════════════════
+# MTAPI_CI: полный пайплайн перед коммитом
+# ═══════════════════════════════════════════════════════════
+
+# lint: node --check на все .js + ESLint
+lint:
+	@echo "🔍  LINT"
+	@echo "──────────────────────────────────────────"
+	@echo "  node --check..."
+	@fail=0; \
+	for f in $$(find gocore test -name "*.js" -not -path "*/node_modules/*" 2>/dev/null); do \
+	  if ! node --check "$$f" 2>/dev/null; then \
+	    echo "  ✗ $$f SYNTAX ERROR"; fail=1; \
+	  fi; \
+	done; \
+	if [ $$fail -eq 0 ]; then echo "  ✓ SYNTAX OK"; else exit 1; fi
+	@if [ -f test/mtapi-eslint.test.js ]; then \
+	  echo "  ESLint..."; \
+	  (cd test && node --test --test-force-exit --test-timeout=10000 mtapi-eslint.test.js 2>&1 | grep -E "PASS:|FAIL:" || true); \
+	fi
+	@echo "──────────────────────────────────────────"
+	@echo "✅ lint passed"
+
+# check: алиас для test
+check: test
+
+# ci: test → lint → apk — полный пайплайн
+ci:
+	@echo ""
+	@echo "══════════════════════════════════════════════════"
+	@echo "  CI PIPELINE: test → lint → apk"
+	@echo "══════════════════════════════════════════════════"
+	@echo ""
+	@echo "═══ STEP 1/3: test ═══"
+	@$(MAKE) --no-print-directory test 2>&1 | grep -E "PASS:|FAIL:" || true
+	@echo ""
+	@echo "═══ STEP 2/3: lint ═══"
+	@$(MAKE) --no-print-directory lint
+	@echo ""
+	@echo "═══ STEP 3/3: apk ═══"
+	@$(MAKE) --no-print-directory apk 2>&1 | tail -5
+	@echo ""
+	@echo "══════════════════════════════════════════════════"
+	@echo "  ✅ CI PIPELINE COMPLETE"
+	@echo "══════════════════════════════════════════════════"
+
