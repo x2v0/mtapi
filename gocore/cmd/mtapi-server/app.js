@@ -5,19 +5,23 @@ if (typeof window === 'undefined') { globalThis.window = {}; }
 function _fetch(url, opts) {
   opts = opts || {};
   // MTAPI_299: WebView-safe timeout
+  var _to = null;
   if (typeof AbortController !== 'undefined') {
     try {
       var ctrl = new AbortController();
-      opts.signal = ctrl.signal;
-      var _to = setTimeout(function(){ try { ctrl.abort(); } catch(e){} }, 5000);
+      if (!opts.signal) opts.signal = ctrl.signal;
+      _to = setTimeout(function(){ try { ctrl.abort(); } catch(e){} }, 5000);
       if (_to && typeof _to.unref === 'function') _to.unref();
     } catch (e) {
       // AbortController not supported — ignore
     }
   }
-  return fetch(url, opts);
+  var _p = fetch(url, opts);
+  if (_to) _p.then(function(){ clearTimeout(_to); }, function(){ clearTimeout(_to); });
+  return _p;
 }
-// MTAPI_270: LOG_LEVEL_TITLES — в САМОМ НАЧАЛЕ (до renderDebugSections)
+
+// MTAPI_270: LOG_LEVEL_TITLES — единственная копия (дубликат удалён)
 var LOG_LEVEL_TITLES = {
   V: 'V — Verbose (все сообщения)',
   D: 'D — Debug (отладочная информация)',
@@ -27,7 +31,6 @@ var LOG_LEVEL_TITLES = {
   F: 'F — Fatal (критические, краш)',
 };
 
-// MTAPI_270: LOG_LEVEL_TITLES — в САМОМ НАЧАЛЕ (до renderDebugSections)
 // ─── MTAPI_145: localStorage polyfill ───
 (function() {
   if (typeof localStorage === 'undefined') {
@@ -108,7 +111,7 @@ const SLOW = new Set([
   "/calendar?days=7","/app/list"
 ]);
 
-// ─── renderers ────────────────────────────────────────
+// ─── renderers (единственные копии — дубликаты удалены) ──
 function esc(s){return String(s).replace(/[&<>"']/g,function(c){
   return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})}
 function cellStr(v){
@@ -116,6 +119,19 @@ function cellStr(v){
   if(v===undefined)return'';
   if(typeof v==='object')return JSON.stringify(v);
   return String(v);
+}
+function classifyValue(v){
+  if(v===null||v===undefined)return'v-null';
+  if(typeof v==='boolean')return v?'v-bool-t':'v-bool-f';
+  if(typeof v==='number')return'v-num';
+  return'';
+}
+function _isScalar(v){
+  return v===null||v===undefined||
+    typeof v==='number'||typeof v==='string'||typeof v==='boolean';
+}
+function _scalarCell(v){
+  return '<td class="'+classifyValue(v)+'">'+esc(cellStr(v))+'</td>';
 }
 
 // MTAPI_354: copyLogcat — копировать logcat в clipboard
@@ -156,18 +172,15 @@ function _copyFallback(text) {
 if (typeof window !== "undefined") window._openDevtools = function(wsUrl) {
   try {
     var encoded = encodeURIComponent(wsUrl);
-    // 1. попробовать Android.intent (Chrome)
     if (typeof Android !== 'undefined' && Android.openDevtools) {
       Android.openDevtools(wsUrl);
       return;
     }
-    // 2. iframe devtools frontend (встроенный)
     var frame = document.getElementById('devtools-frame');
     if (frame) {
       var url = 'https://chrome-devtools-frontend.appspot.com/serve_file/@/inspector.html?ws=' + encoded;
       frame.innerHTML = '<iframe src="' + url + '" style="width:100%;height:100%;border:none"></iframe>';
     }
-    // 3. fallback — копировать ws и открыть chrome://inspect
     console.log('[mtapi] devtools:', wsUrl);
   } catch(e) { console.log('[mtapi] openDevtools err:', e.message); }
 };
@@ -191,51 +204,6 @@ if (typeof window !== "undefined") window._copyDevtools = function(wsUrl) {
 };
 
 
-// MTAPI_283: window.filterLogcat — глобальная функция для oninput
-
-
-// MTAPI_283: highlightText — глобальная
-
-
-// MTAPI_283: attachLogcatSearch — навешиваем addEventListener
-
-
-function classifyValue(v){
-  if(v===null||v===undefined)return'v-null';
-  if(typeof v==='boolean')return v?'v-bool-t':'v-bool-f';
-  if(typeof v==='number')return'v-num';
-  return'';
-}
-// ─── MTAPI_DEEP_TABLES_77: deep recursive renderer ────
-// object → 30/70 kv table
-// nested object → recurses with depth indent
-// array of scalars → inline chips
-// array of objects (flat) → multi-col table with scalar cells
-// array of objects (nested inside) → multi-col table + expandable sub-cell
-// array of arrays → multi-col table
-
-function esc(s){return String(s).replace(/[&<>"']/g,function(c){
-  return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})}
-function cellStr(v){
-  if(v===null)return'null';
-  if(v===undefined)return'';
-  if(typeof v==='object')return JSON.stringify(v);
-  return String(v);
-}
-function classifyValue(v){
-  if(v===null||v===undefined)return'v-null';
-  if(typeof v==='boolean')return v?'v-bool-t':'v-bool-f';
-  if(typeof v==='number')return'v-num';
-  return'';
-}
-function _isScalar(v){
-  return v===null||v===undefined||
-    typeof v==='number'||typeof v==='string'||typeof v==='boolean';
-}
-function _scalarCell(v){
-  return '<td class="'+classifyValue(v)+'">'+esc(cellStr(v))+'</td>';
-}
-
 // Render any nested value as inline HTML (used INSIDE table cells)
 function renderCell(v, depth){
   if(_isScalar(v)) return '<span class="'+classifyValue(v)+'">'+esc(cellStr(v))+'</span>';
@@ -244,12 +212,10 @@ function renderCell(v, depth){
   if(Array.isArray(v)){
     if(v.length === 0) return '<span class="empty">[]</span>';
     if(_isScalar(v[0])){
-      // scalar array: [1, 2, 3] → chips (не сворачиваем — 1 строка)
       return '<span style="font-size:10px">' +
         v.map(function(x){return '<code>'+esc(cellStr(x))+'</code>';}).join(' ') +
         '</span>';
     }
-    // array of arrays / objects → <details class="sub">
     if(Array.isArray(v[0])){
       var h = '<details class="sub"><summary>[['+v.length+']]</summary>';
       h += '<table style="font-size:10px;margin:2px 0"><tbody>';
@@ -262,7 +228,6 @@ function renderCell(v, depth){
       });
       return h + '</tbody></table></details>';
     }
-    // array of objects → mini table
     var cols = [], seen = {};
     v.forEach(function(o){
       if(o && typeof o==='object' && !Array.isArray(o)){
@@ -290,7 +255,6 @@ function renderCell(v, depth){
   }
 
   if(typeof v === 'object'){
-    // nested object → <details class="sub">
     var n = Object.keys(v).length;
     var h = '<details class="sub"><summary>{'+n+'}</summary>';
     h += '<table class="kv" style="font-size:10px;margin:2px 0"><tbody>';
@@ -319,7 +283,6 @@ function renderObj(obj, depth){
 
   var h = '';
 
-  // 1. Scalar table (30/70) — открыта всегда
   if(scalars.length){
     h += '<table class="kv"><tbody>';
     scalars.forEach(function(it){
@@ -328,7 +291,6 @@ function renderObj(obj, depth){
     h += '</tbody></table>';
   }
 
-  // 2. Nested items — <details class="sub"> (свёрнуты по умолчанию)
   nested.forEach(function(it){
     var k = it.k, v = it.v;
     var count = (Array.isArray(v)) ? v.length : Object.keys(v).length;
@@ -339,15 +301,12 @@ function renderObj(obj, depth){
         h += '<details class="sub"><summary>'+label+'</summary>'+
              '<span class="empty">[]</span></details>';
       } else if(_isScalar(v[0])){
-        // scalar array → chips (открыто, не сворачиваем — 1 строка)
         h += '<details class="sub" open><summary>'+label+'</summary>'+
              '<div style="padding:4px 0 4px 12px">' + renderCell(v, depth+1) + '</div></details>';
       } else if(Array.isArray(v[0])){
-        // array of arrays
         h += '<details class="sub"><summary>'+label+'</summary>'+
              '<div style="padding-left:12px">' + renderCell(v, depth+1) + '</div></details>';
       } else {
-        // array of objects — table, each cell rendered recursively
         var cols = [], seen = {};
         v.forEach(function(o){
           if(o && typeof o==='object' && !Array.isArray(o)){
@@ -371,7 +330,6 @@ function renderObj(obj, depth){
         h += '</tbody></table></details>';
       }
     } else if(typeof v === 'object'){
-      // nested object → <details class="sub">
       if(depth < 5){
         h += '<details class="sub"><summary>'+label+'</summary>';
         h += renderObj(v, depth+1);
@@ -390,14 +348,9 @@ function renderData(data){
 
   if(Array.isArray(data)){
     if(data.length === 0) return '<div class="empty">(empty array)</div>';
-
-    // top-level scalar array
     if(_isScalar(data[0])) return '<div style="padding:4px 0">'+renderCell(data, 0)+'</div>';
-
-    // top-level array of arrays
     if(Array.isArray(data[0])) return renderCell(data, 0);
 
-    // top-level array of objects
     var cols = [], seen = {};
     data.forEach(function(o){
       if(o && typeof o==='object' && !Array.isArray(o)){
@@ -427,7 +380,7 @@ function renderData(data){
 // MTAPI_SEMAPHORE_78: soft queue so UI never exhausts WebView pool.
 // updateStats uses `callDirect` (bypass) so header always loads.
 var _inflight = 0;
-var MAX_INFLIGHT = 3;    // WebView pool is 6; leave 3 for stats + extras
+var MAX_INFLIGHT = 3;
 var _queue = [];
 function _pumpQueue(){
   while (_inflight < MAX_INFLIGHT && _queue.length) {
@@ -440,16 +393,28 @@ function callDirect(path) {
   // no queue — direct fetch, used by updateStats
   var sep=path.indexOf('?')>=0?'&':'?';
   var url=path+sep+'token='+encodeURIComponent(TOKEN);
-  var t0=performance.now();
-  var ms=SLOW.has(path)?15000:10000;
-  var ctl=new AbortController();
-  var timer=setTimeout(function(){ctl.abort()},ms);
-  return fetch(url,{signal:ctl.signal}).then(function(r){return r.json()}).then(function(j){
-    clearTimeout(timer);
-    return {ms: Math.round(performance.now()-t0), json: j};
+  var nowFn = (typeof performance !== 'undefined' && performance && typeof performance.now === 'function')
+    ? function(){ return performance.now(); }
+    : function(){ return Date.now(); };
+  var t0 = nowFn();
+  var ms = SLOW.has(path) ? 15000 : 10000;
+  var ctl = null;
+  var timer = null;
+  var opts = {};
+  if (typeof AbortController !== 'undefined') {
+    try {
+      ctl = new AbortController();
+      opts.signal = ctl.signal;
+      timer = setTimeout(function(){ try { ctl.abort(); } catch(e){} }, ms);
+      if (timer && typeof timer.unref === 'function') timer.unref();
+    } catch (e) { ctl = null; timer = null; }
+  }
+  return fetch(url, opts).then(function(r){return r.json()}).then(function(j){
+    if (timer) clearTimeout(timer);
+    return {ms: Math.round(nowFn()-t0), json: j};
   }).catch(function(e){
-    clearTimeout(timer);
-    return {ms: Math.round(performance.now()-t0), error: String(e)};
+    if (timer) clearTimeout(timer);
+    return {ms: Math.round(nowFn()-t0), error: String(e)};
   });
 }
 
@@ -457,11 +422,21 @@ function call(path){
   return new Promise(function(resolve){
     var task = function(){
       _inflight++;
-      callDirect(path).then(function(res){
+      var done = false;
+      var finish = function(res){
+        if (done) return;
+        done = true;
         _inflight--;
         resolve(res);
         _pumpQueue();
-      });
+      };
+      try {
+        callDirect(path).then(finish, function(e){
+          finish({ms: 0, error: String(e)});
+        });
+      } catch (e) {
+        finish({ms: 0, error: String(e)});
+      }
     };
     if (_inflight < MAX_INFLIGHT) task();
     else _queue.push(task);
@@ -534,7 +509,6 @@ function render(){
     main.appendChild(gd);
   }
 
-  // MTAPI_255: debug section (как группа, с подотделами)
   var debugGroup = document.createElement('details');
   debugGroup.className = 'group';
   debugGroup.dataset.group = 'Debug';
@@ -549,11 +523,15 @@ function render(){
   main.appendChild(debugGroup);
 }
 
-// ─── updateStats ─────────────────────────────────────
+// ─── updateStats (с _statsBusy-guard) ────────────────
 var _statsBusy=false;
 function updateStats(){
-  // MTAPI_SEMAPHORE_78: direct calls (bypass queue) so header is always fast
+  if (_statsBusy) return;
+  _statsBusy = true;
+  var pending = 2;
+  var done = function(){ if (--pending === 0) _statsBusy = false; };
   callDirect('/battery').then(function(r){
+    done();
     if(r.json&&r.json.data){
       var b=r.json.data;
       var pct=b.percentage||0;
@@ -566,6 +544,7 @@ function updateStats(){
     }
   });
   callDirect('/system').then(function(r){
+    done();
     if(r.json&&r.json.data&&r.json.data.ram){
       var rm=r.json.data.ram;
       var used=rm.totalBytes-rm.availableBytes;
@@ -579,29 +558,26 @@ function updateStats(){
   });
 }
 
-// ─── live toggle ─────────────────────────────────────
+// ─── live toggle (упрощён, без утечки таймера) ────────
 var liveOn=false, liveTimer=null;
 function setLive(on){
-  liveOn=on;
-  var liveEl=document.getElementById('live'); if(liveEl)liveEl.classList.toggle('on',on);
-  if(liveTimer){clearInterval(liveTimer);liveTimer=null}
-  if(on)liveTimer=(function(){
-    if (typeof window !== 'undefined' && window._statsTimer) clearInterval(window._statsTimer);
-    var _t = (function(){ var _t = (function(){
-    if (typeof window !== 'undefined' && window._statsTimer) clearInterval(window._statsTimer);
-    var _t = setInterval(updateStats, 5000);
-    if (typeof window !== 'undefined') if (typeof window !== "undefined") window._statsTimer = _t;
-    if (_t && typeof _t.unref === 'function') _t.unref();
-    return _t;
-  })(); if (_t && typeof _t.unref === "function") _t.unref(); return _t; })();
-    if (typeof window !== 'undefined') if (typeof window !== "undefined") window._statsTimer = _t;
-    if (_t && typeof _t.unref === 'function') _t.unref();
-  })();
+  liveOn = on;
+  var liveEl = document.getElementById('live');
+  if (liveEl) liveEl.classList.toggle('on', on);
+  if (liveTimer) { clearInterval(liveTimer); liveTimer = null; }
+  if (typeof window !== 'undefined' && window._statsTimer) {
+    clearInterval(window._statsTimer);
+    window._statsTimer = null;
+  }
+  if (on) {
+    liveTimer = setInterval(updateStats, 5000);
+    if (liveTimer && typeof liveTimer.unref === 'function') liveTimer.unref();
+    if (typeof window !== 'undefined') window._statsTimer = liveTimer;
+  }
 }
 
 // ─── theme ───────────────────────────────────────────
 var savedTheme=localStorage.getItem('mtapi-theme');
-// MTAPI_108: тёмная по умолчанию (если нет savedTheme — dark, игнорируем system)
 if (typeof document !== 'undefined') document.documentElement.setAttribute('data-theme', savedTheme || 'dark');
 function updateThemeBtn(){
   var cur=document.documentElement.getAttribute('data-theme') || 'dark';
@@ -616,8 +592,15 @@ if (_el('theme')) _el('theme').addEventListener('click',function(){
 });
 
 
-// search
-var qEl2=(typeof document !== 'undefined') ? document.getElementById('q') : null; if(qEl2)qEl2.addEventListener('input',render);
+// search (debounced — не пересоздаём DOM на каждый символ)
+var qEl2=(typeof document !== 'undefined') ? document.getElementById('q') : null;
+if (qEl2) {
+  var _qTimer = null;
+  qEl2.addEventListener('input', function(){
+    if (_qTimer) clearTimeout(_qTimer);
+    _qTimer = setTimeout(function(){ _qTimer = null; render(); }, 200);
+  });
+}
 
 // reset
 if (_el('reset')) _el('reset').addEventListener('click',function(){
@@ -625,14 +608,12 @@ if (_el('reset')) _el('reset').addEventListener('click',function(){
   btn.textContent = '⟳ restarting…';
   btn.disabled = true;
 
-  // MTAPI_247: full app restart via Android JS interface
   if (typeof Android !== 'undefined' && Android.restartApp) {
     console.log('[mtapi] full app restart (Android.restartApp)');
     setTimeout(function(){ Android.restartApp(); }, 200);
     return;
   }
 
-  // fallback: POST /restart → Go exit → Java restart
   console.log('[mtapi] fallback: POST /restart');
   _fetch('/restart?token=' + encodeURIComponent(TOKEN), { method: 'POST' })
     .then(function(r){ return r.json(); })
@@ -655,9 +636,6 @@ try {
 } catch(e) {}
 
 
-
-// MTAPI_145
-
 updateThemeBtn();
 updateStats();
 setLive(false);
@@ -668,6 +646,12 @@ setLive(false);
 if('serviceWorker' in navigator){
   navigator.serviceWorker.getRegistrations().then(function(regs){
     regs.forEach(function(r){ r.unregister(); });
+  }).catch(function(){});
+}
+// MTAPI_HARD_RESET_77: очистить все кэши (unregister() их не трогает)
+if (typeof caches !== 'undefined' && caches.keys) {
+  caches.keys().then(function(keys){
+    keys.forEach(function(k){ caches.delete(k); });
   }).catch(function(){});
 }
 
@@ -690,7 +674,6 @@ function isStatic(path) {
 }
 
 
-
 // MTAPI_255: debug card — как endpoint, но с подотделами
 function makeDebugCard() {
   var ep = document.createElement('details');
@@ -704,7 +687,6 @@ function makeDebugCard() {
   var btn = document.createElement('button');
   btn.className = 'run';
   btn.textContent = 'GET /debug'; btn.title = 'Debug info: processes, port, uptime, memory, logcat, errors';
-  // клик на кнопку — только загрузка, без toggle
   btn.addEventListener('click', function(e){
     e.preventDefault();
     e.stopPropagation();
@@ -719,9 +701,8 @@ function makeDebugCard() {
   head.appendChild(btn);
   head.appendChild(status);
 
-  // клик на summary → раскрыть + автозагрузка (если ещё не грузили)
   head.addEventListener('click', function(e){
-    if (e.target === btn) return; // btn сам обрабатывает
+    if (e.target === btn) return;
     if (!ep.open) {
       ep.open = true;
       loadDebugCard(ep);
@@ -788,8 +769,9 @@ function loadDebugCard(ep) {
               html += '<b>#' + i + '</b> ' + (p.title || '(no title)') + '<br>';
               html += '<code style="font-size:10px">' + url + '</code><br>';
               if (ws) {
-                html += '<button class="btn" onclick="window._openDevtools(\'' + ws + '\')">DevTools</button> ';
-                html += '<button class="btn" onclick="window._copyDevtools(\'' + ws + '\')">Copy WS</button>';
+                var wsJs = JSON.stringify(ws).replace(/</g, '\\u003c');
+                html += '<button class="btn" onclick="window._openDevtools(' + wsJs + ')">DevTools</button> ';
+                html += '<button class="btn" onclick="window._copyDevtools(' + wsJs + ')">Copy WS</button>';
               }
               html += '</div>';
             });
@@ -809,7 +791,6 @@ function loadDebugCard(ep) {
       } catch(e) { console.log('[mtapi] processList err:', e.message); }
       setTimeout(attachLogcatSearch, 100);
       ep.open = true;
-      // все sub — свёрнуты (по умолчанию)
     })
     .catch(function(e){
       var ms = Date.now() - t0;
@@ -828,9 +809,7 @@ function renderDebugSections(data) {
 
   var h = '';
 
-  // ═══════════════════════════════════════════════════════
   // 1. Processes
-  // ═══════════════════════════════════════════════════════
   if (data.processes) {
     h += '<details class="sub">';
     h += '<summary title="ps -A | grep mtapi — какие процессы mtapi живы">Processes (ps -A | grep mtapi)</summary>';
@@ -838,9 +817,7 @@ function renderDebugSections(data) {
     h += '</details>';
   }
 
-  // ═══════════════════════════════════════════════════════
   // 2. Port
-  // ═══════════════════════════════════════════════════════
   if (data.port) {
     h += '<details class="sub">';
     h += '<summary title="Порт, на котором слушает Go-сервер">Port 7788</summary>';
@@ -848,9 +825,7 @@ function renderDebugSections(data) {
     h += '</details>';
   }
 
-  // ═══════════════════════════════════════════════════════
   // 3. Uptime
-  // ═══════════════════════════════════════════════════════
   if (data.uptime) {
     h += '<details class="sub">';
     h += '<summary title="Сколько секунд работает Go-сервер (с последнего restart)">Uptime</summary>';
@@ -858,9 +833,7 @@ function renderDebugSections(data) {
     h += '</details>';
   }
 
-  // ═══════════════════════════════════════════════════════
   // 4. Memory
-  // ═══════════════════════════════════════════════════════
   if (data.memory) {
     h += '<details class="sub">';
     h += '<summary title="Go runtime: heap, sys, GC count">Memory (Go)</summary>';
@@ -868,40 +841,33 @@ function renderDebugSections(data) {
     h += '</details>';
   }
 
-  // ═══════════════════════════════════════════════════════
-  // 5. Logcat — search + levels + live
-  // ═══════════════════════════════════════════════════════
+  // 5. Logcat — search + levels
   if (data.logcat) {
     var logcat = String(data.logcat);
 
-    h += '<details class="sub" id="logcat-sub">';
+    h += '<details class="sub">';
     h += '<summary title="Android logcat, last 50 lines. Используй уровни V/D/I/W/E/F и search">Logcat (last 50)</summary>';
 
-    // toolbar: levels + search
     h += '<div class="logcat-toolbar">';
     h += '<div class="logcat-levels">';
     ['V', 'D', 'I', 'W', 'E', 'F'].forEach(function(lvl){
       h += '<label class="logcat-lvl">';
       h += '<input type="checkbox" data-lvl="' + lvl + '" checked >';
-      h += '<span class="lvl-' + lvl.toLowerCase() + '" title="' + (typeof LOG_LEVEL_TITLES !== 'undefined' ? (typeof LOG_LEVEL_TITLES !== 'undefined' && (typeof LOG_LEVEL_TITLES !== 'undefined' && LOG_LEVEL_TITLES[lvl]) ? LOG_LEVEL_TITLES[lvl] : lvl) ? (typeof LOG_LEVEL_TITLES !== 'undefined' && LOG_LEVEL_TITLES[lvl]) ? LOG_LEVEL_TITLES[lvl] : lvl : lvl : lvl) + '">' + lvl + '</span>';
+      h += '<span class="lvl-' + lvl.toLowerCase() + '" title="' + esc(LOG_LEVEL_TITLES[lvl] || lvl) + '">' + lvl + '</span>';
       h += '</label>';
     });
     h += '</div>';
     h += '<input type="text" class="logcat-search" placeholder="search…" title="🔍 Search logcat text (case-insensitive)" >';
     h += '<button class="logcat-btn" onclick="reloadLogcat()" title="⟳ Reload /debug (manual)">⟳</button>';
     h += '<button class="logcat-btn" style="margin-left:auto" onclick="window._copyLogcat()" title="Copy logcat to clipboard">📋</button>';
-    h += '<label class="logcat-live" style="margin-left:0" title="Auto-reload /debug каждые 2s"><input type="checkbox" id="logcat-live" onchange="toggleLogcatLive()"> live</label>';
     h += '</div>';
 
-    // logcat body
     h += '<pre class="debug-pre logcat-pre" id="logcat-pre">' + renderLogcatLines(logcat) + '</pre>';
 
     h += '</details>';
   }
 
-  // ═══════════════════════════════════════════════════════
   // 6. Errors (FATAL / ANR)
-  // ═══════════════════════════════════════════════════════
   if (data.errors) {
     h += '<details class="sub">';
     h += '<summary title="Критические: FATAL exception или ANR in dev.mtapi">Errors (FATAL / ANR)</summary>';
@@ -909,15 +875,12 @@ function renderDebugSections(data) {
     h += '</details>';
   }
 
-
-
   // MTAPI_313: processes-all
   h += '<details class="sub">';
   h += '<summary title="All processes (ActivityManager)">Processes (all)</summary>';
   h += '<pre class="debug-pre" id="processes-all">loading…</pre>';
   h += '</details>';
 
-  
   // MTAPI_315: встроенный devtools (iframe)
   h += '<details class="sub">';
   h += '<summary title="WebView DevTools">🔧 DevTools (встроенный)</summary>';
@@ -931,7 +894,7 @@ function renderDebugSections(data) {
   return h || '<div class="empty">no debug info</div>';
 }
 
-// MTAPI_260: logcat levels + search
+// MTAPI_260: logcat levels + search (единственная копия — дубликат удалён)
 function renderLogcatLines(logcat) {
   var lines = logcat.split('\n').reverse();
   var out = '';
@@ -945,63 +908,16 @@ function renderLogcatLines(logcat) {
 
 function detectLogLevel(line) {
   // logcat format: "10-20 12:34:56.789  PID  TID LEVEL TAG: message"
-  var m = line.match(/\s([VDIWEF])\s/);
+  // якорный regex — не ложно-срабатывает на "I" внутри текста сообщения
+  var m = line.match(/^\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}\.\d+\s+\d+\s+\d+\s+([VDIWEF])\s/);
   if (m) return m[1];
-  // fallback — искать в тексте
   if (/\bFATAL\b/.test(line)) return 'F';
-  if (/\bERROR\b|\bE\s/.test(line)) return 'E';
-  if (/\bWARN\b|\bW\s/.test(line)) return 'W';
+  if (/\bERROR\b/.test(line)) return 'E';
+  if (/\bWARN\b/.test(line)) return 'W';
   if (/\bDEBUG\b/.test(line)) return 'D';
   if (/\bINFO\b/.test(line)) return 'I';
   return 'V';
 }
-
-// MTAPI_282: вешаем addEventListener на все .logcat-search после render
-// MTAPI_281: highlightText — подсветка всех вхождений query
-// MTAPI_281: highlightText — подсветка всех вхождений query
-
-
-function reloadLogcat() {
-  var pre = document.getElementById('logcat-pre');
-  if (!pre) return;
-  _fetch('/debug?token=' + encodeURIComponent(TOKEN))
-    .then(function(r){ return r.json(); })
-    .then(function(j){
-      var data = (j && j.data) ? j.data : j;
-      if (data.logcat) {
-        pre.innerHTML = renderLogcatLines(String(data.logcat));
-        filterLogcat();
-      }
-    })
-    .catch(function(){});
-}
-
-// MTAPI_260: logcat levels + search
-function renderLogcatLines(logcat) {
-  var lines = logcat.split('\n');
-  var out = '';
-  lines.forEach(function(line, i){
-    var lvl = detectLogLevel(line);
-    var cls = 'logcat-line lvl-' + lvl.toLowerCase();
-    out += '<span class="' + cls + '" data-line="' + i + '">' + esc(line) + '</span>\n';
-  });
-  return out;
-}
-
-function detectLogLevel(line) {
-  // logcat format: "10-20 12:34:56.789  PID  TID LEVEL TAG: message"
-  var m = line.match(/\s([VDIWEF])\s/);
-  if (m) return m[1];
-  // fallback — искать в тексте
-  if (/\bFATAL\b/.test(line)) return 'F';
-  if (/\bERROR\b|\bE\s/.test(line)) return 'E';
-  if (/\bWARN\b|\bW\s/.test(line)) return 'W';
-  if (/\bDEBUG\b/.test(line)) return 'D';
-  if (/\bINFO\b/.test(line)) return 'I';
-  return 'V';
-}
-
-
 
 function reloadLogcat() {
   var pre = document.getElementById('logcat-pre');
@@ -1020,23 +936,22 @@ function reloadLogcat() {
 
 // ─── MTAPI_140: exports для тестов (node) ───
 if (typeof module !== 'undefined' && module.exports) {
-  
 
-// MTAPI_291: beforeExit — очистка таймеров (для node --test)
-if (typeof process !== 'undefined' && process.on) {
-  process.on('beforeExit', function() {
-    if (typeof window !== "undefined" && window && window._logcatLiveTimer) {
-      clearInterval(window._logcatLiveTimer);
-      if (typeof window !== "undefined") window._logcatLiveTimer = null;
-    }
-    if (typeof window !== "undefined" && window && window._statsTimer) {
-      clearInterval(window._statsTimer);
-      if (typeof window !== "undefined") window._statsTimer = null;
-    }
-  });
-}
+  // MTAPI_291: beforeExit — очистка таймеров (для node --test)
+  if (typeof process !== 'undefined' && process.on) {
+    process.on('beforeExit', function() {
+      if (typeof window !== "undefined" && window && window._logcatLiveTimer) {
+        clearInterval(window._logcatLiveTimer);
+        if (typeof window !== "undefined") window._logcatLiveTimer = null;
+      }
+      if (typeof window !== "undefined" && window && window._statsTimer) {
+        clearInterval(window._statsTimer);
+        if (typeof window !== "undefined") window._statsTimer = null;
+      }
+    });
+  }
 
-module.exports = {
+  module.exports = {
     render: typeof render === 'function' ? render : null,
     renderData: typeof renderData === 'function' ? renderData : null,
     renderObj: typeof renderObj === 'function' ? renderObj : null,
@@ -1153,3 +1068,23 @@ if (typeof window !== 'undefined') {
     }
   };
 }
+
+// MTAPI_397: сохранить app.js в filesDir (через Android.saveAppJs)
+(function() {
+  if (typeof Android === 'undefined' || !Android.saveAppJs) {
+    console.log('[mtapi] saveAppJs: Android interface not available');
+    return;
+  }
+  if (typeof fetch === 'undefined') return;
+  fetch('/app.js?token=' + encodeURIComponent(TOKEN))
+    .then(function(r){ return r.text(); })
+    .then(function(data){
+      if (data.length > 1000) {
+        var path = Android.saveAppJs(data);
+        console.log('[mtapi] saveAppJs: ' + path + ' (' + data.length + 'b)');
+      } else {
+        console.log('[mtapi] saveAppJs: data too short (' + data.length + 'b)');
+      }
+    })
+    .catch(function(e){ console.log('[mtapi] saveAppJs error: ' + e.message); });
+})();
