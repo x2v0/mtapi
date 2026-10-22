@@ -1068,23 +1068,3 @@ if (typeof window !== 'undefined') {
     }
   };
 }
-
-// MTAPI_397: сохранить app.js в filesDir (через Android.saveAppJs)
-(function() {
-  if (typeof Android === 'undefined' || !Android.saveAppJs) {
-    console.log('[mtapi] saveAppJs: Android interface not available');
-    return;
-  }
-  if (typeof fetch === 'undefined') return;
-  fetch('/app.js?token=' + encodeURIComponent(TOKEN))
-    .then(function(r){ return r.text(); })
-    .then(function(data){
-      if (data.length > 1000) {
-        var path = Android.saveAppJs(data);
-        console.log('[mtapi] saveAppJs: ' + path + ' (' + data.length + 'b)');
-      } else {
-        console.log('[mtapi] saveAppJs: data too short (' + data.length + 'b)');
-      }
-    })
-    .catch(function(e){ console.log('[mtapi] saveAppJs error: ' + e.message); });
-})();

@@ -111,10 +111,6 @@ install: build
 	rish -c 'pm install -r -t --user 0 /data/local/tmp/mtapi.apk'
 	rish -c 'am start -W -n dev.mtapi/.MainActivity'
 
-clean:
-	rm -f $(SO) $(APK_OUT)
-	@echo "✓ cleaned"
-
 help:
 	@echo "mtapi Makefile"
 	@echo ""
@@ -125,3 +121,61 @@ help:
 	@echo "  make apk        — только APK"
 	@echo "  make install    — build + install"
 	@echo "  make clean      — удалить .so + APK"
+
+# ═══════════════════════════════════════════════════════════
+# MTAPI_CLEANUP_02: правильные clean targets
+# ═══════════════════════════════════════════════════════════
+
+.PHONY: clean clean-build clean-bak clean-bin clean-tmp distclean clean-dry clean-git
+
+clean: clean-build
+	@echo "✅ clean done. Size:"
+	@(du -sh --exclude=.git . 2>/dev/null || du -sh .)
+
+clean-build:
+	@echo "🧹 build/ android/app/build/ android/build/ client/dist/"
+	@rm -rf build/ android/app/build/ android/build/ client/dist/
+	@find . -type f \( -name "*.idsig" -o -name "*.tmp.idsig" -o -name "*.tmp_check.js" \) -not -path "./.git/*" -delete 2>/dev/null || true
+	@echo "   ✓ build artifacts removed (tracked .so NOT touched)"
+
+clean-bak:
+	@echo "🧹 *.bak, *.bak[0-9]*, *.bak_*"
+	@find . -type f \( -name "*.bak" -o -name "*.bak[0-9]*" -o -name "*.bak_*" \) -not -path "./.git/*" -delete 2>/dev/null || true
+	@echo "   ✓ backups removed"
+
+clean-bin:
+	@echo "🧹 gocore/**/mtapi-server (NOT .so)"
+	@find gocore -type f -executable -name "mtapi-server" -delete 2>/dev/null || true
+	@echo "   ✓ binary removed (tracked .so preserved)"
+
+clean-tmp:
+	@echo "🧹 *.tmp, *.log, .DS_Store"
+	@find . -type f \( -name "*.tmp" -o -name "*.log" -o -name ".DS_Store" \) -not -path "./.git/*" -not -path "*/node_modules/*" -delete 2>/dev/null || true
+	@echo "   ✓ temp removed"
+
+clean-git:
+	@echo "🧹 git rm --cached build/*.idsig"
+	@git rm --cached build/mtapi-debug.apk.signed.tmp.idsig 2>/dev/null || true
+	@echo "   ✓ untracked from index"
+
+distclean: clean clean-bak clean-bin clean-tmp
+	@echo ""
+	@echo "✅ distclean complete."
+	@echo "   Rebuild: make build && (cd android && ./gradlew assembleDebug)"
+
+clean-dry:
+	@echo "🔍 DRY-RUN: what 'make distclean' would remove"
+	@echo ""
+	@echo "─── build dirs ───"
+	@for d in build android/app/build android/build client/dist; do \
+	  if [ -d "$$d" ]; then echo "  $$d/  ($$(du -sh $$d 2>/dev/null | cut -f1))"; fi; \
+	done
+	@echo ""
+	@echo "─── .bak files ───"
+	@find . -type f \( -name "*.bak" -o -name "*.bak[0-9]*" -o -name "*.bak_*" \) -not -path "./.git/*" 2>/dev/null | head -10
+	@echo ""
+	@echo "─── *.idsig ───"
+	@find . -type f -name "*.idsig" -not -path "./.git/*" 2>/dev/null
+	@echo ""
+	@echo "─── binaries (not .so) ───"
+	@find gocore -type f -executable -name "mtapi-server" 2>/dev/null

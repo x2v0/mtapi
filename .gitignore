@@ -34,3 +34,6 @@ Thumbs.db
 *.swo
 *~
 .config/
+*.idsig
+*.tmp.idsig
+TMPDIR=*
