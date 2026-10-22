@@ -1,5 +1,16 @@
 if (typeof window === 'undefined') { globalThis.window = {}; }
 
+
+// MTAPI_FMT_TIME: локальное время HH:MM:SS.mmm (как logcat)
+function _fmtTime(ms) {
+  var d = new Date(ms);
+  var h = String(d.getHours()).padStart(2, '0');
+  var m = String(d.getMinutes()).padStart(2, '0');
+  var s = String(d.getSeconds()).padStart(2, '0');
+  var ms3 = String(d.getMilliseconds()).padStart(3, '0');
+  return h + ':' + m + ':' + s + '.' + ms3;
+}
+
 // MTAPI_JSLOG: перехват console.* в буфер (MIUI блокирует chromium logs при debuggable=false)
 (function(){
   if (typeof window === 'undefined') return;
@@ -9,20 +20,29 @@ if (typeof window === 'undefined') { globalThis.window = {}; }
   function push(level, args) {
     try {
       var msg = Array.prototype.map.call(args, function(a){
-        if (a instanceof Error) return a.stack || (a.name + ': ' + a.message);
+        if (a instanceof Error || (a && a.stack && a.message)) return a.stack || (a.name + ': ' + a.message);
         if (typeof a === 'object') { try { return JSON.stringify(a); } catch(e) { return String(a); } }
         return String(a);
       }).join(' ');
       var line = { t: Date.now(), lvl: level, m: msg };
       window._jslogBuf.push(line);
       if (window._jslogBuf.length > window._jslogMax) window._jslogBuf.shift();
+      // MTAPI_PERSIST_ERR: ошибки в localStorage (выживают reload)
+      if (level === 'error') {
+        try {
+          var _perrs = JSON.parse(localStorage.getItem('mtapi-errors') || '[]');
+          _perrs.unshift({ t: line.t, lvl: level, m: msg });
+          if (_perrs.length > 50) _perrs.length = 50;
+          localStorage.setItem('mtapi-errors', JSON.stringify(_perrs));
+        } catch(e) {}
+      }
       // MTAPI_JSLOG_LIVE: append to DOM if section visible (no polling needed)
       try {
         var pre = document.getElementById('jslog-pre');
         if (pre) {
           var lv = level || 'log';
           var cls = 'logcat-line lvl-' + (lv === 'error' ? 'e' : lv === 'warn' ? 'w' : lv === 'info' ? 'i' : lv === 'debug' ? 'd' : 'v');
-          var tstr = new Date(line.t).toISOString().slice(11, 23);
+          var tstr = _fmtTime(line.t);
           var text = tstr + ' [' + lv + '] ' + msg;
           var span = document.createElement('span');
           span.className = cls;
@@ -61,6 +81,34 @@ if (typeof window === 'undefined') { globalThis.window = {}; }
   }
 })();
 
+// MTAPI_JSLOG_NETWORK: перехват fetch → JS Logs (Network в Console)
+(function(){
+  if (typeof window === 'undefined') return;
+  var _origFetch = window.fetch;
+  if (typeof _origFetch !== 'function') return;
+  window.fetch = function(url, opts) {
+    var t0 = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+    var method = (opts && opts.method) ? String(opts.method).toUpperCase() : 'GET';
+    var urlStr = String(url);
+    // MTAPI_NET_QUIET_DEBUG: не логировать /debug (spam от logcat live 3с)
+    var _noLog = /\/debug(\?|$)/.test(urlStr);
+    if (!_noLog) console.log('[net] → ' + method + ' ' + urlStr);
+    return _origFetch(url, opts).then(function(r){
+      var ms = Math.round(((typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now()) - t0);
+      var _cl = (r.headers && r.headers.get) ? (r.headers.get('content-length') || '?') : '?';
+      var _ct = (r.headers && r.headers.get) ? ((r.headers.get('content-type') || '?').split(';')[0]) : '?';
+      if (!_noLog) console.log('[net] ← ' + r.status + ' ' + method + ' ' + urlStr + ' (' + ms + 'ms, ' + _cl + 'b, ' + _ct + ')');
+      return r;
+    }).catch(function(e){
+      var ms = Math.round(((typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now()) - t0);
+      if (!_noLog) console.log('[net] ✗ ' + method + ' ' + urlStr + ' (' + ms + 'ms) ' + (e && e.message || e));
+      throw e;
+    });
+  };
+})();
+
+
+
 
 // MTAPI_293: fetch с timeout (AbortController)
 function _fetch(url, opts) {
@@ -91,6 +139,11 @@ var LOG_LEVEL_TITLES = {
   E: 'E — Error (ошибки)',
   F: 'F — Fatal (критические, краш)',
 };
+
+// MTAPI_LOGCAT_LIVE_FLAG: временно отключить автообновление logcat (GET /debug?token= каждые 3с)
+// true  = включено (setInterval 3000 → reloadLogcat → GET /debug)
+// false = отключено (только ⟳ кнопка + toggle секций + open /debug)
+var _LOGCAT_LIVE_ENABLED = true;
 
 // ─── MTAPI_145: localStorage polyfill ───
 (function() {
@@ -977,6 +1030,7 @@ function run(ep,path){
 function _el(id) { return (typeof document !== 'undefined') ? document.getElementById(id) : null; }
 
 function render(){
+  var _perfT0 = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
   var qEl=document.getElementById('q'); var q=qEl?qEl.value.toLowerCase():'';
   var main=document.getElementById('main'); if(!main)return; main.innerHTML='';
   for(var gi=0;gi<ENDPOINTS.length;gi++){
@@ -1005,6 +1059,11 @@ function render(){
 
   debugGroup.appendChild(makeDebugCard());
   main.appendChild(debugGroup);
+
+  // MTAPI_PERF: замер render()
+  var _perfT1 = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+  window._perf = window._perf || {};
+  window._perf.render = Math.round(_perfT1 - _perfT0);
 }
 
 // ─── updateStats (с _statsBusy-guard) ────────────────
@@ -1046,8 +1105,7 @@ function updateStats(){
 var liveOn=false, liveTimer=null;
 function setLive(on){
   liveOn = on;
-  var liveEl = document.getElementById('live');
-  if (liveEl) liveEl.classList.toggle('on', on);
+  // MTAPI_NOBUTTONS: live button removed → liveEl больше не нужен
   if (liveTimer) { clearInterval(liveTimer); liveTimer = null; }
   if (typeof window !== 'undefined' && window._statsTimer) {
     clearInterval(window._statsTimer);
@@ -1086,30 +1144,9 @@ if (qEl2) {
   });
 }
 
-// reset
-if (_el('reset')) _el('reset').addEventListener('click',function(){
-  var btn = _el('reset');
-  btn.textContent = '⟳ restarting…';
-  btn.disabled = true;
+// MTAPI_NOBUTTONS: reset button removed
 
-  if (typeof Android !== 'undefined' && Android.restartApp) {
-    console.log('[mtapi] full app restart (Android.restartApp)');
-    setTimeout(function(){ Android.restartApp(); }, 200);
-    return;
-  }
-
-  console.log('[mtapi] fallback: POST /restart');
-  _fetch('/restart?token=' + encodeURIComponent(TOKEN), { method: 'POST' })
-    .then(function(r){ return r.json(); })
-    .then(function(j){ console.log('[mtapi] restart:', j); })
-    .catch(function(e){ console.error('[mtapi] restart error:', e); })
-    .finally(function(){
-      setTimeout(function(){ location.reload(); }, 2000);
-    });
-});
-
-// live toggle
-if (_el('live')) _el('live').addEventListener('click',function(){setLive(!liveOn)});
+// live toggle removed
 
 // init
 if (typeof document !== 'undefined') {
@@ -1122,7 +1159,7 @@ try {
 
 updateThemeBtn();
 updateStats();
-setLive(false);
+// setLive removed
 } // MTAPI_242: DOM init
 
 
@@ -1215,6 +1252,7 @@ function loadDebugCard(ep) {
   var status = ep.querySelector('.status');
   var body = ep.querySelector('.ep-b');
   var t0 = Date.now();
+  var _perfT0 = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
 
   status.className = 'status loading';
   status.innerHTML = '<span class="spin"></span>';
@@ -1232,7 +1270,11 @@ function loadDebugCard(ep) {
       status.className = 'status ok';
       status.textContent = ms + 'ms';
       var data = (j && j.data) ? j.data : j;
+      var _perfT1 = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
       body.innerHTML = renderDebugSections(data);
+      window._perf = window._perf || {};
+      window._perf.loadDebugCard = Math.round(_perfT1 - _perfT0);
+      setTimeout(function(){ if (typeof window._updatePerfDisplay === 'function') window._updatePerfDisplay(); }, 0);
       // MTAPI_315: devtools
       setTimeout(function(){
         try {
@@ -1264,7 +1306,8 @@ function loadDebugCard(ep) {
                 // MTAPI_DEVTOOLS_BTN_FIX: data-* вместо inline onclick
                 // (было сломано: onclick="window._openDevtools("ws://...")")
                 html += '<button class="btn devtools-btn" data-action="devtools" data-ws="' + esc(ws) + '">DevTools</button> ';
-                html += '<button class="btn devtools-btn" data-action="copy-ws" data-ws="' + esc(ws) + '">Copy WS</button>';
+                html += '<button class="btn devtools-btn" data-action="copy-ws" data-ws="' + esc(ws) + '">Copy WS</button> ';
+                html += '<button class="btn devtools-btn" data-action="view-source" data-ws="' + esc(ws) + '">\uD83D\uDCC4 Sources</button>';
               }
               html += '</div>';
             });
@@ -1282,6 +1325,8 @@ function loadDebugCard(ep) {
                     if (typeof window._openDevtools === 'function') window._openDevtools(ws);
                   } else if (action === 'copy-ws') {
                     if (typeof window._copyDevtools === 'function') window._copyDevtools(ws);
+                  } else if (action === 'view-source') {
+                    if (typeof window._viewAppSource === 'function') window._viewAppSource();
                   }
                 });
               })(btns[bi]);
@@ -1292,14 +1337,19 @@ function loadDebugCard(ep) {
           });
         } catch(e) { console.log('[mtapi] devtools err:', e.message); }
       }, 300);
-      // MTAPI_313: processes-all
       try {
         if (typeof Android !== 'undefined' && Android.processList) {
           var pre = body.querySelector('#processes-all');
           if (pre) pre.textContent = Android.processList();
         }
       } catch(e) { console.log('[mtapi] processList err:', e.message); }
-      setTimeout(attachLogcatSearch, 100);
+      setTimeout(function(){
+        if (typeof window !== 'undefined' && typeof window.attachLogcatSearch === 'function') {
+          window.attachLogcatSearch();
+        } else if (typeof attachLogcatSearch === 'function') {
+          attachLogcatSearch();
+        }
+      }, 100);
       setTimeout(function(){ if (window.attachJsLogSearch) window.attachJsLogSearch(); }, 100);
       setTimeout(function(){ _attachUptimeRefresh(body); }, 100);
       setTimeout(function(){
@@ -1329,7 +1379,7 @@ function renderDebugSections(data) {
 
   var h = '';
 
-  // 1. Processes
+  // 1. Processes (ps -A | grep mtapi)
   if (data.processes) {
     h += '<details class="sub" data-refresh-field="processes">';
     h += '<summary title="ps -A | grep mtapi (обновляется при раскрытии)">Processes (ps -A | grep mtapi)</summary>';
@@ -1345,15 +1395,15 @@ function renderDebugSections(data) {
     h += '</details>';
   }
 
-  // 3. Uptime (обновляется при раскрытии — _attachUptimeRefresh)
+  // 3. Uptime (обновляется при раскрытии)
   if (data.uptime) {
     h += '<details class="sub" id="uptime-sub">';
-    h += '<summary title="Сколько секунд работает Go-сервер (с последнего restart). Обновляется при раскрытии.">Uptime</summary>';
+    h += '<summary title="Сколько секунд работает Go-сервер (обновляется при раскрытии)">Uptime</summary>';
     h += '<pre class="debug-pre" id="uptime-pre">' + esc(String(data.uptime)) + '</pre>';
     h += '</details>';
   }
 
-  // 4. Memory
+  // 4. Memory (Go)
   if (data.memory) {
     h += '<details class="sub" data-refresh-field="memory">';
     h += '<summary title="Go runtime (обновляется при раскрытии)">Memory (Go)</summary>';
@@ -1361,13 +1411,25 @@ function renderDebugSections(data) {
     h += '</details>';
   }
 
-  // 5. Logcat — search + levels
+  // 5. Errors (FATAL / ANR)
+  if (data.errors) {
+    h += '<details class="sub" data-refresh-field="errors">';
+    h += '<summary title="FATAL exception / ANR (обновляется при раскрытии)">Errors (FATAL / ANR)</summary>';
+    h += '<pre class="debug-pre debug-errors" id="errors-pre">' + esc(String(data.errors)) + '</pre>';
+    h += '</details>';
+  }
+
+  // 6. Processes (all) — ActivityManager
+  h += '<details class="sub" id="processes-all-sub">';
+  h += '<summary title="All processes через ActivityManager (обновляется при раскрытии)">Processes (all)</summary>';
+  h += '<pre class="debug-pre" id="processes-all">loading…</pre>';
+  h += '</details>';
+
+  // 7. Logcat
   if (data.logcat) {
     var logcat = String(data.logcat);
-
-    h += '<details class="sub">';
-    h += '<summary title="Android logcat, last 50 lines. Используй уровни V/D/I/W/E/F и search">Logcat (last 50)</summary>';
-
+    h += '<details class="sub" id="logcat-sub">';
+    h += '<summary title="Android logcat, last 50 lines. Уровни V/D/I/W/E/F и search">Logcat (last 50)</summary>';
     h += '<div class="logcat-toolbar">';
     h += '<div class="logcat-levels">';
     ['V', 'D', 'I', 'W', 'E', 'F'].forEach(function(lvl){
@@ -1377,31 +1439,34 @@ function renderDebugSections(data) {
       h += '</label>';
     });
     h += '</div>';
-    h += '<input type="text" class="logcat-search" placeholder="search…" title="🔍 Search logcat text (case-insensitive)" >';
-    h += '<button class="logcat-btn" onclick="reloadLogcat()" title="⟳ Reload /debug (manual)">⟳</button>';
-    h += '<button class="logcat-btn" style="margin-left:auto" onclick="window._copyLogcat()" title="Copy logcat to clipboard">📋</button>';
+    h += '<input type="text" class="logcat-search" placeholder="search…" title="Search logcat">';
+    h += '<button class="logcat-btn" onclick="reloadLogcat()" title="Reload">\u27F3</button>';
+    h += '<button class="logcat-btn" style="margin-left:auto" onclick="window._copyLogcat()" title="Copy logcat">\uD83D\uDCCB</button>';
     h += '</div>';
-
     h += '<pre class="debug-pre logcat-pre" id="logcat-pre">' + renderLogcatLines(logcat) + '</pre>';
-
     h += '</details>';
   }
 
-  // MTAPI_JSLOG: JS Logs (console.* перехвачен в буфер)
+  // 8. JS Logs
   if (typeof window !== 'undefined' && window._jslogBuf) {
     var buf = window._jslogBuf;
     h += '<details class="sub" id="jslog-sub" open>';
     h += '<summary title="console.log/warn/error из app.js (без adb, без DevTools)">JS Logs (' + buf.length + ')</summary>';
     h += '<div class="logcat-toolbar">';
+    h += '<div class="logcat-levels">';
+    ['V', 'D', 'I', 'W', 'E', 'F'].forEach(function(lvl){
+      h += '<label class="logcat-lvl"><input type="checkbox" data-lvl="' + lvl + '" class="jslog-lvl" checked><span class="lvl-' + lvl.toLowerCase() + '" title="' + esc(LOG_LEVEL_TITLES[lvl] || lvl) + '">' + lvl + '</span></label>';
+    });
+    h += '</div>';
     h += '<input type="text" class="logcat-search jslog-search" placeholder="search JS logs…">';
+    h += '<button class="logcat-btn" onclick="window._copyJslog&&window._copyJslog()" title="Copy JS Logs">\uD83D\uDCCB</button>';
     h += '<button class="logcat-btn" onclick="window._jslogClear&&window._jslogClear()" title="Clear">\uD83D\uDDD1</button>';
     h += '</div>';
     h += '<pre class="debug-pre logcat-pre" id="jslog-pre">';
-    // MTAPI_JSLOG_REVERSE: новые логи сверху (с конца буфера)
     for (var ji = buf.length - 1; ji >= 0; ji--) {
       var lv = buf[ji].lvl || 'log';
       var cls = 'logcat-line lvl-' + (lv === 'error' ? 'e' : lv === 'warn' ? 'w' : lv === 'info' ? 'i' : lv === 'debug' ? 'd' : 'v');
-      var tstr = new Date(buf[ji].t).toISOString().slice(11, 23);
+      var tstr = _fmtTime(buf[ji].t);
       var line = tstr + ' [' + lv + '] ' + buf[ji].m;
       h += '<span class="' + cls + '" data-orig="' + esc(line) + '">' + esc(line) + '</span>\n';
     }
@@ -1409,34 +1474,60 @@ function renderDebugSections(data) {
     h += '</details>';
   }
 
-  // 6. Errors (FATAL / ANR)
-  if (data.errors) {
-    h += '<details class="sub" data-refresh-field="errors">';
-    h += '<summary title="FATAL exception / ANR (обновляется при раскрытии)">Errors (FATAL / ANR)</summary>';
-    h += '<pre class="debug-pre debug-errors" id="errors-pre">' + esc(String(data.errors)) + '</pre>';
+  // 8.5 Errors (persistent)
+  h += '<details class="sub" id="persist-errors-sub">';
+  h += '<summary title="Ошибки, выжившие после reload (localStorage)">Errors (persistent)</summary>';
+  h += '<div class="logcat-toolbar">';
+  h += '<button class="logcat-btn" onclick="window._persistErrorsClear&&window._persistErrorsClear()" title="Clear">\uD83D\uDDD1 Clear</button>';
+  h += '</div>';
+  h += '<pre class="debug-pre" id="persist-errors-pre" style="max-height:200px;overflow:auto;color:var(--err)">';
+  try {
+    var _perrs2 = JSON.parse(localStorage.getItem('mtapi-errors') || '[]');
+    h += _perrs2.map(function(e){ return _fmtTime(e.t) + ' [' + e.lvl + '] ' + esc(e.m); }).join('\n');
+  } catch(e) {}
+  h += '</pre>';
+  h += '</details>';
+
+  // 9. Console Eval (сразу под JS Logs)
+  h += '<details class="sub" id="eval-sub">';
+  h += '<summary title="Console eval — выполнить JS выражение">Console Eval</summary>';
+  h += '<div class="logcat-toolbar">';
+  h += '<input type="text" class="eval-input" placeholder="JS expression… (e.g. window._logcatLiveTimer)" style="flex:1;padding:3px 6px;font-size:12px;background:var(--bg3);color:var(--fg);border:1px solid var(--border);border-radius:3px;font-family:monospace">';
+  h += '<button class="logcat-btn" onclick="window._evalConsole&&window._evalConsole()" title="Run">\u25B6 Run</button>';
+  h += '<button class="logcat-btn" onclick="window._evalClear&&window._evalClear()" title="Clear">\uD83D\uDDD1</button>';
+  h += '</div>';
+  h += '<pre class="debug-pre" id="eval-output" style="max-height:200px;overflow:auto;font-size:11px">(нажмите \u25B6 Run)</pre>';
+  h += '</details>';
+
+  // 10. Performance
+  if (typeof window !== 'undefined') {
+    var p = window._perf || {};
+    h += '<details class="sub" id="perf-sub">';
+    h += '<summary title="Performance — замеры JS функций">Performance</summary>';
+    h += '<div class="logcat-toolbar">';
+    h += '<button class="logcat-btn" onclick="window._perfReset&&window._perfReset()" title="Reset">\uD83D\uDD04 Reset</button>';
+    h += '</div>';
+    h += '<pre class="debug-pre" id="perf-pre" style="max-height:200px;overflow:auto;font-size:11px">';
+    h += 'render() : ' + (p.render != null ? p.render + 'ms' : '?') + '\n';
+    h += 'reloadLogcat() : ' + (p.reloadLogcat != null ? p.reloadLogcat + 'ms' : '?') + '\n';
+    h += 'loadDebugCard() : ' + (p.loadDebugCard != null ? p.loadDebugCard + 'ms' : '?') + '\n';
+    h += '</pre>';
     h += '</details>';
   }
 
-  // MTAPI_313: processes-all
-  h += '<details class="sub" id="processes-all-sub">';
-  h += '<summary title="All processes через ActivityManager (обновляется при раскрытии)">Processes (all)</summary>';
-  h += '<pre class="debug-pre" id="processes-all">loading…</pre>';
-  h += '</details>';
-
-  // MTAPI_315: встроенный devtools (iframe)
-  h += '<details class="sub">';
-  h += '<summary title="WebView DevTools">🔧 DevTools (встроенный)</summary>';
+  // 11. DevTools
+  h += '<details class="sub" id="devtools-sub">';
+  h += '<summary title="WebView DevTools">\uD83D\uDD27 DevTools (встроенный)</summary>';
   h += '<div class="debug-devtools" style="padding:8px">';
   h += '<div id="devtools-status" style="font-size:12px;margin-bottom:6px">loading…</div>';
   h += '<div id="devtools-list" style="font-size:12px"></div>';
-  h += '<div id="devtools-frame" style="margin-top:6px;border:1px solid var(--border);border-radius:4px;height:400px;overflow:hidden"></div>';
+  h += '<div id="devtools-frame" style="margin-top:6px;border:1px solid var(--border);border-radius:4px;height:400px;overflow:auto;max-height:400px"></div>';
   h += '</div>';
   h += '</details>';
 
   return h || '<div class="empty">no debug info</div>';
 }
 
-// MTAPI_260: logcat levels + search (единственная копия — дубликат удалён)
 function renderLogcatLines(logcat) {
   var lines = logcat.split('\n').reverse();
   var out = '';
@@ -1464,6 +1555,7 @@ function detectLogLevel(line) {
 // MTAPI_LOGCAT_LIVE: logcat автообновляется каждые 3с (по умолчанию, без UI)
 function _startLogcatLive() {
   if (typeof window === 'undefined') return;
+  if (!_LOGCAT_LIVE_ENABLED) return;   // MTAPI_LOGCAT_LIVE_FLAG: disabled
   if (window._logcatLiveTimer) return;
   window._logcatLiveTimer = setInterval(function(){
     var pre = document.getElementById('logcat-pre');
@@ -1481,6 +1573,7 @@ function _stopLogcatLive() {
 }
 
 function reloadLogcat() {
+  var _perfT0 = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
   var pre = document.getElementById('logcat-pre');
   if (!pre) return;
   if (window._logcatRefreshing) return;
@@ -1494,7 +1587,11 @@ function reloadLogcat() {
       if (data.logcat) {
         pre.innerHTML = renderLogcatLines(String(data.logcat));
         pre.scrollTop = wasAtTop ? 0 : scrollTop;
-        filterLogcat();
+        if (typeof window !== 'undefined' && typeof window.filterLogcat === 'function') {
+          window.filterLogcat();
+        } else if (typeof filterLogcat === 'function') {
+          filterLogcat();
+        }
       }
       // MTAPI_UPTIME_LIVE: uptime обновляется вместе с logcat (каждые 3с).
       // Надёжнее, чем toggle-listener (не зависит от event timing).
@@ -1509,7 +1606,13 @@ function reloadLogcat() {
       }
     })
     .catch(function(){})
-    .finally(function(){ window._logcatRefreshing = false; });
+    .finally(function(){
+      window._logcatRefreshing = false;
+      var _perfT1 = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+      window._perf = window._perf || {};
+      window._perf.reloadLogcat = Math.round(_perfT1 - _perfT0);
+      if (typeof window._updatePerfDisplay === 'function') window._updatePerfDisplay();
+    });
 }
 
 // ─── MTAPI_140: exports для тестов (node) ───
@@ -1563,6 +1666,11 @@ if (typeof window !== 'undefined') {
       if (!pre) return;
       var q = (searches[0].value || '').trim();
       var ql = q.toLowerCase();
+      // MTAPI_JSLOG_LEVELS: учитывать уровни V/D/I/W/E/F
+      var levels = {};
+      document.querySelectorAll('.jslog-lvl').forEach(function(cb){
+        levels[cb.dataset.lvl] = cb.checked;
+      });
       var visible = 0, total = 0;
       var lines = pre.querySelectorAll('.logcat-line');
       for (var i = 0; i < lines.length; i++) {
@@ -1573,12 +1681,23 @@ if (typeof window !== 'undefined') {
           orig = span.textContent || '';
           span.setAttribute('data-orig', orig);
         }
-        var show = !ql || orig.toLowerCase().indexOf(ql) >= 0;
+        // Определить уровень из class
+        var lvl = 'V';
+        var cls = span.className || '';
+        if (typeof cls === 'string') {
+          var parts = cls.split(' ');
+          for (var k = 0; k < parts.length; k++) {
+            if (parts[k].indexOf('lvl-') === 0) lvl = parts[k].substring(4).toUpperCase();
+          }
+        }
+        var matchLvl = levels[lvl] !== false;
+        var matchSearch = !ql || orig.toLowerCase().indexOf(ql) >= 0;
+        var show = matchLvl && matchSearch;
         span.style.display = show ? '' : 'none';
         if (show) visible++;
         if (ql && show) {
           span.innerHTML = (typeof window.highlightText === 'function') ? window.highlightText(orig, q) : esc(orig);
-        } else {
+        } else if (show) {
           span.innerHTML = esc(orig);
         }
       }
@@ -1596,6 +1715,299 @@ if (typeof window !== 'undefined') {
       s.addEventListener('input', window.filterJsLog);
       s.addEventListener('keyup', window.filterJsLog);
     }
+    var cbs = document.querySelectorAll('.jslog-lvl');
+    for (var j = 0; j < cbs.length; j++) {
+      var cb = cbs[j];
+      if (cb.getAttribute('data-jsbound') === '1') continue;
+      cb.setAttribute('data-jsbound', '1');
+      cb.addEventListener('change', window.filterJsLog);
+    }
+  };
+}
+
+
+
+// MTAPI_BYID: safe getElementById (null guard, src-* и др.)
+function _byId(id) {
+  if (typeof document === 'undefined') return null;
+  return document.getElementById(id);
+}
+
+// MTAPI_VIEW_SOURCE: просмотр app.js с Search/Select/Copy (Sources)
+if (typeof window !== 'undefined') {
+  window._viewAppSource = function() {
+    try {
+      var url = '/app.js?token=' + encodeURIComponent(TOKEN);
+      _fetch(url).then(function(r){ return r.text(); }).then(function(text){
+        window._src = text;
+        var frame = document.getElementById('devtools-frame');
+        if (!frame) { console.log('[mtapi] devtools-frame не найден'); return; }
+        frame.style.height = '600px';
+        frame.style.maxHeight = '600px';
+        frame.style.overflow = 'hidden';
+        setTimeout(function(){ try { frame.scrollIntoView({behavior:'smooth', block:'start'}); } catch(e) {} }, 100);
+        frame.innerHTML =
+          '<div style="display:flex;flex-direction:column;height:100%;background:#1a1a1a;overflow:hidden">' +
+            '<div style="flex:0 0 auto;background:#2a2a2a;padding:6px;border-bottom:1px solid #555">' +
+              '<input id="src-q" placeholder="search app.js…" style="width:180px;padding:3px 6px;font-size:12px;background:#111;color:#eee;border:1px solid #555;border-radius:3px">' +
+              '<button id="src-select" class="logcat-btn" style="margin-left:4px">Select</button>' +
+              '<button id="src-copy" class="logcat-btn" style="margin-left:4px">Copy</button>' +
+              '<button id="src-download" class="logcat-btn" style="margin-left:4px">Download</button>' +
+              '<span id="src-status" style="font-size:11px;color:#888;margin-left:8px"></span>' +
+            '</div>' +
+            '<pre id="src-pre" style="flex:1 1 auto;margin:0;padding:8px;overflow:auto;white-space:pre-wrap;word-wrap:break-word;font-size:11px;line-height:1.4;background:#1a1a1a;color:#ddd;scrollbar-width:thin"></pre>' +
+          '</div>';
+
+        var pre = _byId('src-pre');
+        if (!pre) { console.log('[mtapi] src-pre не найден'); return; }
+        pre.textContent = text;
+        var st0 = _byId('src-status');
+        if (st0) st0.textContent = text.length + 'b, ' + text.split('\n').length + ' lines';
+
+        // Search
+        var qEl = _byId('src-q');
+        if (qEl) qEl.addEventListener('input', function(e){
+          var q = (e.target.value || '').toLowerCase();
+          if (!q) { pre.textContent = text; var st = _byId('src-status'); if (st) st.textContent = text.length + 'b'; return; }
+          var out = '', idx = 0, n = 0, pos;
+          var low = text.toLowerCase();
+          while (true) {
+            pos = low.indexOf(q, idx);
+            if (pos < 0) { out += esc(text.slice(idx)); break; }
+            out += esc(text.slice(idx, pos));
+            out += '<mark style="background:#ffeb3b;color:#000;border-radius:2px">' + esc(text.slice(pos, pos + q.length)) + '</mark>';
+            idx = pos + q.length;
+            n++;
+            if (n > 1000) break;
+          }
+          pre.innerHTML = out;
+          var stEl2 = _byId('src-status');
+          if (stEl2) stEl2.textContent = n + ' matches / ' + text.length + 'b';
+        });
+
+        // Select all
+        var selEl = _byId('src-select');
+        if (selEl) selEl.addEventListener('click', function(){
+          var r = document.createRange();
+          r.selectNodeContents(pre);
+          var s = window.getSelection();
+          s.removeAllRanges(); s.addRange(r);
+        });
+
+        // Copy
+        var copyEl = _byId('src-copy');
+        if (copyEl) copyEl.addEventListener('click', function(){
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text).then(function(){
+              console.log('[mtapi] app.js copied ' + text.length + 'b');
+              var stEl3 = _byId('src-status');
+              if (stEl3) stEl3.textContent = 'copied ' + text.length + 'b';
+            }).catch(function(){ _copyFallback(text); });
+          } else {
+            _copyFallback(text);
+          }
+        });
+
+        // Download
+        var dlEl = _byId('src-download');
+        if (dlEl) dlEl.addEventListener('click', function(){
+          try {
+            var blob = new Blob([text], {type: 'text/javascript'});
+            var a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = 'app.js';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            console.log('[mtapi] app.js downloaded');
+          } catch(e) { console.log('[mtapi] download err: ' + e.message); }
+        });
+
+        console.log('[mtapi] view app.js: ' + text.length + 'b');
+      }).catch(function(e){
+        console.log('[mtapi] view app.js fetch err: ' + e.message);
+      });
+    } catch(e) { console.log('[mtapi] _viewAppSource err: ' + e.message); }
+  };
+}
+
+// MTAPI_INSPECT_DOM: Elements — список всех id/class в документе
+if (typeof window !== 'undefined') {
+  window._inspectDom = function() {
+    try {
+      var pre = document.getElementById('dom-pre');
+      if (!pre) { console.log('[mtapi] dom-pre не найден'); return; }
+      var all = document.querySelectorAll('[id], [class]');
+      var lines = [];
+      for (var i = 0; i < all.length; i++) {
+        var el = all[i];
+        var tag = el.tagName.toLowerCase();
+        var id = el.id ? '#' + el.id : '';
+        var cls = el.className && typeof el.className === 'string' ? '.' + el.className.split(/\s+/).filter(Boolean).join('.') : '';
+        var indent = '';
+        var p = el.parentElement;
+        while (p && p !== document.body) { indent += '  '; p = p.parentElement; }
+        lines.push(indent + tag + id + cls);
+      }
+      pre.textContent = lines.join('\n');
+      console.log('[mtapi] DOM inspected: ' + lines.length + ' elements');
+    } catch(e) { console.log('[mtapi] _inspectDom err: ' + e.message); }
+  };
+
+  window._copyDom = function() {
+    try {
+      var pre = document.getElementById('dom-pre');
+      if (!pre) return;
+      var text = pre.textContent || '';
+      if (!text) return;
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(function(){
+          console.log('[mtapi] DOM copied ' + text.length + 'b');
+        }).catch(function(){ _copyFallback(text); });
+      } else { _copyFallback(text); }
+    } catch(e) { console.log('[mtapi] _copyDom err: ' + e.message); }
+  };
+}
+
+// MTAPI_SHOW_STORAGE: Application — localStorage, sessionStorage, caches
+if (typeof window !== 'undefined') {
+  window._showStorage = function() {
+    try {
+      var pre = document.getElementById('storage-pre');
+      if (!pre) return;
+      var lines = [];
+      try {
+        lines.push('═══ localStorage (' + localStorage.length + ') ═══');
+        for (var i = 0; i < localStorage.length; i++) {
+          var k = localStorage.key(i);
+          var v = localStorage.getItem(k);
+          lines.push('  ' + k + ' = ' + (v && v.length > 200 ? v.slice(0, 200) + '...(' + v.length + 'b)' : v));
+        }
+      } catch(e) { lines.push('localStorage error: ' + e.message); }
+      lines.push('');
+      try {
+        lines.push('═══ sessionStorage (' + sessionStorage.length + ') ═══');
+        for (var j = 0; j < sessionStorage.length; j++) {
+          var k2 = sessionStorage.key(j);
+          var v2 = sessionStorage.getItem(k2);
+          lines.push('  ' + k2 + ' = ' + (v2 && v2.length > 200 ? v2.slice(0, 200) + '...' : v2));
+        }
+      } catch(e) { lines.push('sessionStorage error: ' + e.message); }
+      pre.textContent = lines.join('\n');
+      if (typeof caches !== 'undefined' && caches.keys) {
+        caches.keys().then(function(keys){
+          var tail = ['', '═══ caches (' + keys.length + ') ═══'];
+          keys.forEach(function(k){ tail.push('  ' + k); });
+          pre.textContent = pre.textContent + '\n' + tail.join('\n');
+        }).catch(function(){});
+      }
+      console.log('[mtapi] storage: ' + lines.length + ' lines');
+    } catch(e) { console.log('[mtapi] _showStorage err: ' + e.message); }
+  };
+}
+
+// MTAPI_COPY_JSLOG: копировать видимые JS Logs (как _copyLogcat)
+if (typeof window !== 'undefined') {
+  window._copyJslog = function() {
+    try {
+      var pre = document.getElementById('jslog-pre');
+      if (!pre) { alert('jslog-pre не найден'); return; }
+      var lines = pre.querySelectorAll('.logcat-line');
+      var visible = [];
+      for (var i = 0; i < lines.length; i++) {
+        if (lines[i].style.display === 'none') continue;
+        var orig = lines[i].getAttribute('data-orig');
+        if (orig === null) orig = lines[i].textContent || '';
+        visible.push(orig);
+      }
+      var text = visible.length ? visible.join('\n') : (pre.textContent || pre.innerText || '');
+      if (!text) { alert('jslog пуст'); return; }
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(function(){
+          console.log('[mtapi] jslog copied ' + text.length + 'b (' + visible.length + ' lines)');
+        }).catch(function(){ _copyFallback(text); });
+      } else {
+        _copyFallback(text);
+      }
+    } catch(e) { alert('error: ' + e.message); }
+  };
+}
+
+// MTAPI_CONSOLE_EVAL: eval JS в /debug
+if (typeof window !== 'undefined') {
+  window._evalConsole = function() {
+    try {
+      var inp = document.querySelector('.eval-input');
+      if (!inp) return;
+      var cmd = (inp.value || '').trim();
+      if (!cmd) return;
+      var result, out;
+      try {
+        var _evalFn = window['eval'] || eval;
+        result = _evalFn(cmd); // MTAPI_EVAL_ALLOW: user-typed console eval
+      } catch(e) {
+        out = 'Error: ' + e.message + (e.stack ? '\n' + e.stack : '');
+        var preE = document.getElementById('eval-output');
+        if (preE) preE.textContent = out;
+        console.log('[eval] ' + cmd + ' → ' + out);
+        return;
+      }
+      try {
+        out = (result === undefined) ? 'undefined'
+            : (result === null) ? 'null'
+            : (typeof result === 'object') ? JSON.stringify(result, null, 2)
+            : String(result);
+      } catch(e2) {
+        out = String(result);
+      }
+      var pre = document.getElementById('eval-output');
+      if (pre) pre.textContent = out;
+      console.log('[eval] ' + cmd + ' → ' + (out || '').slice(0, 200));
+    } catch(e) {
+      console.log('[mtapi] _evalConsole err: ' + e.message);
+    }
+  };
+  window._evalClear = function() {
+    var pre = document.getElementById('eval-output');
+    if (pre) pre.textContent = '(нажмите ▶ Run)';
+  };
+}
+
+// MTAPI_PERF: update display
+if (typeof window !== 'undefined') {
+  window._updatePerfDisplay = function() {
+    var pre = document.getElementById('perf-pre');
+    if (!pre) return;
+    var p = (window._perf) ? window._perf : {};
+    var r = (p.render != null ? p.render + 'ms' : '?');
+    var l = (p.reloadLogcat != null ? p.reloadLogcat + 'ms' : '?');
+    var d = (p.loadDebugCard != null ? p.loadDebugCard + 'ms' : '?');
+    pre.textContent = 
+      'render()        : ' + r + '\n' +
+      'reloadLogcat()  : ' + l + '\n' +
+      'loadDebugCard() : ' + d + '\n';
+  };
+}
+
+// MTAPI_PERF: reset замеров (keep render)
+if (typeof window !== 'undefined') {
+  window._perfReset = function() {
+    var keepRender = (window._perf) ? window._perf.render : null;
+    window._perf = {};
+    if (keepRender != null) window._perf.render = keepRender;
+    if (typeof window._updatePerfDisplay === 'function') window._updatePerfDisplay();
+    console.log('[mtapi] perf reset');
+  };
+}
+
+
+// MTAPI_PERSIST_ERR: очистить persistent errors
+if (typeof window !== 'undefined') {
+  window._persistErrorsClear = function() {
+    try { localStorage.removeItem('mtapi-errors'); } catch(e) {}
+    var pre = (typeof _el === 'function') ? _el('persist-errors-pre') : null;
+    if (pre) pre.textContent = '';
+    console.log('[mtapi] persistent errors cleared');
   };
 }
 
@@ -1613,7 +2025,7 @@ if (typeof window !== 'undefined') {
 if (typeof window !== 'undefined') {
   window.filterLogcat = function() {
     try {
-      var searches = document.querySelectorAll('.logcat-search');
+      var searches = document.querySelectorAll('#logcat-sub .logcat-search');
       var pre = document.getElementById('logcat-pre');
       if (!pre) {
         var pres = document.querySelectorAll('.logcat-pre');
@@ -1623,7 +2035,7 @@ if (typeof window !== 'undefined') {
       var q = (searches[0].value || '').trim();
       var ql = q.toLowerCase();
       var levels = {};
-      document.querySelectorAll('.logcat-lvl input').forEach(function(cb){
+      document.querySelectorAll('#logcat-sub .logcat-lvl input').forEach(function(cb){
         levels[cb.dataset.lvl] = cb.checked;
       });
       var visible = 0, total = 0;
@@ -1685,7 +2097,7 @@ if (typeof window !== 'undefined') {
   };
 
   window.attachLogcatSearch = function() {
-    var searches = document.querySelectorAll('.logcat-search');
+    var searches = document.querySelectorAll('#logcat-sub .logcat-search');
     var bound = 0;
     for (var i = 0; i < searches.length; i++) {
       var s = searches[i];
@@ -1695,7 +2107,7 @@ if (typeof window !== 'undefined') {
       s.addEventListener('keyup', window.filterLogcat);
       bound++;
     }
-    var cbs = document.querySelectorAll('.logcat-lvl input');
+    var cbs = document.querySelectorAll('#logcat-sub .logcat-lvl input');
     for (var j = 0; j < cbs.length; j++) {
       var cb = cbs[j];
       if (cb.getAttribute('data-bound') === '1') continue;

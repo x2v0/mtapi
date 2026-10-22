@@ -1,6 +1,7 @@
 package main
 
 import (
+	_ "embed"
 	"io"
 	"encoding/json"
 	"fmt"
@@ -466,6 +467,12 @@ func (s *apiServer) handleIndex(w http.ResponseWriter, r *http.Request) {
 func startHTTP(api AndroidAPI, token string) error {
 	s := &apiServer{api: api, token: token}
 	mux := http.NewServeMux()
+	mux.HandleFunc("/mtapi-debug.js", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/javascript; charset=utf-8")
+		w.Header().Set("Cache-Control", "public, max-age=3600")
+		fmt.Fprint(w, mtapiDebugJS)
+	})
+
 	mux.HandleFunc("/app.js", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/javascript; charset=utf-8")
 		w.Header().Set("Cache-Control", "public, max-age=3600")
@@ -661,3 +668,6 @@ func collectDebug() map[string]any {
 }
 
 var startTime = time.Now()
+
+//go:embed mtapi-debug.js
+var mtapiDebugJS string
