@@ -716,6 +716,14 @@ function makeDebugCard() {
   ep.appendChild(head);
   ep.appendChild(body);
 
+  ep.addEventListener('toggle', function(){
+    if (!ep.open) {
+      if (typeof _stopLogcatLive === 'function') _stopLogcatLive();
+    } else {
+      if (typeof _startLogcatLive === 'function') _startLogcatLive();
+    }
+  });
+
   return ep;
 }
 
@@ -790,6 +798,7 @@ function loadDebugCard(ep) {
         }
       } catch(e) { console.log('[mtapi] processList err:', e.message); }
       setTimeout(attachLogcatSearch, 100);
+      _startLogcatLive();
       ep.open = true;
     })
     .catch(function(e){
@@ -919,19 +928,44 @@ function detectLogLevel(line) {
   return 'V';
 }
 
+// MTAPI_LOGCAT_LIVE: logcat автообновляется каждые 3с (по умолчанию, без UI)
+function _startLogcatLive() {
+  if (typeof window === 'undefined') return;
+  if (window._logcatLiveTimer) return;
+  window._logcatLiveTimer = setInterval(function(){
+    var pre = document.getElementById('logcat-pre');
+    if (pre) reloadLogcat();
+    else _stopLogcatLive();
+  }, 3000);
+}
+
+function _stopLogcatLive() {
+  if (typeof window === 'undefined') return;
+  if (window._logcatLiveTimer) {
+    clearInterval(window._logcatLiveTimer);
+    window._logcatLiveTimer = null;
+  }
+}
+
 function reloadLogcat() {
   var pre = document.getElementById('logcat-pre');
   if (!pre) return;
+  if (window._logcatRefreshing) return;
+  window._logcatRefreshing = true;
+  var scrollTop = pre.scrollTop;
+  var wasAtTop = scrollTop < 5;
   _fetch('/debug?token=' + encodeURIComponent(TOKEN))
     .then(function(r){ return r.json(); })
     .then(function(j){
       var data = (j && j.data) ? j.data : j;
       if (data.logcat) {
         pre.innerHTML = renderLogcatLines(String(data.logcat));
+        pre.scrollTop = wasAtTop ? 0 : scrollTop;
         filterLogcat();
       }
     })
-    .catch(function(){});
+    .catch(function(){})
+    .finally(function(){ window._logcatRefreshing = false; });
 }
 
 // ─── MTAPI_140: exports для тестов (node) ───
