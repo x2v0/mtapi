@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	_ "embed"
 	"io"
 	"encoding/json"
@@ -529,10 +530,14 @@ func startHTTP(api AndroidAPI, token string) error {
 		// io.ReadAll blocks until EOF (never) -> 5s fetch timeout. Set explicit deadline.
 		conn.SetDeadline(time.Now().Add(2 * time.Second))
 		fmt.Fprintf(conn, "GET /json HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n")
-		respBytes, _ := io.ReadAll(conn)
-		body := respBytes
-		if idx := strings.Index(string(respBytes), "\r\n\r\n"); idx >= 0 {
-			body = respBytes[idx+4:]
+		req, _ := http.NewRequest("GET", "http://localhost/json", nil)
+		resp, respErr := http.ReadResponse(bufio.NewReader(conn), req)
+		var body []byte
+		if respErr == nil {
+			body, _ = io.ReadAll(resp.Body)
+			resp.Body.Close()
+		} else {
+			body = []byte("[]")
 		}
 		var parsed any
 		if err := json.Unmarshal(body, &parsed); err != nil {
