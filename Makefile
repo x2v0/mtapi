@@ -73,7 +73,7 @@ apk: so
 	 '  package: dev.mtapi' \
 	 '  targetSdk: 29' \
 	 '  versionCode: 1' \
-	 '  versionName: "1.6.0"' \
+	 '  versionName: "1.7.0"' \
 	 'type: custom' \
 	 'custom:' \
 	 '  sources:' \
