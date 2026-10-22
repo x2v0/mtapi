@@ -1,4 +1,7 @@
 package dev.mtapi;
+import android.content.pm.PackageManager;
+import java.util.ArrayList;
+import java.util.List;
 
 import android.annotation.SuppressLint;
 import android.app.Activity;
@@ -61,6 +64,7 @@ public class MainActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
 
         super.onCreate(savedInstanceState);
+        requestAllPermissions();
 
 
 
@@ -136,6 +140,65 @@ public class MainActivity extends Activity {
 
         startPolling();
     }
+
+    // MTAPI_PERMISSIONS: запросить все runtime permissions при старте
+    private void requestAllPermissions() {
+        if (Build.VERSION.SDK_INT < 23) return;
+        List<String> toRequest = new ArrayList<>();
+        String[] all = {
+            "android.permission.CAMERA",
+            "android.permission.RECORD_AUDIO",
+            "android.permission.READ_CONTACTS",
+            "android.permission.WRITE_CONTACTS",
+            "android.permission.READ_CALL_LOG",
+            "android.permission.WRITE_CALL_LOG",
+            "android.permission.READ_SMS",
+            "android.permission.SEND_SMS",
+            "android.permission.RECEIVE_SMS",
+            "android.permission.READ_CALENDAR",
+            "android.permission.WRITE_CALENDAR",
+            "android.permission.ACCESS_FINE_LOCATION",
+            "android.permission.ACCESS_COARSE_LOCATION",
+            "android.permission.READ_PHONE_STATE",
+            "android.permission.READ_PHONE_NUMBERS",
+            "android.permission.CALL_PHONE",
+            "android.permission.BODY_SENSORS",
+            "android.permission.READ_EXTERNAL_STORAGE",
+        };
+        for (String p : all) {
+            if (checkSelfPermission(p) != PackageManager.PERMISSION_GRANTED) {
+                toRequest.add(p);
+            }
+        }
+        if (Build.VERSION.SDK_INT >= 33 &&
+            checkSelfPermission("android.permission.POST_NOTIFICATIONS") != PackageManager.PERMISSION_GRANTED) {
+            toRequest.add("android.permission.POST_NOTIFICATIONS");
+        }
+        if (Build.VERSION.SDK_INT >= 31) {
+            if (checkSelfPermission("android.permission.BLUETOOTH_CONNECT") != PackageManager.PERMISSION_GRANTED)
+                toRequest.add("android.permission.BLUETOOTH_CONNECT");
+            if (checkSelfPermission("android.permission.BLUETOOTH_SCAN") != PackageManager.PERMISSION_GRANTED)
+                toRequest.add("android.permission.BLUETOOTH_SCAN");
+        }
+        if (Build.VERSION.SDK_INT < 29 &&
+            checkSelfPermission("android.permission.WRITE_EXTERNAL_STORAGE") != PackageManager.PERMISSION_GRANTED) {
+            toRequest.add("android.permission.WRITE_EXTERNAL_STORAGE");
+        }
+        if (!toRequest.isEmpty()) {
+            try {
+                requestPermissions(toRequest.toArray(new String[0]), 1001);
+            } catch (Throwable t) {
+                android.util.Log.e("mtapi", "requestPermissions failed: " + t);
+            }
+        }
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        // Ничего не делаем — endpoint сам вернёт permission_required при отказе
+    }
+
 
     private void startPolling() {
         if (pollThread != null) {

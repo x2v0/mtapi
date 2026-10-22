@@ -263,3 +263,25 @@ min-width:40px;text-align:right}
 .btn-uptime{background:transparent;border:none;color:var(--fg);cursor:pointer;
 font-family:inherit;font-size:inherit;padding:0;text-decoration:underline;text-decoration-style:dotted}
 .btn-uptime:hover{color:var(--accent)}
+
+/* MTAPI_GUI: красный border на endpoint с ошибкой (виден при collapsed) */
+details.ep.ep-err > summary.ep-h {
+  border-left: 3px solid var(--err);
+  padding-left: 4px;
+}
+
+/* MTAPI_GUI: кнопка copy (📋) — как toggle { } */
+button.copy {
+  font-size: 12px;
+  padding: 1px 6px;
+  margin-left: 4px;
+  background: var(--bg3);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  cursor: pointer;
+  font-family: inherit;
+}
+button.copy:hover {
+  background: var(--bg2);
+}

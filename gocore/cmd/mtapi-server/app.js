@@ -443,6 +443,43 @@ function call(path){
   });
 }
 
+
+// MTAPI_GUI: copy JSON endpoint'а в clipboard
+function _copyEndpointJson(ep) {
+  var j = ep._lastJson;
+  if (!j) return;
+  var text = JSON.stringify(j, null, 2);
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(function(){
+      console.log('[mtapi] copied ' + text.length + 'b');
+    }).catch(function(){ _copyFallback(text); });
+  } else {
+    _copyFallback(text);
+  }
+}
+
+// MTAPI_GUI: счётчик успешных/ошибочных в группе
+function _updateGroupCounter(gd) {
+  if (!gd) return;
+  var h = gd.querySelector('.group-h');
+  if (!h) return;
+  var base = gd.dataset.group || '';
+  var eps = gd.querySelectorAll('.ep');
+  var total = eps.length, ok = 0, err = 0;
+  for (var i = 0; i < eps.length; i++) {
+    var st = eps[i].querySelector('.status');
+    if (!st) continue;
+    if (st.classList.contains('ok')) ok++;
+    else if (st.classList.contains('err')) err++;
+  }
+  var tail = '';
+  if (ok + err > 0) {
+    if (err === 0) tail = ' \u2014 ' + ok + '/' + total + ' \u2713';
+    else tail = ' \u2014 ' + ok + '/' + total + ', ' + err + ' \u2717';
+  }
+  h.textContent = base + ' (' + total + ')' + tail;
+}
+
 function makeCard(path){
   var ep=document.createElement('details');
   ep.className='ep'; ep.dataset.path=path;
@@ -450,9 +487,16 @@ function makeCard(path){
   var btn=document.createElement('button'); btn.className='run'; btn.textContent='GET '+path; btn.title='Click to fetch '+path+' (single request, no queue)';
   btn.addEventListener('click',function(e){e.preventDefault();e.stopPropagation();run(ep,path)});
   var status=document.createElement('span'); status.className='status';
+  var copy=document.createElement('button'); copy.className='copy';
+  copy.textContent='\uD83D\uDCCB'; copy.title='copy raw JSON to clipboard';
+  copy.style.display='none';
+  copy.addEventListener('click', function(e){
+    e.preventDefault(); e.stopPropagation();
+    _copyEndpointJson(ep);
+  });
   var toggle=document.createElement('button'); toggle.className='toggle';
   toggle.textContent='{ }'; toggle.title='toggle raw JSON';
-  head.appendChild(btn); head.appendChild(status); head.appendChild(toggle);
+  head.appendChild(btn); head.appendChild(status); head.appendChild(copy); head.appendChild(toggle);
   var body=document.createElement('div'); body.className='ep-b';
   ep.appendChild(head); ep.appendChild(body);
   return ep;
@@ -466,17 +510,26 @@ function run(ep,path){
   status.className='status loading'; status.innerHTML='<span class="spin"></span>';
   body.innerHTML='<div class="empty">loading…</div>';
   call(path).then(function(res){
+    var copyBtn = ep.querySelector('.copy');
+    var grp = ep.closest ? ep.closest('.group') : null;
+    function _done(){ if (grp) _updateGroupCounter(grp); }
     if(res.error){
+      ep.classList.add('ep-err');
       status.className='status err'; status.textContent=res.ms+'ms';
       body.innerHTML='<div class="empty" style="color:var(--err)">'+esc(res.error)+'</div>';
-      toggle.style.display='none'; return;
+      toggle.style.display='none'; if (copyBtn) copyBtn.style.display='none';
+      _done(); return;
     }
     var j=res.json;
     if(j&&j.ok===false){
+      ep.classList.add('ep-err');
       status.className='status err'; status.textContent=res.ms+'ms';
       body.innerHTML='<div class="empty" style="color:var(--err)">error: '+esc(j.error||'unknown')+'</div>';
-      toggle.style.display='none'; return;
+      toggle.style.display='none'; if (copyBtn) copyBtn.style.display='none';
+      _done(); return;
     }
+    ep.classList.remove('ep-err');
+    ep._lastJson = j;
     status.className='status ok'; status.textContent=res.ms+'ms';
     var data=(j&&('data'in j))?j.data:j;
     body.innerHTML=renderData(data);
@@ -486,6 +539,8 @@ function run(ep,path){
     raw.appendChild(sum); raw.appendChild(pre); body.appendChild(raw);
     toggle.style.display='';
     toggle.onclick=function(){raw.open=!raw.open;};
+    if (copyBtn) copyBtn.style.display='';
+    _done();
   });
 }
 
@@ -505,6 +560,7 @@ function render(){
     var h=document.createElement('summary'); h.className='group-h';
     h.textContent=g.group+' ('+filtered.length+')'; h.title=g.group+': '+filtered.length+' endpoint'+(filtered.length!==1?'s':'')+' (click to expand/collapse)';
     gd.appendChild(h);
+    gd.addEventListener('toggle', function(){ _updateGroupCounter(gd); });
     for(var pi=0;pi<filtered.length;pi++)gd.appendChild(makeCard(filtered[pi]));
     main.appendChild(gd);
   }
