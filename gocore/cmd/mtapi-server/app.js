@@ -964,6 +964,17 @@ function reloadLogcat() {
         pre.scrollTop = wasAtTop ? 0 : scrollTop;
         filterLogcat();
       }
+      // MTAPI_UPTIME_LIVE: uptime обновляется вместе с logcat (каждые 3с).
+      // Надёжнее, чем toggle-listener (не зависит от event timing).
+      if (data && data.uptime) {
+        var upPre = document.getElementById('uptime-pre');
+        if (upPre) {
+          var next = String(data.uptime);
+          if (upPre.textContent !== next) {
+            upPre.textContent = next;
+          }
+        }
+      }
     })
     .catch(function(){})
     .finally(function(){ window._logcatRefreshing = false; });

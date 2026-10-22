@@ -104,6 +104,17 @@ test('app.js: uptime refresh on toggle (MTAPI_UPTIME_REFRESH)', function() {
   assert.ok(src.includes('id="uptime-pre"'), 'нет id="uptime-pre"');
 });
 
+test('app.js: reloadLogcat updates #uptime-pre (MTAPI_UPTIME_LIVE)', function() {
+  const src = readText(APP_JS);
+  assert.ok(src.includes('MTAPI_UPTIME_LIVE'),
+    'нет MTAPI_UPTIME_LIVE — uptime не обновляется вместе с logcat');
+  // проверяем, что reloadLogcat содержит обновление uptime-pre
+  const rl = src.slice(src.indexOf('function reloadLogcat'));
+  const rlBody = rl.slice(0, rl.indexOf('\nfunction '));
+  assert.ok(rlBody.includes('uptime-pre'),
+    'reloadLogcat не содержит #uptime-pre — live-обновление сломано');
+});
+
 test('app.js: no duplicate function names anywhere', function() {
   const src = readText(APP_JS);
   const re = /^function\s+(\w+)\s*\(/gm;
