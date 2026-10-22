@@ -6,7 +6,7 @@ SHARED   := $(HOME)/dwn/shared-tests
 RUNNER   := scripts/test-runner.sh
 SO       := android/app/src/main/jniLibs/arm64-v8a/libmtapi-server.so
 APK_CFG  := $(HOME)/tmp/mtapi-standalone.yaml
-APK_OUT  := $(CURDIR)/build/mtapi-debug.apk
+APK_OUT  := $(CURDIR)/build/mtapi.apk
 APKS_DIR := $(HOME)/dwn/apks
 W2A      := $(HOME)/w2a
 
@@ -87,18 +87,18 @@ apk: so
 	 '  targetApi: 34' \
 	 '  javaRelease: "17"' \
 	 'output:' \
-	 '  path: "$(CURDIR)/build/mtapi-debug.apk"' \
+	 '  path: "$(CURDIR)/build/mtapi.apk"' \
 	 > $(APK_CFG)
 	cd $(W2A) && go run ./cmd/wta build -c $(APK_CFG) 2>&1 | tail -8
 	@test -f $(APK_OUT) || (echo "✗ APK not built" && exit 1)
 	@ls -lh $(APK_OUT)
 	@mkdir -p $(APKS_DIR) && cp -f $(APK_OUT) $(APKS_DIR)/mtapi-$$(date +%Y%m%d-%H%M%S).apk
 	@mkdir -p /sdcard/Download 2>/dev/null || true
-	@cp -f $(APK_OUT) /sdcard/Download/mtapi-debug.apk 2>/dev/null || true
+	@cp -f $(APK_OUT) /sdcard/Download/mtapi.apk 2>/dev/null || true
 	@mkdir -p $(APKS_DIR) 2>/dev/null || true
 	@cp -f $(APK_OUT) $(APKS_DIR)/mtapi-$$(date +%Y%m%d-%H%M%S).apk 2>/dev/null || true
 	@echo "  APK → $(APK_OUT)"
-	@echo "  APK → /sdcard/Download/mtapi-debug.apk"
+	@echo "  APK → /sdcard/Download/mtapi.apk"
 	@echo "  APK → $(APKS_DIR)/mtapi-*.apk"
 
 install: build
@@ -155,7 +155,7 @@ clean-tmp:
 
 clean-git:
 	@echo "🧹 git rm --cached build/*.idsig"
-	@git rm --cached build/mtapi-debug.apk.signed.tmp.idsig 2>/dev/null || true
+	@git rm --cached build/mtapi.apk.signed.tmp.idsig 2>/dev/null || true
 	@echo "   ✓ untracked from index"
 
 distclean: clean clean-bak clean-bin clean-tmp
