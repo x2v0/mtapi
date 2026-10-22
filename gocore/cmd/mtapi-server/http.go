@@ -15,6 +15,42 @@ import (
 	"os/exec"
 	"runtime")
 
+// MTAPI_DEVTOOLS_DIRECT: find PID of process owning @webview_devtools_remote_<PID>.
+// Go server runs as child of dev.mtapi (or is same process, depends on build).
+// We try Getpid (if in-process), Getppid (if forked child), then scan /proc.
+func findWebViewPid() int {
+	candidates := []int{os.Getpid(), os.Getppid()}
+	for _, pid := range candidates {
+		if pid <= 0 {
+			continue
+		}
+		name := fmt.Sprintf("\x00webview_devtools_remote_%d", pid)
+		conn, err := net.DialTimeout("unix", name, 500*time.Millisecond)
+		if err == nil {
+			conn.Close()
+			return pid
+		}
+	}
+	entries, _ := os.ReadDir("/proc")
+	for _, e := range entries {
+		pid, err := strconv.Atoi(e.Name())
+		if err != nil || pid <= 0 {
+			continue
+		}
+		cmdline, _ := os.ReadFile(fmt.Sprintf("/proc/%d/cmdline", pid))
+		s := string(cmdline)
+		if strings.Contains(s, "dev.mtapi") && !strings.Contains(s, "mtapi-server") && !strings.Contains(s, "--type=") {
+			name := fmt.Sprintf("\x00webview_devtools_remote_%d", pid)
+			conn, err := net.DialTimeout("unix", name, 500*time.Millisecond)
+			if err == nil {
+				conn.Close()
+				return pid
+			}
+		}
+	}
+	return 0
+}
+
 type apiServer struct {
 	api   AndroidAPI
 	token string
@@ -451,24 +487,64 @@ func startHTTP(api AndroidAPI, token string) error {
 		fmt.Fprint(w, swJS)
 	})
 	mux.HandleFunc("/call", s.handleCall)
-	mux.HandleFunc("/debug", func(w http.ResponseWriter, r *http.Request) {
-		if !s.checkAuth(r) {
-			s.writeJSON(w, 401, map[string]any{"ok": false, "error": "auth_failed"})
-	// MTAPI_325: /devtools/json
+	// MTAPI_DEVTOOLS_DIRECT: /devtools/json через abstract socket напрямую.
+	// Go server и WebView в одном процессе/UID — SELinux разрешает.
+	// adb forward НЕ нужен для работы из приложения.
 	mux.HandleFunc("/devtools/json", func(w http.ResponseWriter, r *http.Request) {
-		client := &http.Client{Timeout: 3 * time.Second}
-		resp, err := client.Get("http://127.0.0.1:9222/json")
-		if err != nil {
-			w.Header().Set("Content-Type", "application/json")
-			w.Write([]byte(`{"ok":false,"error":"` + err.Error() + `","data":[]}`))
+		if !s.checkAuth(r) {
+			s.writeJSON(w, 401, map[string]any{"ok": false, "error": "auth_failed", "data": []any{}})
 			return
 		}
-		defer resp.Body.Close()
-		body, _ := io.ReadAll(resp.Body)
+		webviewPid := findWebViewPid()
+		if webviewPid == 0 {
+			s.writeJSON(w, 200, map[string]any{
+				"ok":    false,
+				"error": "devtools_pid_not_found",
+				"hint":  "WebView.setWebContentsDebuggingEnabled(true) may not be active",
+				"data":  []any{},
+			})
+			return
+		}
+		abstractName := fmt.Sprintf("\x00webview_devtools_remote_%d", webviewPid)
+		conn, err := net.DialTimeout("unix", abstractName, 2*time.Second)
+		if err != nil {
+			s.writeJSON(w, 200, map[string]any{
+				"ok":     false,
+				"error":  "devtools_socket_unavailable",
+				"detail": err.Error(),
+				"pid":    webviewPid,
+				"data":   []any{},
+			})
+			return
+		}
+		defer conn.Close()
+		// MTAPI_DEVTOOLS_DEADLINE: WebView keeps connection open (keep-alive),
+		// io.ReadAll blocks until EOF (never) -> 5s fetch timeout. Set explicit deadline.
+		conn.SetDeadline(time.Now().Add(2 * time.Second))
+		fmt.Fprintf(conn, "GET /json HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n")
+		respBytes, _ := io.ReadAll(conn)
+		body := respBytes
+		if idx := strings.Index(string(respBytes), "\r\n\r\n"); idx >= 0 {
+			body = respBytes[idx+4:]
+		}
+		var parsed any
+		if err := json.Unmarshal(body, &parsed); err != nil {
+			s.writeJSON(w, 200, map[string]any{
+				"ok":     false,
+				"error":  "invalid_devtools_json",
+				"detail": err.Error(),
+				"pid":    webviewPid,
+				"data":   []any{},
+			})
+			return
+		}
 		w.Header().Set("Content-Type", "application/json")
 		w.Write(body)
 	})
 
+	mux.HandleFunc("/debug", func(w http.ResponseWriter, r *http.Request) {
+		if !s.checkAuth(r) {
+			s.writeJSON(w, 401, map[string]any{"ok": false, "error": "auth_failed"})
 			return
 		}
 		s.writeJSON(w, 200, map[string]any{"ok": true, "data": collectDebug()})
