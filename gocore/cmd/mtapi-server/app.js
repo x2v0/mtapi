@@ -1,5 +1,65 @@
 if (typeof window === 'undefined') { globalThis.window = {}; }
 
+// MTAPI_JSLOG: перехват console.* в буфер (MIUI блокирует chromium logs при debuggable=false)
+(function(){
+  if (typeof window === 'undefined') return;
+  window._jslogBuf = window._jslogBuf || [];
+  window._jslogMax = 500;
+  var orig = { log: console.log, warn: console.warn, error: console.error, info: console.info, debug: console.debug };
+  function push(level, args) {
+    try {
+      var msg = Array.prototype.map.call(args, function(a){
+        if (a instanceof Error) return a.stack || (a.name + ': ' + a.message);
+        if (typeof a === 'object') { try { return JSON.stringify(a); } catch(e) { return String(a); } }
+        return String(a);
+      }).join(' ');
+      var line = { t: Date.now(), lvl: level, m: msg };
+      window._jslogBuf.push(line);
+      if (window._jslogBuf.length > window._jslogMax) window._jslogBuf.shift();
+      // MTAPI_JSLOG_LIVE: append to DOM if section visible (no polling needed)
+      try {
+        var pre = document.getElementById('jslog-pre');
+        if (pre) {
+          var lv = level || 'log';
+          var cls = 'logcat-line lvl-' + (lv === 'error' ? 'e' : lv === 'warn' ? 'w' : lv === 'info' ? 'i' : lv === 'debug' ? 'd' : 'v');
+          var tstr = new Date(line.t).toISOString().slice(11, 23);
+          var text = tstr + ' [' + lv + '] ' + msg;
+          var span = document.createElement('span');
+          span.className = cls;
+          span.setAttribute('data-orig', text);
+          span.textContent = text;
+          pre.appendChild(span);
+          pre.appendChild(document.createTextNode('\n'));
+          var sub = document.getElementById('jslog-sub');
+          if (sub) {
+            var sum = sub.querySelector('summary');
+            if (sum) sum.textContent = 'JS Logs (' + window._jslogBuf.length + ')';
+          }
+          // autoscroll if user was at bottom
+          if (pre.scrollTop + pre.clientHeight >= pre.scrollHeight - 50) {
+            pre.scrollTop = pre.scrollHeight;
+          }
+        }
+      } catch(e2) {}
+    } catch(e) {}
+  }
+  ['log','warn','error','info','debug'].forEach(function(k){
+    console[k] = function(){
+      push(k, arguments);
+      try { orig[k].apply(console, arguments); } catch(e) {}
+    };
+  });
+  // MTAPI_JSLOG_SAFE: window.addEventListener отсутствует в Node.js
+  if (typeof window.addEventListener === 'function') {
+    window.addEventListener('error', function(ev){
+      push('error', ['Uncaught: ' + (ev.message || '?') + ' at ' + (ev.filename||'') + ':' + (ev.lineno||0)]);
+    });
+    window.addEventListener('unhandledrejection', function(ev){
+      push('error', ['UnhandledRejection: ' + (ev.reason && ev.reason.message || ev.reason)]);
+    });
+  }
+})();
+
 
 // MTAPI_293: fetch с timeout (AbortController)
 function _fetch(url, opts) {
@@ -169,25 +229,60 @@ function _copyFallback(text) {
 
 
 // MTAPI_315: DevTools — открыть в WebView (встроенный devtools frontend)
+// MTAPI_DEVTOOLS_FIX: мёртвый appspot URL убран, только info + native
+// MTAPI_WS_FIX: WebView отдаёт ws://localhost/... (без порта).
+// Для ПК после adb forward tcp:9222 нужен ws://localhost:9222/...
+function _normalizeDevtoolsWs(ws) {
+  if (!ws) return ws;
+  // ws://localhost/devtools/... → ws://localhost:9222/devtools/...
+  // ws://127.0.0.1/devtools/... → ws://127.0.0.1:9222/devtools/...
+  if (/^wss?:\/\/(localhost|127\.0\.0\.1)\//i.test(ws)) {
+    return ws.replace(/^(wss?:\/\/(?:localhost|127\.0\.0\.1))\//i, '$1:9222/');
+  }
+  return ws;
+}
+
 if (typeof window !== "undefined") window._openDevtools = function(wsUrl) {
   try {
-    var encoded = encodeURIComponent(wsUrl);
-    if (typeof Android !== 'undefined' && Android.openDevtools) {
+    wsUrl = _normalizeDevtoolsWs(wsUrl);
+    // 1. Native (Toast + clipboard)
+    if (typeof Android !== 'undefined' && typeof Android.openDevtools === 'function') {
       Android.openDevtools(wsUrl);
+      console.log('[mtapi] devtools → native');
       return;
     }
+    // 2. Fallback: info-блок + копия в clipboard
     var frame = document.getElementById('devtools-frame');
     if (frame) {
-      var url = 'https://chrome-devtools-frontend.appspot.com/serve_file/@/inspector.html?ws=' + encoded;
-      frame.innerHTML = '<iframe src="' + url + '" style="width:100%;height:100%;border:none"></iframe>';
+      var path = wsUrl;
+      var p = wsUrl.indexOf('/devtools/');
+      if (p >= 0) path = wsUrl.substring(p);
+      frame.innerHTML =
+        '<div style="padding:12px;font-size:12px;line-height:1.6">' +
+        '<b>WebView DevTools</b><br><br>' +
+        '<b>На телефоне:</b> Copy WS → в clipboard.<br>' +
+        '<b>На ПК:</b> adb forward → chrome://inspect<br><br>' +
+        '<b>Команды (ПК):</b><br>' +
+        '<code>adb shell pidof dev.mtapi</code><br>' +
+        '<code>adb forward tcp:9222 localabstract:webview_devtools_remote_&lt;PID&gt;</code><br>' +
+        '<code>chrome://inspect/#devices</code><br><br>' +
+        '<b>WS (в clipboard):</b><br>' +
+        '<code style="font-size:10px;word-break:break-all">ws://localhost:9222' + esc(path) + '</code>' +
+        '</div>';
     }
-    console.log('[mtapi] devtools:', wsUrl);
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(wsUrl).then(function(){
+        console.log('[mtapi] devtools WS copied');
+      }).catch(function(){});
+    }
+    console.log('[mtapi] openDevtools fallback:', wsUrl);
   } catch(e) { console.log('[mtapi] openDevtools err:', e.message); }
 };
 
 // MTAPI_315: copy WebSocket URL
 if (typeof window !== "undefined") window._copyDevtools = function(wsUrl) {
   try {
+    wsUrl = _normalizeDevtoolsWs(wsUrl);
     if (navigator.clipboard) {
       navigator.clipboard.writeText(wsUrl);
       console.log('[mtapi] copied:', wsUrl);
@@ -1093,13 +1188,31 @@ function loadDebugCard(ep) {
               html += '<b>#' + i + '</b> ' + (p.title || '(no title)') + '<br>';
               html += '<code style="font-size:10px">' + url + '</code><br>';
               if (ws) {
-                var wsJs = JSON.stringify(ws).replace(/</g, '\\u003c');
-                html += '<button class="btn" onclick="window._openDevtools(' + wsJs + ')">DevTools</button> ';
-                html += '<button class="btn" onclick="window._copyDevtools(' + wsJs + ')">Copy WS</button>';
+                // MTAPI_DEVTOOLS_BTN_FIX: data-* вместо inline onclick
+                // (было сломано: onclick="window._openDevtools("ws://...")")
+                html += '<button class="btn devtools-btn" data-action="devtools" data-ws="' + esc(ws) + '">DevTools</button> ';
+                html += '<button class="btn devtools-btn" data-action="copy-ws" data-ws="' + esc(ws) + '">Copy WS</button>';
               }
               html += '</div>';
             });
             list.innerHTML = html;
+            // MTAPI_DEVTOOLS_BTN_FIX: делегирование кликов (не inline onclick)
+            var btns = list.querySelectorAll('.devtools-btn');
+            for (var bi = 0; bi < btns.length; bi++) {
+              (function(b){
+                b.addEventListener('click', function(e){
+                  e.preventDefault();
+                  var action = b.getAttribute('data-action');
+                  var ws = b.getAttribute('data-ws');
+                  if (!ws) return;
+                  if (action === 'devtools') {
+                    if (typeof window._openDevtools === 'function') window._openDevtools(ws);
+                  } else if (action === 'copy-ws') {
+                    if (typeof window._copyDevtools === 'function') window._copyDevtools(ws);
+                  }
+                });
+              })(btns[bi]);
+            }
           }).catch(function(e){
             status.textContent = 'DevTools error: ' + e.message;
             status.style.color = 'var(--err)';
@@ -1114,6 +1227,7 @@ function loadDebugCard(ep) {
         }
       } catch(e) { console.log('[mtapi] processList err:', e.message); }
       setTimeout(attachLogcatSearch, 100);
+      setTimeout(function(){ if (window.attachJsLogSearch) window.attachJsLogSearch(); }, 100);
       setTimeout(function(){ _attachUptimeRefresh(body); }, 100);
       setTimeout(function(){
         _attachAllTableSearch(body);
@@ -1195,6 +1309,27 @@ function renderDebugSections(data) {
 
     h += '<pre class="debug-pre logcat-pre" id="logcat-pre">' + renderLogcatLines(logcat) + '</pre>';
 
+    h += '</details>';
+  }
+
+  // MTAPI_JSLOG: JS Logs (console.* перехвачен в буфер)
+  if (typeof window !== 'undefined' && window._jslogBuf) {
+    var buf = window._jslogBuf;
+    h += '<details class="sub" id="jslog-sub" open>';
+    h += '<summary title="console.log/warn/error из app.js (без adb, без DevTools)">JS Logs (' + buf.length + ')</summary>';
+    h += '<div class="logcat-toolbar">';
+    h += '<input type="text" class="logcat-search jslog-search" placeholder="search JS logs…">';
+    h += '<button class="logcat-btn" onclick="window._jslogClear&&window._jslogClear()" title="Clear">\uD83D\uDDD1</button>';
+    h += '</div>';
+    h += '<pre class="debug-pre logcat-pre" id="jslog-pre">';
+    for (var ji = 0; ji < buf.length; ji++) {
+      var lv = buf[ji].lvl || 'log';
+      var cls = 'logcat-line lvl-' + (lv === 'error' ? 'e' : lv === 'warn' ? 'w' : lv === 'info' ? 'i' : lv === 'debug' ? 'd' : 'v');
+      var tstr = new Date(buf[ji].t).toISOString().slice(11, 23);
+      var line = tstr + ' [' + lv + '] ' + buf[ji].m;
+      h += '<span class="' + cls + '" data-orig="' + esc(line) + '">' + esc(line) + '</span>\n';
+    }
+    h += '</pre>';
     h += '</details>';
   }
 
@@ -1336,6 +1471,65 @@ if (typeof module !== 'undefined' && module.exports) {
     makeDebugCard: typeof makeDebugCard === 'function' ? makeDebugCard : null,
     loadDebugCard: typeof loadDebugCard === 'function' ? loadDebugCard : null,
     renderDebugSections: typeof renderDebugSections === 'function' ? renderDebugSections : null,
+  };
+}
+
+
+
+// MTAPI_JSLOG_SEARCH: отдельный фильтр для JS Logs (не filterLogcat!)
+// filterLogcat ищет #logcat-pre, а нам нужен #jslog-pre
+if (typeof window !== 'undefined') {
+  window.filterJsLog = function() {
+    try {
+      var searches = document.querySelectorAll('.jslog-search');
+      if (!searches.length) return;
+      var pre = document.getElementById('jslog-pre');
+      if (!pre) return;
+      var q = (searches[0].value || '').trim();
+      var ql = q.toLowerCase();
+      var visible = 0, total = 0;
+      var lines = pre.querySelectorAll('.logcat-line');
+      for (var i = 0; i < lines.length; i++) {
+        var span = lines[i];
+        total++;
+        var orig = span.getAttribute('data-orig');
+        if (orig === null) {
+          orig = span.textContent || '';
+          span.setAttribute('data-orig', orig);
+        }
+        var show = !ql || orig.toLowerCase().indexOf(ql) >= 0;
+        span.style.display = show ? '' : 'none';
+        if (show) visible++;
+        if (ql && show) {
+          span.innerHTML = (typeof window.highlightText === 'function') ? window.highlightText(orig, q) : esc(orig);
+        } else {
+          span.innerHTML = esc(orig);
+        }
+      }
+      var status = document.querySelector('.jslog-status');
+      if (status) status.textContent = visible + '/' + total;
+    } catch(e) { console.log('[mtapi] filterJsLog ERROR:', e.message); }
+  };
+
+  window.attachJsLogSearch = function() {
+    var searches = document.querySelectorAll('.jslog-search');
+    for (var i = 0; i < searches.length; i++) {
+      var s = searches[i];
+      if (s.getAttribute('data-jsbound') === '1') continue;
+      s.setAttribute('data-jsbound', '1');
+      s.addEventListener('input', window.filterJsLog);
+      s.addEventListener('keyup', window.filterJsLog);
+    }
+  };
+}
+
+// MTAPI_JSLOG: очистить буфер
+if (typeof window !== 'undefined') {
+  window._jslogClear = function() {
+    window._jslogBuf = [];
+    var pre = document.getElementById('jslog-pre');
+    if (pre) pre.innerHTML = '';
+    console.log('[mtapi] jslog cleared');
   };
 }
 

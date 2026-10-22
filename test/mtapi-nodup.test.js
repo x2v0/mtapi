@@ -164,6 +164,18 @@ test('app.js: _copyEndpointJson respects active filter (MTAPI_COPY_FILTER)', fun
   assert.ok(body.includes('_filterJsonByQuery'), '_copyEndpointJson не вызывает _filterJsonByQuery');
 });
 
+test('app.js: JS Logs live append (MTAPI_JSLOG_LIVE)', function() {
+  const src = readText(APP_JS);
+  assert.ok(src.includes('MTAPI_JSLOG_LIVE'),
+    'нет MTAPI_JSLOG_LIVE — JS Logs не обновляются в реальном времени');
+  // проверяем, что push() содержит append в #jslog-pre
+  const idx = src.indexOf('window._jslogBuf.push(line)');
+  assert.ok(idx >= 0, 'window._jslogBuf.push(line) не найден');
+  const body = src.slice(idx, idx + 1500);
+  assert.ok(body.includes('jslog-pre'), 'push() не обновляет #jslog-pre');
+  assert.ok(body.includes('appendChild'), 'push() не делает appendChild');
+});
+
 test('app.js: no duplicate function names anywhere', function() {
   const src = readText(APP_JS);
   const re = /^function\s+(\w+)\s*\(/gm;
