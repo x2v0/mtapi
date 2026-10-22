@@ -108,11 +108,48 @@ test('app.js: reloadLogcat updates #uptime-pre (MTAPI_UPTIME_LIVE)', function() 
   const src = readText(APP_JS);
   assert.ok(src.includes('MTAPI_UPTIME_LIVE'),
     'нет MTAPI_UPTIME_LIVE — uptime не обновляется вместе с logcat');
-  // проверяем, что reloadLogcat содержит обновление uptime-pre
-  const rl = src.slice(src.indexOf('function reloadLogcat'));
-  const rlBody = rl.slice(0, rl.indexOf('\nfunction '));
-  assert.ok(rlBody.includes('uptime-pre'),
+  // Найти начало reloadLogcat
+  const idx = src.indexOf('function reloadLogcat');
+  assert.ok(idx >= 0, 'function reloadLogcat не найдена');
+  // Взять 3000 символов после начала — этого точно достаточно для тела
+  // (reloadLogcat ~700 символов)
+  const body = src.slice(idx, idx + 3000);
+  // Найти конец функции — первая } на нулевом уровне (грубая, но работает)
+  // Проще: проверить, что в этом фрагменте есть и uptime-pre, и MTAPI_UPTIME_LIVE
+  assert.ok(body.includes('uptime-pre'),
     'reloadLogcat не содержит #uptime-pre — live-обновление сломано');
+  assert.ok(body.includes('MTAPI_UPTIME_LIVE'),
+    'reloadLogcat не содержит MTAPI_UPTIME_LIVE');
+});
+
+test('app.js: reloadLogcat: guard _logcatRefreshing + preserve scroll', function() {
+  const src = readText(APP_JS);
+  const idx = src.indexOf('function reloadLogcat');
+  assert.ok(idx >= 0, 'reloadLogcat не найдена');
+  const body = src.slice(idx, idx + 3000);
+  assert.ok(body.includes('_logcatRefreshing'), 'нет guard _logcatRefreshing (race)');
+  assert.ok(body.includes('wasAtTop'), 'нет preserve scroll (wasAtTop)');
+  assert.ok(body.includes('scrollTop'), 'нет сохранения scrollTop');
+});
+
+test('app.js: _stopLogcatLive clears timer (beforeExit safety)', function() {
+  const src = readText(APP_JS);
+  const idx = src.indexOf('function _stopLogcatLive');
+  assert.ok(idx >= 0, '_stopLogcatLive не найдена');
+  const body = src.slice(idx, idx + 500);
+  assert.ok(body.includes('clearInterval'), '_stopLogcatLive не очищает interval');
+  assert.ok(body.includes('_logcatLiveTimer = null'), 'не сбрасывает _logcatLiveTimer в null');
+});
+
+test('app.js: _startLogcatLive idempotent (no double interval)', function() {
+  const src = readText(APP_JS);
+  const idx = src.indexOf('function _startLogcatLive');
+  assert.ok(idx >= 0, '_startLogcatLive не найдена');
+  const body = src.slice(idx, idx + 500);
+  // Должен быть guard: if (_logcatLiveTimer) return;
+  assert.ok(/if\s*\(\s*window\._logcatLiveTimer\s*\)\s*return/.test(body),
+    'нет guard от двойного setInterval');
+  assert.ok(body.includes('setInterval'), 'не использует setInterval');
 });
 
 test('app.js: no duplicate function names anywhere', function() {

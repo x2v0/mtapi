@@ -58,7 +58,30 @@ test('all getElementById targets exist in index.html', () => {
     (html.match(/id="([^"]+)"/g) || []).map(s => s.match(/id="([^"]+)"/)[1])
   );
   
-  const missing = [...usedIds].filter(id => !htmlIds.has(id) && id !== '');
+  // MTAPI_DYN_IDS: ID может создаваться динамически в app.js (innerHTML)
+  const dynamicIds = new Set(
+    [...js.matchAll(/\bid=["']([^"']+)["']/g)].map(m => m[1])
+  );
+  const missing = [...usedIds].filter(id =>
+    !htmlIds.has(id) && !dynamicIds.has(id) && id !== ''
+  );
+  if (missing.length) {
+    // MTAPI_TEST_DIAG: показать, где каждый missing ID используется
+    const lines = js.split('\n');
+    const diag = missing.map(id => {
+      const re = new RegExp("getElementById\\(['\"]" + id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + "['\"]\\)");
+      const hits = lines
+        .map((ln, i) => re.test(ln) ? '    ' + (i + 1) + ': ' + ln.trim() : null)
+        .filter(Boolean);
+      return '  ' + id + ':\n' + (hits.join('\n') || '    (не найдено?)');
+    }).join('\n');
+    console.error('\n  ❌ Missing IDs (used in app.js, not in index.html, not dynamic):');
+    console.error('  ' + missing.join(', '));
+    console.error('\n  Где используется:');
+    console.error(diag);
+    console.error('\n  💡 Hint: если ID создаётся динамически — добавьте id="X" в HTML-строку app.js.');
+    console.error('  Если ID статический — добавьте id="X" в index.html.\n');
+  }
   assert.deepStrictEqual(missing, [], 
     'app.js references IDs not in index.html: ' + missing.join(', '));
 });
