@@ -285,3 +285,42 @@ button.copy {
 button.copy:hover {
   background: var(--bg2);
 }
+
+/* MTAPI_TABLE_SEARCH: toolbar над таблицами с большими данными */
+.tbl-toolbar {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  padding: 4px 0 6px 0;
+}
+.tbl-search, .proc-search {
+  flex: 1;
+  font-size: 12px;
+  padding: 3px 6px;
+  background: var(--bg3);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  font-family: inherit;
+  outline: none;
+}
+.tbl-search:focus, .proc-search:focus {
+  border-color: var(--accent, #4a8);
+}
+.tbl-status {
+  font-size: 11px;
+  color: var(--fg2);
+  min-width: 60px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+mark.tbl-hl {
+  background: #ffeb3b;
+  color: #000;
+  border-radius: 2px;
+  padding: 0 1px;
+}
+.proc-line {
+  display: block;
+  white-space: pre;
+}
