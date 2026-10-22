@@ -445,10 +445,71 @@ function call(path){
 
 
 // MTAPI_GUI: copy JSON endpoint'а в clipboard
+// MTAPI_COPY_FILTER: рекурсивно фильтровать массивы в JSON по строковому совпадению
+function _filterJsonByQuery(data, q) {
+  if (!q) return data;
+  var ql = q.toLowerCase();
+  if (Array.isArray(data)) {
+    var out = [];
+    for (var i = 0; i < data.length; i++) {
+      var item = data[i];
+      if (item && typeof item === 'object' && !Array.isArray(item)) {
+        var keys = Object.keys(item);
+        var match = false;
+        for (var j = 0; j < keys.length; j++) {
+          var v = item[keys[j]];
+          if (v == null) continue;
+          if (typeof v === 'object') continue;
+          if (String(v).toLowerCase().indexOf(ql) >= 0) { match = true; break; }
+        }
+        if (match) out.push(item);
+      } else if (item && typeof item === 'object' && Array.isArray(item)) {
+        var sub = _filterJsonByQuery(item, q);
+        if (sub.length) out.push(sub);
+      } else {
+        if (item == null) continue;
+        if (String(item).toLowerCase().indexOf(ql) >= 0) out.push(item);
+      }
+    }
+    return out;
+  }
+  if (data && typeof data === 'object') {
+    var outObj = {};
+    for (var k in data) {
+      if (!Object.prototype.hasOwnProperty.call(data, k)) continue;
+      var val = data[k];
+      if (Array.isArray(val)) {
+        outObj[k] = _filterJsonByQuery(val, q);
+      } else {
+        outObj[k] = val;
+      }
+    }
+    return outObj;
+  }
+  return data;
+}
+
 function _copyEndpointJson(ep) {
   var j = ep._lastJson;
   if (!j) return;
-  var text = JSON.stringify(j, null, 2);
+  // Активный .tbl-search → копируем только отфильтрованные строки
+  var q = '';
+  var inputs = ep.querySelectorAll('.tbl-search');
+  for (var i = 0; i < inputs.length; i++) {
+    var v = (inputs[i].value || '').trim();
+    if (v) { q = v; break; }
+  }
+  var out = j;
+  if (q) {
+    if (j && typeof j === 'object' && 'data' in j) {
+      out = Object.assign({}, j);
+      out.data = _filterJsonByQuery(j.data, q);
+    } else {
+      out = _filterJsonByQuery(j, q);
+    }
+    console.log('[mtapi] copy filtered by "' + q + '"');
+  }
+  var text = JSON.stringify(out, null, 2);
   if (navigator.clipboard && navigator.clipboard.writeText) {
     navigator.clipboard.writeText(text).then(function(){
       console.log('[mtapi] copied ' + text.length + 'b');
@@ -479,6 +540,204 @@ function _updateGroupCounter(gd) {
   }
   h.textContent = base + ' (' + total + ')' + tail;
 }
+
+
+// MTAPI_TABLE_SEARCH: search + подсветка для таблиц с большими данными
+// Автоматически появляется при > 15 строк. Работает как logcat.
+function _attachAllTableSearch(root) {
+  if (!root) return;
+  var tables = root.querySelectorAll('table');
+  for (var i = 0; i < tables.length; i++) {
+    _attachTableSearch(tables[i]);
+  }
+}
+
+function _attachTableSearch(tbl) {
+  if (tbl.dataset.searchAttached === '1') return;
+  tbl.dataset.searchAttached = '1';
+  var rows = tbl.querySelectorAll('tbody > tr');
+  if (rows.length < 15) return; // мало строк — не нужно
+  // Не дублировать если уже есть toolbar
+  if (tbl.previousElementSibling &&
+      tbl.previousElementSibling.classList &&
+      tbl.previousElementSibling.classList.contains('tbl-toolbar')) {
+    return;
+  }
+
+  var wrap = document.createElement('div');
+  wrap.className = 'tbl-toolbar';
+  var input = document.createElement('input');
+  input.type = 'text';
+  input.className = 'tbl-search';
+  input.placeholder = 'filter ' + rows.length + ' rows\u2026';
+  input.setAttribute('title', '\uD83D\uDD0D Filter table rows (case-insensitive)');
+  var status = document.createElement('span');
+  status.className = 'tbl-status';
+  status.textContent = rows.length + '/' + rows.length;
+  wrap.appendChild(input);
+  wrap.appendChild(status);
+  tbl.parentNode.insertBefore(wrap, tbl);
+
+  var timer = null;
+  input.addEventListener('input', function() {
+    if (timer) clearTimeout(timer);
+    timer = setTimeout(function() {
+      timer = null;
+      _filterTable(tbl, input.value, status);
+    }, 150);
+  });
+}
+
+function _filterTable(tbl, query, statusEl) {
+  var q = (query || '').trim().toLowerCase();
+  var rows = tbl.querySelectorAll('tbody > tr');
+  var visible = 0;
+  for (var i = 0; i < rows.length; i++) {
+    var row = rows[i];
+    var text = row.getAttribute('data-search-text');
+    if (text === null) {
+      text = row.textContent || '';
+      row.setAttribute('data-search-text', text);
+    }
+    var match = !q || text.toLowerCase().indexOf(q) >= 0;
+    row.style.display = match ? '' : 'none';
+    if (match) visible++;
+
+    var cells = row.querySelectorAll('td, th');
+    for (var j = 0; j < cells.length; j++) {
+      _applyCellHighlight(cells[j], q);
+    }
+  }
+  if (statusEl) statusEl.textContent = visible + '/' + rows.length;
+  // Обновить title copy-кнопки — чтобы было видно, что копируется
+  var ep = tbl.closest ? tbl.closest('.ep') : null;
+  var copyBtn = ep ? ep.querySelector('.copy') : null;
+  if (copyBtn) {
+    copyBtn.title = q ? ('copy ' + visible + ' filtered rows (of ' + rows.length + ')') : 'copy raw JSON';
+  }
+}
+
+function _applyCellHighlight(cell, q) {
+  var orig = cell.getAttribute('data-orig-html');
+  if (orig === null) {
+    orig = cell.innerHTML;
+    cell.setAttribute('data-orig-html', orig);
+  }
+  if (cell.innerHTML !== orig) cell.innerHTML = orig;
+  if (q) _highlightTree(cell, q);
+}
+
+// Обёрнуть совпадения в <mark class="tbl-hl"> (walk по text nodes)
+function _highlightTree(root, q) {
+  if (!q) return;
+  var ql = q.toLowerCase();
+  if (typeof document.createTreeWalker !== 'function') return;
+  var walker = document.createTreeWalker(root, 4 /* SHOW_TEXT */, null);
+  var nodes = [];
+  var n;
+  while ((n = walker.nextNode()) !== null) nodes.push(n);
+  for (var k = 0; k < nodes.length; k++) {
+    var tn = nodes[k];
+    var t = tn.nodeValue;
+    if (!t) continue;
+    var low = t.toLowerCase();
+    if (low.indexOf(ql) < 0) continue;
+    var parent = tn.parentNode;
+    var frag = document.createDocumentFragment();
+    var idx = 0;
+    while (true) {
+      var pos = low.indexOf(ql, idx);
+      if (pos < 0) {
+        if (idx < t.length) frag.appendChild(document.createTextNode(t.slice(idx)));
+        break;
+      }
+      if (pos > idx) frag.appendChild(document.createTextNode(t.slice(idx, pos)));
+      var mark = document.createElement('mark');
+      mark.className = 'tbl-hl';
+      mark.textContent = t.slice(pos, pos + ql.length);
+      frag.appendChild(mark);
+      idx = pos + ql.length;
+    }
+    parent.replaceChild(frag, tn);
+  }
+}
+
+// MTAPI_PROC_SEARCH: search + подсветка для <pre id="processes-all">
+function _attachProcSearch(pre) {
+  if (!pre || pre.dataset.searchAttached === '1') return;
+  pre.dataset.searchAttached = '1';
+  var lines = (pre.textContent || '').split('\n');
+  if (lines.length < 10) return;
+
+  // превратить в .logcat-line спаны
+  var html = '';
+  for (var i = 0; i < lines.length; i++) {
+    html += '<span class="proc-line">' + esc(lines[i]) + '</span>\n';
+  }
+  pre.innerHTML = html;
+
+  var wrap = document.createElement('div');
+  wrap.className = 'tbl-toolbar';
+  var input = document.createElement('input');
+  input.type = 'text';
+  input.className = 'proc-search';
+  input.placeholder = 'filter ' + lines.length + ' processes\u2026';
+  var status = document.createElement('span');
+  status.className = 'tbl-status';
+  status.textContent = lines.length + '/' + lines.length;
+  wrap.appendChild(input);
+  wrap.appendChild(status);
+  pre.parentNode.insertBefore(wrap, pre);
+
+  var timer = null;
+  input.addEventListener('input', function() {
+    if (timer) clearTimeout(timer);
+    timer = setTimeout(function() {
+      timer = null;
+      var spans = pre.querySelectorAll('.proc-line');
+      var q = (input.value || '').trim().toLowerCase();
+      var visible = 0;
+      for (var i = 0; i < spans.length; i++) {
+        var sp = spans[i];
+        var orig = sp.getAttribute('data-orig');
+        if (orig === null) {
+          orig = sp.textContent || '';
+          sp.setAttribute('data-orig', orig);
+        }
+        var match = !q || orig.toLowerCase().indexOf(q) >= 0;
+        sp.style.display = match ? '' : 'none';
+        if (match) {
+          visible++;
+          if (q) {
+            sp.innerHTML = _highlightString(orig, q);
+          } else {
+            sp.innerHTML = esc(orig);
+          }
+        }
+      }
+      status.textContent = visible + '/' + spans.length;
+    }, 150);
+  });
+}
+
+// Строковая подсветка (как logcat, но класс .tbl-hl)
+function _highlightString(text, query) {
+  if (!query) return esc(text);
+  var lower = text.toLowerCase();
+  var q = query.toLowerCase();
+  var out = '';
+  var idx = 0, pos, n = 0;
+  while ((pos = lower.indexOf(q, idx)) !== -1) {
+    out += esc(text.slice(idx, pos));
+    out += '<mark class="tbl-hl">' + esc(text.slice(pos, pos + q.length)) + '</mark>';
+    idx = pos + q.length;
+    n++;
+    if (n > 500) break;
+  }
+  out += esc(text.slice(idx));
+  return out;
+}
+
 
 function makeCard(path){
   var ep=document.createElement('details');
@@ -540,6 +799,7 @@ function run(ep,path){
     toggle.style.display='';
     toggle.onclick=function(){raw.open=!raw.open;};
     if (copyBtn) copyBtn.style.display='';
+    _attachAllTableSearch(body);
     _done();
   });
 }
@@ -855,6 +1115,11 @@ function loadDebugCard(ep) {
       } catch(e) { console.log('[mtapi] processList err:', e.message); }
       setTimeout(attachLogcatSearch, 100);
       setTimeout(function(){ _attachUptimeRefresh(body); }, 100);
+      setTimeout(function(){
+        _attachAllTableSearch(body);
+        var proc = body.querySelector('#processes-all');
+        if (proc) _attachProcSearch(proc);
+      }, 100);
       _startLogcatLive();
       ep.open = true;
     })

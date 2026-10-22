@@ -152,6 +152,18 @@ test('app.js: _startLogcatLive idempotent (no double interval)', function() {
   assert.ok(body.includes('setInterval'), 'не использует setInterval');
 });
 
+test('app.js: _copyEndpointJson respects active filter (MTAPI_COPY_FILTER)', function() {
+  const src = readText(APP_JS);
+  assert.ok(src.includes('MTAPI_COPY_FILTER'), 'нет MTAPI_COPY_FILTER');
+  assert.ok(src.includes('function _filterJsonByQuery'), 'нет _filterJsonByQuery');
+  // _copyEndpointJson должен проверять .tbl-search
+  const idx = src.indexOf('function _copyEndpointJson');
+  assert.ok(idx >= 0, '_copyEndpointJson не найдена');
+  const body = src.slice(idx, idx + 1500);
+  assert.ok(body.includes('.tbl-search'), '_copyEndpointJson не проверяет .tbl-search');
+  assert.ok(body.includes('_filterJsonByQuery'), '_copyEndpointJson не вызывает _filterJsonByQuery');
+});
+
 test('app.js: no duplicate function names anywhere', function() {
   const src = readText(APP_JS);
   const re = /^function\s+(\w+)\s*\(/gm;
