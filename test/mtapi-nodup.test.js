@@ -97,6 +97,13 @@ test('app.js: logcat live timer present (MTAPI_LOGCAT_LIVE)', function() {
     'нет setInterval, вызывающего reloadLogcat — live не работает');
 });
 
+test('app.js: uptime refresh on toggle (MTAPI_UPTIME_REFRESH)', function() {
+  const src = readText(APP_JS);
+  assert.ok(src.includes('_attachUptimeRefresh'), 'нет _attachUptimeRefresh — uptime не обновляется при раскрытии');
+  assert.ok(src.includes('id="uptime-sub"'), 'нет id="uptime-sub" в renderDebugSections');
+  assert.ok(src.includes('id="uptime-pre"'), 'нет id="uptime-pre"');
+});
+
 test('app.js: no duplicate function names anywhere', function() {
   const src = readText(APP_JS);
   const re = /^function\s+(\w+)\s*\(/gm;

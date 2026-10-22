@@ -798,6 +798,7 @@ function loadDebugCard(ep) {
         }
       } catch(e) { console.log('[mtapi] processList err:', e.message); }
       setTimeout(attachLogcatSearch, 100);
+      setTimeout(function(){ _attachUptimeRefresh(body); }, 100);
       _startLogcatLive();
       ep.open = true;
     })
@@ -834,11 +835,11 @@ function renderDebugSections(data) {
     h += '</details>';
   }
 
-  // 3. Uptime
+  // 3. Uptime (обновляется при раскрытии — _attachUptimeRefresh)
   if (data.uptime) {
-    h += '<details class="sub">';
-    h += '<summary title="Сколько секунд работает Go-сервер (с последнего restart)">Uptime</summary>';
-    h += '<pre class="debug-pre">' + esc(String(data.uptime)) + '</pre>';
+    h += '<details class="sub" id="uptime-sub">';
+    h += '<summary title="Сколько секунд работает Go-сервер (с последнего restart). Обновляется при раскрытии.">Uptime</summary>';
+    h += '<pre class="debug-pre" id="uptime-pre">' + esc(String(data.uptime)) + '</pre>';
     h += '</details>';
   }
 
