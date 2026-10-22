@@ -62,7 +62,7 @@ so:
 	@test -f $(SO) || (echo "✗ .so not built" && exit 1)
 	@ls -lh $(SO)
 
-apk: build
+apk: so
 	@echo "══════════════════════════════════════════════════"
 	@echo "  BUILD APK"
 	@echo "══════════════════════════════════════════════════"
