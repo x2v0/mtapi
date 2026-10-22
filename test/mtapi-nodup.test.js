@@ -176,6 +176,32 @@ test('app.js: JS Logs live append (MTAPI_JSLOG_LIVE)', function() {
   assert.ok(body.includes('appendChild'), 'push() не делает appendChild');
 });
 
+test('app.js: refresh on toggle helpers defined (MTAPI_REFRESH_ON_TOGGLE)', function() {
+  const src = readText(APP_JS);
+  assert.ok(src.includes('function _attachRefreshOnToggle'),
+    'нет function _attachRefreshOnToggle');
+  assert.ok(src.includes('function _attachProcessesAllRefresh'),
+    'нет function _attachProcessesAllRefresh');
+  assert.ok(src.includes('function _attachUptimeRefresh'),
+    'нет function _attachUptimeRefresh');
+  assert.ok(src.includes('data-refresh-field="memory"'), 'нет data-refresh-field="memory"');
+  assert.ok(src.includes('data-refresh-field="processes"'), 'нет data-refresh-field="processes"');
+  assert.ok(src.includes('data-refresh-field="errors"'), 'нет data-refresh-field="errors"');
+  assert.ok(src.includes('id="processes-all-sub"'), 'нет id="processes-all-sub"');
+});
+
+test('app.js: JS Logs reverse — новые сверху (MTAPI_JSLOG_REVERSE)', function() {
+  const src = readText(APP_JS);
+  assert.ok(src.includes('MTAPI_JSLOG_REVERSE'),
+    'нет MTAPI_JSLOG_REVERSE — JS Logs идут в хронологическом порядке');
+  // renderDebugSections — reverse
+  const idx1 = src.indexOf('for (var ji = buf.length - 1; ji >= 0; ji--)');
+  assert.ok(idx1 >= 0, 'renderDebugSections не итерирует с конца буфера');
+  // push() — prepend
+  assert.ok(src.includes('pre.insertBefore(frag, pre.firstChild)'),
+    'push() не вставляет в начало (prepend)');
+});
+
 test('app.js: no duplicate function names anywhere', function() {
   const src = readText(APP_JS);
   const re = /^function\s+(\w+)\s*\(/gm;

@@ -28,17 +28,18 @@ if (typeof window === 'undefined') { globalThis.window = {}; }
           span.className = cls;
           span.setAttribute('data-orig', text);
           span.textContent = text;
-          pre.appendChild(span);
-          pre.appendChild(document.createTextNode('\n'));
+          // MTAPI_JSLOG_REVERSE: prepend (новые сверху)
+          var frag = document.createDocumentFragment();
+          frag.appendChild(span);
+          frag.appendChild(document.createTextNode('\n'));
+          pre.insertBefore(frag, pre.firstChild);
           var sub = document.getElementById('jslog-sub');
           if (sub) {
             var sum = sub.querySelector('summary');
             if (sum) sum.textContent = 'JS Logs (' + window._jslogBuf.length + ')';
           }
-          // autoscroll if user was at bottom
-          if (pre.scrollTop + pre.clientHeight >= pre.scrollHeight - 50) {
-            pre.scrollTop = pre.scrollHeight;
-          }
+          // MTAPI_JSLOG_REVERSE: если был наверху — оставить наверху (новые видны)
+          if (pre.scrollTop < 50) pre.scrollTop = 0;
         }
       } catch(e2) {}
     } catch(e) {}
@@ -615,6 +616,78 @@ function _copyEndpointJson(ep) {
 }
 
 // MTAPI_GUI: счётчик успешных/ошибочных в группе
+
+// MTAPI_UPTIME_REFRESH: обновление uptime при раскрытии секции
+function _attachUptimeRefresh(body) {
+  if (!body) return;
+  var sub = body.querySelector('#uptime-sub');
+  if (!sub) return;
+  if (sub.dataset.bound === '1') return;
+  sub.dataset.bound = '1';
+  sub.addEventListener('toggle', function(){
+    if (!sub.open) return;
+    var pre = sub.querySelector('#uptime-pre');
+    if (!pre) return;
+    if (sub.dataset.refreshing === '1') return;
+    sub.dataset.refreshing = '1';
+    _fetch('/debug?token=' + encodeURIComponent(TOKEN))
+      .then(function(r){ return r.json(); })
+      .then(function(j){
+        var data = (j && j.data) ? j.data : j;
+        if (data && data.uptime) pre.textContent = String(data.uptime);
+      })
+      .catch(function(){})
+      .finally(function(){ sub.dataset.refreshing = ''; });
+  });
+}
+
+// MTAPI_REFRESH_ON_TOGGLE: универсальное обновление секций /debug при раскрытии
+// Секции помечены data-refresh-field="<field>" → pre.textContent из data[field]
+function _attachRefreshOnToggle(root) {
+  if (!root) return;
+  var secs = root.querySelectorAll('details[data-refresh-field]');
+  for (var i = 0; i < secs.length; i++) {
+    (function(d) {
+      if (d.dataset.bound === '1') return;
+      d.dataset.bound = '1';
+      d.addEventListener('toggle', function() {
+        if (!d.open) return;
+        var field = d.dataset.refreshField;
+        var pre = d.querySelector('.debug-pre');
+        if (!pre || !field) return;
+        if (d.dataset.refreshing === '1') return;
+        d.dataset.refreshing = '1';
+        _fetch('/debug?token=' + encodeURIComponent(TOKEN))
+          .then(function(r) { return r.json(); })
+          .then(function(j) {
+            var data = (j && j.data) ? j.data : j;
+            if (data && data[field] !== undefined && data[field] !== null) {
+              pre.textContent = String(data[field]);
+            }
+          })
+          .catch(function() {})
+          .finally(function() { d.dataset.refreshing = ''; });
+      });
+    })(secs[i]);
+  }
+}
+
+// MTAPI_PROC_ALL_REFRESH: обновить Processes (all) при раскрытии (нативный Android.processList)
+function _attachProcessesAllRefresh(root) {
+  if (!root) return;
+  var d = root.querySelector('#processes-all-sub');
+  if (!d || d.dataset.bound === '1') return;
+  d.dataset.bound = '1';
+  d.addEventListener('toggle', function() {
+    if (!d.open) return;
+    if (typeof Android === 'undefined' || typeof Android.processList !== 'function') return;
+    try {
+      var pre = d.querySelector('#processes-all');
+      if (pre) pre.textContent = Android.processList();
+    } catch(e) { console.log('[mtapi] processes-all refresh err:', e.message); }
+  });
+}
+
 function _updateGroupCounter(gd) {
   if (!gd) return;
   var h = gd.querySelector('.group-h');
@@ -1231,6 +1304,8 @@ function loadDebugCard(ep) {
       setTimeout(function(){ _attachUptimeRefresh(body); }, 100);
       setTimeout(function(){
         _attachAllTableSearch(body);
+        _attachRefreshOnToggle(body);
+        _attachProcessesAllRefresh(body);
         var proc = body.querySelector('#processes-all');
         if (proc) _attachProcSearch(proc);
       }, 100);
@@ -1256,9 +1331,9 @@ function renderDebugSections(data) {
 
   // 1. Processes
   if (data.processes) {
-    h += '<details class="sub">';
-    h += '<summary title="ps -A | grep mtapi — какие процессы mtapi живы">Processes (ps -A | grep mtapi)</summary>';
-    h += '<pre class="debug-pre">' + esc(String(data.processes)) + '</pre>';
+    h += '<details class="sub" data-refresh-field="processes">';
+    h += '<summary title="ps -A | grep mtapi (обновляется при раскрытии)">Processes (ps -A | grep mtapi)</summary>';
+    h += '<pre class="debug-pre" id="processes-pre">' + esc(String(data.processes)) + '</pre>';
     h += '</details>';
   }
 
@@ -1280,9 +1355,9 @@ function renderDebugSections(data) {
 
   // 4. Memory
   if (data.memory) {
-    h += '<details class="sub">';
-    h += '<summary title="Go runtime: heap, sys, GC count">Memory (Go)</summary>';
-    h += '<pre class="debug-pre">' + esc(String(data.memory)) + '</pre>';
+    h += '<details class="sub" data-refresh-field="memory">';
+    h += '<summary title="Go runtime (обновляется при раскрытии)">Memory (Go)</summary>';
+    h += '<pre class="debug-pre" id="memory-pre">' + esc(String(data.memory)) + '</pre>';
     h += '</details>';
   }
 
@@ -1322,7 +1397,8 @@ function renderDebugSections(data) {
     h += '<button class="logcat-btn" onclick="window._jslogClear&&window._jslogClear()" title="Clear">\uD83D\uDDD1</button>';
     h += '</div>';
     h += '<pre class="debug-pre logcat-pre" id="jslog-pre">';
-    for (var ji = 0; ji < buf.length; ji++) {
+    // MTAPI_JSLOG_REVERSE: новые логи сверху (с конца буфера)
+    for (var ji = buf.length - 1; ji >= 0; ji--) {
       var lv = buf[ji].lvl || 'log';
       var cls = 'logcat-line lvl-' + (lv === 'error' ? 'e' : lv === 'warn' ? 'w' : lv === 'info' ? 'i' : lv === 'debug' ? 'd' : 'v');
       var tstr = new Date(buf[ji].t).toISOString().slice(11, 23);
@@ -1335,15 +1411,15 @@ function renderDebugSections(data) {
 
   // 6. Errors (FATAL / ANR)
   if (data.errors) {
-    h += '<details class="sub">';
-    h += '<summary title="Критические: FATAL exception или ANR in dev.mtapi">Errors (FATAL / ANR)</summary>';
-    h += '<pre class="debug-pre debug-errors">' + esc(String(data.errors)) + '</pre>';
+    h += '<details class="sub" data-refresh-field="errors">';
+    h += '<summary title="FATAL exception / ANR (обновляется при раскрытии)">Errors (FATAL / ANR)</summary>';
+    h += '<pre class="debug-pre debug-errors" id="errors-pre">' + esc(String(data.errors)) + '</pre>';
     h += '</details>';
   }
 
   // MTAPI_313: processes-all
-  h += '<details class="sub">';
-  h += '<summary title="All processes (ActivityManager)">Processes (all)</summary>';
+  h += '<details class="sub" id="processes-all-sub">';
+  h += '<summary title="All processes через ActivityManager (обновляется при раскрытии)">Processes (all)</summary>';
   h += '<pre class="debug-pre" id="processes-all">loading…</pre>';
   h += '</details>';
 
