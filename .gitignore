@@ -37,4 +37,4 @@ Thumbs.db
 *.idsig
 *.tmp.idsig
 TMPDIR=*
-mtapi/*
+/mtapi
