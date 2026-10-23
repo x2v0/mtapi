@@ -7,17 +7,11 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 // Путь к app.js (из mtapi)
-const APP_JS = path.resolve(
-  process.env.HOME,
-  'mtapi/gocore/cmd/mtapi-server/app.js'
+const APP_JS = path.resolve(__dirname, '..', 'gocore/cmd/mtapi-server/app.js'
 );
-const STYLE_CSS = path.resolve(
-  process.env.HOME,
-  'mtapi/gocore/cmd/mtapi-server/style.css'
+const STYLE_CSS = path.resolve(__dirname, '..', 'gocore/cmd/mtapi-server/style.css'
 );
-const INDEX_HTML = path.resolve(
-  process.env.HOME,
-  'mtapi/gocore/cmd/mtapi-server/index.html'
+const INDEX_HTML = path.resolve(__dirname, '..', 'gocore/cmd/mtapi-server/index.html'
 );
 
 // ═══════════════════════════════════════════════════════

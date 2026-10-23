@@ -5,8 +5,8 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { JSDOM } = require('jsdom');
 
-const APP_JS = path.resolve(process.env.HOME, 'mtapi/gocore/cmd/mtapi-server/app.js');
-const INDEX_HTML = path.resolve(process.env.HOME, 'mtapi/gocore/cmd/mtapi-server/index.html');
+const APP_JS = path.resolve(__dirname, '..', 'gocore/cmd/mtapi-server/app.js');
+const INDEX_HTML = path.resolve(__dirname, '..', 'gocore/cmd/mtapi-server/index.html');
 
 let app;
 try {

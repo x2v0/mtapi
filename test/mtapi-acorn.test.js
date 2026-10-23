@@ -5,7 +5,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const acorn = require('acorn');
 
-const APP_JS = path.resolve(process.env.HOME, 'mtapi/gocore/cmd/mtapi-server/app.js');
+const APP_JS = path.resolve(__dirname, '..', 'gocore/cmd/mtapi-server/app.js');
 
 test('acorn: app.js parses without errors', () => {
   const src = fs.readFileSync(APP_JS, 'utf8');

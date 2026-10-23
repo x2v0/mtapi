@@ -6,7 +6,7 @@ const path = require('node:path');
 const { execFileSync } = require('node:child_process');
 const { JSDOM } = require('jsdom');
 
-const SRV = path.resolve(process.env.HOME, 'mtapi/gocore/cmd/mtapi-server');
+const SRV = path.resolve(__dirname, '..', 'gocore/cmd/mtapi-server');
 const APP_JS = path.join(SRV, 'app.js');
 const INDEX_HTML = path.join(SRV, 'index.html');
 
