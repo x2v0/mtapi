@@ -39,7 +39,6 @@ type request struct {
 	Params json.RawMessage `json:"params,omitempty"`
 }
 
-
 type response struct {
 	OK    bool            `json:"ok"`
 	Data  json.RawMessage `json:"data,omitempty"`

@@ -18,18 +18,18 @@ type mockAPI struct {
 	torchOn       bool
 }
 
-func (m *mockAPI) BatteryStatus() (string, error)   { return m.batteryJSON, m.batteryErr }
-func (m *mockAPI) WifiInfo() (string, error)        { return `{"ssid":"x","rssi":-50}`, nil }
-func (m *mockAPI) ClipboardGet() (string, error)    { return m.clipboardText, m.clipboardErr }
-func (m *mockAPI) ClipboardSet(s string) error      { m.clipboardText = s; return m.clipboardErr }
-func (m *mockAPI) Toast(s string) error             { m.lastToast = s; return m.toastErr }
-func (m *mockAPI) Notify(t, b string) error         { return nil }
-func (m *mockAPI) Vibrate(ms int32) error           { m.vibratedMs = ms; return nil }
-func (m *mockAPI) Torch(on bool) error              { m.torchOn = on; return nil }
-func (m *mockAPI) DeviceInfo() (string, error)      { return `{"model":"x"}`, nil }
-func (m *mockAPI) LocationLast() (string, error)    { return `{"lat":1,"lon":2}`, nil }
-func (m *mockAPI) TTS(s string) error               { return nil }
-func (m *mockAPI) Share(t, x string) error          { return nil }
+func (m *mockAPI) BatteryStatus() (string, error)       { return m.batteryJSON, m.batteryErr }
+func (m *mockAPI) WifiInfo() (string, error)            { return `{"ssid":"x","rssi":-50}`, nil }
+func (m *mockAPI) ClipboardGet() (string, error)        { return m.clipboardText, m.clipboardErr }
+func (m *mockAPI) ClipboardSet(s string) error          { m.clipboardText = s; return m.clipboardErr }
+func (m *mockAPI) Toast(s string) error                 { m.lastToast = s; return m.toastErr }
+func (m *mockAPI) Notify(t, b string) error             { return nil }
+func (m *mockAPI) Vibrate(ms int32) error               { m.vibratedMs = ms; return nil }
+func (m *mockAPI) Torch(on bool) error                  { m.torchOn = on; return nil }
+func (m *mockAPI) DeviceInfo() (string, error)          { return `{"model":"x"}`, nil }
+func (m *mockAPI) LocationLast() (string, error)        { return `{"lat":1,"lon":2}`, nil }
+func (m *mockAPI) TTS(s string) error                   { return nil }
+func (m *mockAPI) Share(t, x string) error              { return nil }
 func (m *mockAPI) CameraPhoto(p string) (string, error) { return p, nil }
 func (m *mockAPI) ContactsList(limit int32) (string, error) {
 	return `[{"name":"Alice","phone":"+100"},{"name":"Bob","phone":"+200"}]`, nil
