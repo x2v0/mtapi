@@ -239,7 +239,7 @@ POST /restart                      → restart Go server
 ### Keystore
 
 - **Файл:** `~/.config/w2a/keystore.p12`
-- **Пароль:** `ihepsuka`
+- **Пароль:** `игрушка`
 - **Alias:** `wta`
 - **Config:** `~/.config/w2a/sign.yaml` (`ksPass: pass:ihepsuka`)
 
