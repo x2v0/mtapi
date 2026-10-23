@@ -42,6 +42,14 @@
     global.addEventListener('error',function(ev){ var st=ev.error&&ev.error.stack?'\n'+ev.error.stack:''; push('error',['Uncaught: '+(ev.message||'?')+' at '+(ev.filename||'?')+':'+(ev.lineno||0)+':'+(ev.colno||0)+st]); });
     global.addEventListener('unhandledrejection',function(ev){ var r=ev.reason; var st=r&&r.stack?'\n'+r.stack:''; push('error',['UnhandledRejection: '+(r&&r.message||r)+st]); });
   }
+  var _netBuf = global._netBuf = global._netBuf || [];
+  function _netPush(entry) {
+    _netBuf.push(entry);
+    if (_netBuf.length > 100) _netBuf.shift();
+    var cnt = global.document && global.document.getElementById('mtapi-debug-net-count');
+    if (cnt) cnt.textContent = '(' + _netBuf.length + ')';
+    if (global._netRefresh) { try { global._netRefresh(); } catch(x) {} }
+  }
   var _f = global.fetch;
   if(typeof _f==='function'){
     global.fetch = function(url,opts){
@@ -52,7 +60,22 @@
       if(!skip) global.console.log('[net] \u2192 '+m+' '+u);
       return _f(url,opts).then(function(r){
         var ms = Math.round(((global.performance&&global.performance.now)?global.performance.now():Date.now())-t0);
-        if(!skip){ var cl=(r.headers&&r.headers.get)?(r.headers.get('content-length')||'?'):'?'; var ct=(r.headers&&r.headers.get)?((r.headers.get('content-type')||'?').split(';')[0]):'?'; global.console.log('[net] \u2190 '+r.status+' '+m+' '+u+' ('+ms+'ms, '+cl+'b, '+ct+')'); }
+        var cl=(r.headers&&r.headers.get)?(r.headers.get('content-length')||'?'):'?';
+        var ct=(r.headers&&r.headers.get)?((r.headers.get('content-type')||'?').split(';')[0]):'?';
+        if(!skip){
+          global.console.log('[net] \u2190 '+r.status+' '+m+' '+u+' ('+ms+'ms, '+cl+'b, '+ct+')');
+          var entry = { t: Date.now(), method: m, url: u, status: r.status, ms: ms, size: cl, ct: ct, body: null };
+          if (global._netVerbose === true) {
+            try {
+              r.clone().text().then(function(b){
+                entry.body = b.length > 1024 ? b.slice(0, 1024) + '\n... (' + (b.length - 1024) + ' more)' : b;
+                _netPush(entry);
+              }).catch(function(){ _netPush(entry); });
+            } catch(e) { _netPush(entry); }
+          } else {
+            _netPush(entry);
+          }
+        }
         return r;
       }).catch(function(e){ var ms=Math.round(((global.performance&&global.performance.now)?global.performance.now():Date.now())-t0); if(!skip) global.console.log('[net] \u2717 '+m+' '+u+' ('+ms+'ms) '+(e&&e.message||e)); throw e; });
     };
@@ -113,6 +136,78 @@
     if (el) el.textContent = renderPerf();
   };
 
+  function renderNetwork() {
+    var buf = global._netBuf || [];
+    if (!buf.length) return '<div style="color:#666;padding:4px">(no requests captured)</div>';
+    var o = '<table style="width:100%;border-collapse:collapse;font-size:10px">';
+    o += '<thead><tr style="background:#222"><th>Time</th><th>Method</th><th>URL</th><th>Status</th><th>Size</th><th>CT</th><th>ms</th></tr></thead><tbody>';
+    for (var i = buf.length - 1; i >= 0; i--) {
+      var e = buf[i];
+      o += '<tr style="border-top:1px solid #333">';
+      o += '<td>' + esc(fmtTime(e.t)) + '</td>';
+      o += '<td>' + esc(e.method) + '</td>';
+      o += '<td title="' + esc(e.url) + '">' + esc(e.url.length > 60 ? e.url.slice(0, 60) + '...' : e.url) + '</td>';
+      o += '<td>' + esc(String(e.status)) + '</td>';
+      o += '<td>' + esc(String(e.size)) + '</td>';
+      o += '<td>' + esc(String(e.ct)) + '</td>';
+      o += '<td>' + esc(String(e.ms)) + '</td>';
+      o += '</tr>';
+      if (e.body) {
+        o += '<tr><td colspan="7"><pre style="max-height:120px;overflow:auto;background:#000;color:#aaa;padding:2px;margin:0;font-size:9px;white-space:pre-wrap">' + esc(e.body) + '</pre></td></tr>';
+      }
+    }
+    o += '</tbody></table>';
+    return o;
+  }
+  global._netRefresh = function() {
+    var el = global.document && global.document.getElementById('mtapi-debug-network');
+    if (el) el.innerHTML = renderNetwork();
+  };
+  var _domInspectActive = false;
+  function _domClickHandler(ev) {
+    if (!_domInspectActive) return;
+    ev.preventDefault();
+    ev.stopPropagation();
+    var el = ev.target;
+    var path = [];
+    while (el && el !== global.document.documentElement) {
+      var seg = (el.tagName || '?').toLowerCase();
+      if (el.id) seg += '#' + el.id;
+      else if (el.className && typeof el.className === 'string') {
+        var cls = el.className.split(' ').filter(Boolean).slice(0, 2).join('.');
+        if (cls) seg += '.' + cls;
+      }
+      path.unshift(seg);
+      el = el.parentElement;
+      if (path.length > 8) break;
+    }
+    var sel = path.join(' > ');
+    var pre = global.document.getElementById('mtapi-debug-dom');
+    if (pre) {
+      var outer = ev.target.outerHTML || '';
+      pre.textContent = 'Selector:\n' + sel + '\n\nOuterHTML:\n' + (outer.length > 3000 ? outer.slice(0, 3000) + '\n... (' + (outer.length - 3000) + ' more)' : outer);
+    }
+    var old = ev.target.style.outline;
+    ev.target.style.outline = '2px solid #f0f';
+    setTimeout(function(){ try { ev.target.style.outline = old; } catch(x) {} }, 1000);
+  }
+  global._domRefresh = function() {
+    var el = global.document && global.document.getElementById('mtapi-debug-dom');
+    if (!el) return;
+    var html = global.document.documentElement.outerHTML;
+    el.textContent = html.length > 50000 ? html.slice(0, 50000) + '\n... (' + (html.length - 50000) + ' more)' : html;
+  };
+  global._domInspect = function() {
+    _domInspectActive = !_domInspectActive;
+    var pre = global.document && global.document.getElementById('mtapi-debug-dom');
+    if (_domInspectActive) {
+      global.document.addEventListener('click', _domClickHandler, true);
+      if (pre) pre.textContent = '(tap element to inspect...)';
+    } else {
+      global.document.removeEventListener('click', _domClickHandler, true);
+      if (pre) pre.textContent = '(inspect off)';
+    }
+  };
   function renderCard(){
     var c = CONFIG.container || global.document.body;
     var card = global.document.createElement('details'); card.id='mtapi-debug-card';
@@ -135,6 +230,12 @@
       '<details style="margin:4px 0"><summary style="cursor:pointer">Errors (persistent)</summary>'+
       '<div style="margin:4px 0"><button onclick="localStorage.removeItem(\'mtapi-errors\');document.getElementById(\'mtapi-debug-errors\').textContent=\'\'">Clear</button></div>'+
       '<pre id="mtapi-debug-errors" style="max-height:150px;overflow:auto;background:#000;color:#f00;padding:4px;margin:0">'+esc(p3)+'</pre></details>'+
+      '<details style="margin:4px 0"><summary style="cursor:pointer">Network <span id="mtapi-debug-net-count">('+(global._netBuf?global._netBuf.length:0)+')</span></summary>'+
+      '<div style="margin:4px 0"><label style="font-size:10px"><input type="checkbox" id="mtapi-debug-netverbose" '+((global._netVerbose===true)?'checked':'')+' onchange="window._netVerbose=this.checked"> verbose (capture body)</label> <button onclick="window._netBuf=[];window._netRefresh&&window._netRefresh()">Clear</button></div>'+
+      '<div id="mtapi-debug-network" style="max-height:250px;overflow:auto">'+renderNetwork()+'</div></details>'+
+      '<details style="margin:4px 0"><summary style="cursor:pointer">DOM Inspector</summary>'+
+      '<div style="margin:4px 0"><button onclick="window._domRefresh&&window._domRefresh()">\u21bb Refresh</button> <button onclick="window._domInspect&&window._domInspect()">\uD83D\uDD0D Inspect</button></div>'+
+      '<pre id="mtapi-debug-dom" style="max-height:250px;overflow:auto;background:#000;color:#aaa;padding:4px;margin:0;font-size:9px">(click Refresh or Inspect)</pre></details>'+
       renderLogcatSection()+
       '</div>';
     c.appendChild(card); return card;
