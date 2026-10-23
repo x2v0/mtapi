@@ -241,7 +241,7 @@ POST /restart                      → restart Go server
 - **Файл:** `~/.config/w2a/keystore.p12`
 - **Пароль:** `игрушка`
 - **Alias:** `wta`
-- **Config:** `~/.config/w2a/sign.yaml` (`ksPass: pass:ihepsuka`)
+- **Config:** `~/.config/w2a/sign.yaml` (`ksPass: pass:igrushka`)
 
 **КРИТИЧНО:** без keystore + пароля не выпустить обновление. Сохраните в надёжном месте:
 
