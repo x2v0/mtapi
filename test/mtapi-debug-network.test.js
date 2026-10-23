@@ -69,15 +69,17 @@ test('DOM inspector: helpers exist', () => {
   w.MtapiDebug.attach({ container: w.document.body });
   assert.strictEqual(typeof w._domRefresh, 'function');
   assert.strictEqual(typeof w._domInspect, 'function');
-  assert.ok(w.document.getElementById('mtapi-debug-dom'), 'DOM section exists');
+  assert.ok(w.document.getElementById('mtapi-debug-dom-tree'), 'DOM tree container exists');
+  assert.ok(w.document.getElementById('mtapi-debug-dom-info'), 'DOM info panel exists');
 });
 
-test('DOM inspector: _domRefresh fills pre with outerHTML', () => {
+test('DOM inspector: _domRefresh builds tree with data-tag', () => {
   const w = mk().window;
   w.eval(SRC);
   w.MtapiDebug.attach({ container: w.document.body });
   w._domRefresh();
-  const pre = w.document.getElementById('mtapi-debug-dom');
-  assert.ok(pre.textContent.includes('<html'), 'outerHTML visible');
-  assert.ok(pre.textContent.includes('id="h"'), 'h1 in outerHTML');
+  const tree = w.document.getElementById('mtapi-debug-dom-tree');
+  assert.ok(tree, 'tree container exists');
+  assert.ok(tree.querySelector('summary[data-tag="html"]'), 'html root has data-tag');
+  assert.ok(tree.querySelector('summary[data-tag="h1"]'), 'h1 has data-tag');
 });

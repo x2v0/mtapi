@@ -26,6 +26,12 @@
 
 <script>var TOKEN="{{TOKEN}}";</script>
 <script src="/app.js"></script>
+<script src="/mtapi-debug.js"></script>
+<script>
+if (window.MtapiDebug) {
+  try { MtapiDebug.attach(); } catch (e) { console.error('MtapiDebug.attach failed:', e); }
+}
+</script>
 
   <div id="logcat-pre" style="display:none"></div>
   <input id="logcat-live" type="checkbox" style="display:none">

@@ -1047,18 +1047,8 @@ function render(){
     main.appendChild(gd);
   }
 
-  var debugGroup = document.createElement('details');
-  debugGroup.className = 'group';
-  debugGroup.dataset.group = 'Debug';
-  debugGroup.open = false;
-
-  var debugHead = document.createElement('summary');
-  debugHead.className = 'group-h';
-  debugHead.textContent = 'Debug'; debugHead.title = 'Debug info: processes, port, uptime, memory, logcat (with filters), errors';
-  debugGroup.appendChild(debugHead);
-
-  debugGroup.appendChild(makeDebugCard());
-  main.appendChild(debugGroup);
+  // Debug section moved to mtapi-debug.js overlay (FAB, top-right).
+  // Old in-page debug group removed in v2.2.0. See mtapi-debug.js.
 
   // MTAPI_PERF: замер render()
   var _perfT1 = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();

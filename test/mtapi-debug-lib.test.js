@@ -16,7 +16,7 @@ test("mtapi-debug.js: no bare eval(", function(){
 test("mtapi-debug.js: exposes MtapiDebug", function(){
   var w = mk().window; w.eval(SRC);
   assert.ok(typeof w.MtapiDebug === "object");
-  assert.strictEqual(w.MtapiDebug.version, "0.1.0");
+  assert.strictEqual(w.MtapiDebug.version, "0.2.0");
 });
 
 test("mtapi-debug.js: attach renders card", function(){
@@ -24,7 +24,7 @@ test("mtapi-debug.js: attach renders card", function(){
   var w = dom.window; w.eval(SRC);
   var card = w.MtapiDebug.attach({ container: w.document.getElementById("c") });
   assert.ok(card, "no card");
-  assert.strictEqual(card.id, "mtapi-debug-card");
+  assert.strictEqual(card.id, "mtapi-debug-overlay");
   assert.ok(w.document.getElementById("mtapi-debug-jslog"));
 });
 

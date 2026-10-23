@@ -108,7 +108,7 @@ test('global→window: 3 onclick (Clear, Run, Reset)', () => {
 test('API: version / buffer / errors / log / perf / time / timeEnd', () => {
   const w = mk().window;
   w.eval(SRC);
-  assert.strictEqual(w.MtapiDebug.version, '0.1.0');
+  assert.strictEqual(w.MtapiDebug.version, '0.2.0');
   assert.strictEqual(typeof w.MtapiDebug.buffer, 'function');
   assert.strictEqual(typeof w.MtapiDebug.errors, 'function');
   assert.strictEqual(typeof w.MtapiDebug.log, 'function');
