@@ -70,11 +70,13 @@ public class MainActivity extends Activity {
 
         webView = new WebView(this);
         // MTAPI_328: WebView debugging (ПОСЛЕ new WebView)
-        try {
-            android.webkit.WebView.setWebContentsDebuggingEnabled(true);
-            android.util.Log.i("mtapi", "WebView debugging enabled (after new WebView)");
-        } catch (Throwable t) {
-            android.util.Log.e("mtapi", "WebView debugging failed: " + t);
+        if (BuildConfig.DEBUG) {
+            try {
+                android.webkit.WebView.setWebContentsDebuggingEnabled(true);
+                android.util.Log.i("mtapi", "WebView debugging enabled (debug build)");
+            } catch (Throwable t) {
+                android.util.Log.e("mtapi", "WebView debugging failed: " + t);
+            }
         }
 
 
@@ -262,10 +264,18 @@ public class MainActivity extends Activity {
     @android.webkit.JavascriptInterface
     public String saveFileToDownloads(String name, String data) {
         try {
+            if (name == null || name.isEmpty()) name = "mtapi.txt";
+            String safe = name.replaceAll("[^a-zA-Z0-9._-]", "_");
+            while (safe.contains("..")) safe = safe.replace("..", "_");
+            if (safe.startsWith(".")) safe = "_" + safe;
+            if (safe.isEmpty()) safe = "mtapi.txt";
             java.io.File dir = android.os.Environment.getExternalStoragePublicDirectory(
                 android.os.Environment.DIRECTORY_DOWNLOADS);
             if (!dir.exists()) dir.mkdirs();
-            java.io.File f = new java.io.File(dir, name);
+            java.io.File f = new java.io.File(dir, safe).getCanonicalFile();
+            if (!f.getPath().startsWith(dir.getCanonicalPath() + "/")) {
+                throw new SecurityException("savefile_traversal: " + f.getPath());
+            }
             java.io.FileOutputStream fos = new java.io.FileOutputStream(f);
             fos.write(data.getBytes("UTF-8"));
             fos.close();

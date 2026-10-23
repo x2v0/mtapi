@@ -95,6 +95,9 @@ public class AndroidApiImpl implements AndroidAPI {
     private static final java.util.Map<String, SensorEventListener> sseRegistry = new ConcurrentHashMap<>();
     private static volatile Thread clipWatchThread = null;
     private static volatile Thread locWatchThread = null;
+    private static volatile android.location.LocationManager sLocLm = null;
+    private static volatile android.location.LocationListener sLocListener = null;
+    private static volatile android.os.Looper sLocLooper = null;
     private static volatile android.media.MediaPlayer player = null;
     private static volatile android.speech.tts.TextToSpeech cachedTts = null;
 
@@ -1450,7 +1453,9 @@ public class AndroidApiImpl implements AndroidAPI {
         if (hz > 200) hz = 200;
         final int delayUs = 1000000 / hz;
 
-        final String key = name;
+        // sensor_key_normalize: use stable getStringType()/getName() as key
+        final String key = (target.getStringType() == null || target.getStringType().isEmpty())
+                ? target.getName() : target.getStringType();
         if (sseRegistry.containsKey(key)) return "already_streaming";
 
         final SensorEventListener[] self = new SensorEventListener[1];
@@ -1474,7 +1479,21 @@ public class AndroidApiImpl implements AndroidAPI {
     public String sensorStreamStop(String name) throws Exception {
         SensorManager sm = (SensorManager) ctx.getSystemService(Context.SENSOR_SERVICE);
         if (sm == null) return "no_sensor_manager";
-        SensorEventListener l = sseRegistry.remove(name);
+        // sensor_key_normalize: same key derivation as start
+        String normKey = name;
+        if (name != null && !name.isEmpty()) {
+            for (Sensor sensor : sm.getSensorList(Sensor.TYPE_ALL)) {
+                String st = sensor.getStringType() == null ? "" : sensor.getStringType();
+                if (sensor.getName().equalsIgnoreCase(name)
+                        || st.equalsIgnoreCase(name)
+                        || st.toLowerCase().endsWith("." + name.toLowerCase())) {
+                    normKey = st.isEmpty() ? sensor.getName() : st;
+                    break;
+                }
+            }
+        }
+        SensorEventListener l = sseRegistry.remove(normKey);
+        if (l == null) l = sseRegistry.remove(name);
         if (l == null) return "not_streaming";
         sm.unregisterListener(l);
         return "stopped";
@@ -1631,6 +1650,15 @@ public class AndroidApiImpl implements AndroidAPI {
     public String netFetch(String urlStr) throws Exception {
         if (urlStr == null || urlStr.isEmpty()) throw new RuntimeException("url_required");
         URL u = new URL(urlStr);
+        String scheme = u.getProtocol() == null ? "" : u.getProtocol().toLowerCase();
+        if (!scheme.equals("http") && !scheme.equals("https")) {
+            throw new SecurityException("net_fetch_scheme_blocked: " + scheme);
+        }
+        String host = u.getHost() == null ? "" : u.getHost().toLowerCase();
+        if (host.isEmpty()) throw new SecurityException("net_fetch_no_host");
+        if (isPrivateHost(host)) {
+            throw new SecurityException("net_fetch_private_blocked: " + host);
+        }
         HttpURLConnection c = (HttpURLConnection) u.openConnection();
         c.setConnectTimeout(5000);
         c.setReadTimeout(10000);
@@ -1649,6 +1677,18 @@ public class AndroidApiImpl implements AndroidAPI {
             .put("status", code)
             .put("bytes", body.length())
             .put("body", body.toString()).toString();
+    }
+
+    private static boolean isPrivateHost(String host) {
+        if (host.equals("localhost") || host.equals("localhost.localdomain")) return true;
+        if (host.equals("0.0.0.0") || host.equals("127.0.0.1") || host.equals("::1")) return true;
+        if (host.startsWith("127.")) return true;
+        if (host.startsWith("10.")) return true;
+        if (host.startsWith("192.168.")) return true;
+        if (host.startsWith("169.254.")) return true;
+        if (host.matches("^172\\.(1[6-9]|2[0-9]|3[01])\\..*")) return true;
+        if (host.startsWith("fe80:") || host.startsWith("fc") || host.startsWith("fd")) return true;
+        return false;
     }
 
     private int mapStream(int s) {
@@ -1924,10 +1964,10 @@ public class AndroidApiImpl implements AndroidAPI {
         if (hz <= 0) hz = 1;
         if (hz > 10) hz = 10;
         final long minMs = 1000L / hz;
-        final LocationManager lm =
-                (LocationManager) ctx.getSystemService(Context.LOCATION_SERVICE);
+        final LocationManager lm = (LocationManager) ctx.getSystemService(Context.LOCATION_SERVICE);
         if (lm == null) throw new RuntimeException("no_location_manager");
 
+        sLocLm = lm;
         locWatchThread = new Thread(() -> {
             final LocationListener listener = new LocationListener() {
                 @Override public void onLocationChanged(Location l) {
@@ -1937,8 +1977,10 @@ public class AndroidApiImpl implements AndroidAPI {
                 @Override public void onProviderEnabled(String p) {}
                 @Override public void onProviderDisabled(String p) {}
             };
+            sLocListener = listener;
             try {
                 android.os.Looper.prepare();
+                sLocLooper = android.os.Looper.myLooper();
                 if (lm.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
                     lm.requestLocationUpdates(LocationManager.GPS_PROVIDER, minMs, 0f, listener);
                 }
@@ -1954,11 +1996,26 @@ public class AndroidApiImpl implements AndroidAPI {
 
     @Override
     public String locationWatchStop() throws Exception {
-        if (locWatchThread != null) {
-            locWatchThread.interrupt();
-            locWatchThread = null;
+        LocationListener l = sLocListener;
+        LocationManager lm = sLocLm;
+        android.os.Looper lo = sLocLooper;
+        sLocListener = null;
+        sLocLm = null;
+        sLocLooper = null;
+        if (lm != null && l != null) {
+            try { lm.removeUpdates(l); } catch (Throwable ignored) {}
+        }
+        if (lo != null) {
+            try { lo.quitSafely(); } catch (Throwable ignored) {}
+        }
+        Thread t = locWatchThread;
+        locWatchThread = null;
+        if (t != null) {
+            t.interrupt();
             return "stopped";
         }
+        return "not_watching";
+    }
         return "not_watching";
     }
 
