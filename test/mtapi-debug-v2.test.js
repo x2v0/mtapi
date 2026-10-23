@@ -78,13 +78,15 @@ test('Clear: счётчик (N) → (0)', () => {
   assert.ok(countEl, 'jslog-count должен быть');
   assert.strictEqual(countEl.textContent, '(3)');
 
-  // Симулируем Clear (onclick)
+  // Симулируем Clear (onclick attribute, NOT property — JSDOM outside-only)
+  // With runScripts: 'outside-only', inline onclick is not compiled to a function.
+  // Read the attribute string and eval it in the window context.
   const clearBtns = Array.from(w.document.querySelectorAll('button')).filter(b =>
-    b.textContent === 'Clear' && b.onclick
+    b.textContent === 'Clear' && b.getAttribute('onclick')
   );
-  const jslogClear = clearBtns.find(b => b.onclick.toString().includes('_jslogBuf'));
-  assert.ok(jslogClear, 'Clear JS Logs button');
-  jslogClear.onclick();
+  const jslogClear = clearBtns.find(b => (b.getAttribute('onclick') || '').includes('_jslogBuf'));
+  assert.ok(jslogClear, 'Clear JS Logs button (by onclick attribute)');
+  w.eval(jslogClear.getAttribute('onclick'));
 
   assert.strictEqual(countEl.textContent, '(0)', 'после Clear → (0)');
 });

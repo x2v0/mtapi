@@ -150,3 +150,16 @@
     version: '0.1.0'
   };
 })(typeof window !== 'undefined' ? window : globalThis);
+
+// MTAPI_PERSIST_ERR_CLEAR: clear persistent errors from localStorage.
+// Was only in app.js; moved here so mtapi-debug.js is self-contained
+// and unit tests can call it directly.
+if (typeof window !== 'undefined') {
+  window._persistErrorsClear = function() {
+    try { window.localStorage.removeItem('mtapi-errors'); } catch(e) {}
+    try {
+      var pre = window.document.getElementById('mtapi-debug-errors');
+      if (pre) pre.textContent = '';
+    } catch(e) {}
+  };
+}

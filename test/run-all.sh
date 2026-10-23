@@ -28,7 +28,9 @@ section() {
 }
 
 run_all_tests() {
+  # pipeline: preserve node's exit code (was swallowed by tail)
   node --test mtapi-*.test.js 2>&1 | tail -30
+  return "${PIPESTATUS[0]}"
 }
 
 section "mtapi: all *.test.js"  run_all_tests
