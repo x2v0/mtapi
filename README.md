@@ -494,7 +494,7 @@ make so                  # cross-compile для Android arm64
 
 ## License
 
-MIT (или своя — укажите)
+MIT — see [LICENSE](LICENSE).
 
 ## Author
 
