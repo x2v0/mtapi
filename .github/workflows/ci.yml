@@ -1,0 +1,54 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+jobs:
+  go:
+    name: Go (build / vet / test / gofmt)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+          cache-dependency-path: gocore/go.sum
+
+      - name: go build
+        working-directory: gocore
+        run: go build ./...
+
+      - name: go vet
+        working-directory: gocore
+        run: go vet ./...
+
+      - name: go test
+        working-directory: gocore
+        run: go test ./... -count=1
+
+      - name: gofmt check
+        working-directory: gocore
+        run: |
+          out=$(gofmt -l .)
+          if [ -n "$out" ]; then
+            echo "::error::gofmt found unformatted files:"
+            echo "$out"
+            exit 1
+          fi
+
+  js-tests:
+    name: JS tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: run test suite
+        run: bash test/run-all.sh
