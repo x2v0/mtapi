@@ -99,6 +99,7 @@ public class AndroidApiImpl implements AndroidAPI {
     private static volatile android.location.LocationListener sLocListener = null;
     private static volatile android.os.Looper sLocLooper = null;
     private static volatile android.media.MediaPlayer player = null;
+    private static final java.util.concurrent.atomic.AtomicInteger NOTIFY_SEQ = new java.util.concurrent.atomic.AtomicInteger(1000);
     private static volatile android.speech.tts.TextToSpeech cachedTts = null;
 
     public AndroidApiImpl(Context ctx) {
@@ -127,8 +128,12 @@ public class AndroidApiImpl implements AndroidAPI {
                 .getSystemService(Context.WIFI_SERVICE);
         WifiInfo info = wm == null ? null : wm.getConnectionInfo();
         if (info == null) throw new RuntimeException("no_wifi");
+        String ssid = String.valueOf(info.getSSID());
+        if (ssid == null || ssid.equals("<unknown ssid>") || ssid.equals("0x") || ssid.isEmpty()) {
+            ssid = "<hidden>";
+        }
         return new JSONObject()
-                .put("ssid", String.valueOf(info.getSSID()))
+                .put("ssid", ssid)
                 .put("rssi", info.getRssi())
                 .put("link_speed", info.getLinkSpeed())
                 .toString();
@@ -174,7 +179,7 @@ public class AndroidApiImpl implements AndroidAPI {
         b.setSmallIcon(android.R.drawable.ic_dialog_info)
                 .setContentTitle(title)
                 .setContentText(body);
-        if (nm != null) nm.notify((int) (System.currentTimeMillis() & 0xffff), b.build());
+        if (nm != null) nm.notify(NOTIFY_SEQ.incrementAndGet(), b.build());
     }
 
     @Override
@@ -198,7 +203,7 @@ public class AndroidApiImpl implements AndroidAPI {
                     CameraCharacteristics.FLASH_INFO_AVAILABLE);
             if (has != null && has) { id = c; break; }
         }
-        if (id == null) throw new RuntimeException("no_flash");
+        if (id == null) throw new RuntimeException("no_flash: no camera with flash, or FLASHLIGHT permission missing");
         cm.setTorchMode(id, on);
     }
 
@@ -240,18 +245,24 @@ public class AndroidApiImpl implements AndroidAPI {
 
     @Override
     public void tts(String text) throws Exception {
-        final CountDownLatch latch = new CountDownLatch(1);
-        final TextToSpeech[] ref = new TextToSpeech[1];
-        ref[0] = new TextToSpeech(ctx, status -> {
-            if (status == TextToSpeech.SUCCESS) {
-                ref[0].setLanguage(Locale.getDefault());
-                ref[0].speak(text, TextToSpeech.QUEUE_FLUSH, null, "mtapi");
+        if (text == null) text = "";
+        TextToSpeech t = cachedTts;
+        if (t == null) {
+            final CountDownLatch latch = new CountDownLatch(1);
+            final TextToSpeech[] ref = new TextToSpeech[1];
+            ref[0] = new TextToSpeech(ctx, status -> {
+                if (status == TextToSpeech.SUCCESS) {
+                    try { ref[0].setLanguage(Locale.getDefault()); } catch (Throwable ignored) {}
+                }
+                latch.countDown();
+            });
+            if (!latch.await(5, TimeUnit.SECONDS)) {
+                throw new RuntimeException("tts_init_timeout");
             }
-            latch.countDown();
-        });
-        if (!latch.await(5, TimeUnit.SECONDS)) {
-            throw new RuntimeException("tts_init_timeout");
+            t = ref[0];
+            cachedTts = t;
         }
+        t.speak(text, TextToSpeech.QUEUE_FLUSH, null, "mtapi-" + System.currentTimeMillis());
     }
 
     @Override

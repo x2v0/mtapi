@@ -81,7 +81,7 @@ public final class JavaBridge {
     private void doHandleRequest(String line) throws Exception {
         JSONObject req;
         try { req = new JSONObject(line); }
-        catch (Throwable t) { DiagLog.write(ctx, "bridge: bad JSON " + line); return; }
+        catch (Throwable t) { DiagLog.write(ctx, "bridge: bad JSON (len=" + (line == null ? 0 : line.length()) + ")"); return; }
 
         long id = req.optLong("id", 0);
         String method = req.optString("method", "");

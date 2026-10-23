@@ -103,7 +103,7 @@ public class MainActivity extends Activity {
         ws.setCacheMode(WebSettings.LOAD_NO_CACHE);
         ws.setAllowFileAccess(false);
         ws.setAllowContentAccess(false);
-        ws.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
+        ws.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
         if (Build.VERSION.SDK_INT >= 21) {
             ws.setMediaPlaybackRequiresUserGesture(false);
         }

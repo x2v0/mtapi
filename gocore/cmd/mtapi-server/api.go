@@ -1,8 +1,6 @@
 package main
 
 import (
-	"fmt"
-	"strconv"
 	"time"
 )
 
@@ -297,11 +295,3 @@ func (a *bridgeAPI) LocationWatchStop() (string, error) { return a.b.callStr("lo
 func (a *bridgeAPI) InstallApk(path string) (string, error) {
 	return a.b.callStr("installApk", map[string]any{"path": path})
 }
-
-func _atoi32(s string) int32 {
-	n, _ := strconv.Atoi(s)
-	return int32(n)
-}
-
-var _ = fmt.Sprintf
-var _ = _atoi32
