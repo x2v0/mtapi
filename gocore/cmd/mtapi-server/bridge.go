@@ -7,16 +7,16 @@ import (
 	"log"
 	"os"
 	"sync"
-	"time"
 	"sync/atomic"
+	"time"
 )
 
 // bridge talks to the Java side via stdin/stdout pipes.
 // Go writes REQUESTS to stdout; Java writes RESPONSES to stdin.
 type bridge struct {
-	mu   sync.Mutex   // protects writer
+	mu   sync.Mutex // protects writer
 	w    *bufio.Writer
-	pend sync.Map      // id -> chan *response
+	pend sync.Map // id -> chan *response
 	seq  atomic.Int64
 }
 
@@ -80,6 +80,10 @@ func (b *bridge) call(method string, params map[string]any) (*response, error) {
 		b.pend.Delete(id)
 		return nil, fmt.Errorf("bridge timeout: %s", method)
 	}
+	if r == nil {
+		b.pend.Delete(id)
+		return nil, fmt.Errorf("bridge reset: %s", method)
+	}
 	if !r.OK {
 		if r.Error == "" {
 			r.Error = "unknown error"
@@ -131,7 +135,7 @@ func (b *bridge) Reset() {
 	b.pend.Range(func(k, v any) bool {
 		ch := v.(chan *response)
 		select {
-		case ch <- nil:
+		case ch <- &response{OK: false, Error: "reset"}:
 		default:
 		}
 		b.pend.Delete(k)

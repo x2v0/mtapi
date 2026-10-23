@@ -217,6 +217,7 @@ public final class JavaBridge {
             case "clipboardWatchStop": return api.clipboardWatchStop();
             case "locationWatchStart": return api.locationWatchStart(p.optInt("hz", 1));
             case "locationWatchStop": return api.locationWatchStop();
+            case "installApk": return api.installApk(p.optString("path", ""));
             default:
                 throw new RuntimeException("unknown bridge method: " + method);
         }

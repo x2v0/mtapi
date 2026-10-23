@@ -15,7 +15,7 @@ public final class Token {
     public static synchronized String getOrCreate(Context ctx) {
         SharedPreferences sp = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
         String existing = sp.getString(KEY, null);
-        if (existing != null) {
+        if (existing != null && !existing.isEmpty()) {
             writeToFile(ctx, existing);  // always write — Node dash reads this file
             return existing;
         }

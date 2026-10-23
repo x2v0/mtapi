@@ -1933,4 +1933,34 @@ public class AndroidApiImpl implements AndroidAPI {
         return "not_watching";
     }
 
+    // Patch 46: install APK via system installer
+    @Override
+    public String installApk(String path) throws Exception {
+        if (path == null || path.isEmpty() || !path.startsWith("/")) {
+            throw new RuntimeException("install_path_required");
+        }
+        java.io.File f = new java.io.File(path).getCanonicalFile();
+        String cp = f.getPath();
+        if (!cp.startsWith("/sdcard/Download/")
+            && !cp.startsWith("/storage/emulated/0/Download/")
+            && !cp.startsWith("/data/data/dev.mtapi/")
+            && !cp.startsWith("/data/user/0/dev.mtapi/")) {
+            throw new SecurityException("install_path_not_allowed: " + cp);
+        }
+        if (!f.exists()) throw new RuntimeException("apk_not_found: " + cp);
+        if (!f.getName().endsWith(".apk")) throw new RuntimeException("not_an_apk: " + cp);
+        android.net.Uri uri;
+        if (Build.VERSION.SDK_INT >= 24) {
+            uri = androidx.core.content.FileProvider.getUriForFile(ctx, "dev.mtapi.fileprovider", f);
+        } else {
+            uri = android.net.Uri.fromFile(f);
+        }
+        android.content.Intent i = new android.content.Intent(android.content.Intent.ACTION_VIEW);
+        i.setDataAndType(uri, "application/vnd.android.package-archive");
+        i.addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION);
+        i.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
+        ctx.startActivity(i);
+        return new JSONObject().put("installer_opened", true).put("path", cp).toString();
+    }
+
 }

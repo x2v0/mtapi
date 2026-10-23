@@ -13,7 +13,7 @@ func main() {
 
 	token := os.Getenv("MTAPI_TOKEN")
 	if token == "" {
-		log.Println("WARNING: MTAPI_TOKEN not set; auth disabled")
+		log.Fatal("MTAPI_TOKEN is required; refusing to start (fail-closed)")
 	}
 
 	b := newBridge()
@@ -30,7 +30,7 @@ func main() {
 		os.Exit(0)
 	}()
 
-	log.Printf("starting HTTP server, token=%s", token)
+	log.Printf("starting HTTP server, token len=%d", len(token))
 
 	if err := startHTTP(api, token); err != nil {
 		log.Fatalf("HTTP: %v", err)

@@ -82,4 +82,7 @@ public interface AndroidAPI {
     String locationWatchStart(int hz) throws Exception;
     String locationWatchStop() throws Exception;
 
+    // Patch 46: install APK via system installer
+    String installApk(String path) throws Exception;
+
 }

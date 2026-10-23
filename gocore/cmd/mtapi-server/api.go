@@ -83,6 +83,9 @@ type AndroidAPI interface {
 	ClipboardWatchStop() (string, error)
 	LocationWatchStart(hz int32) (string, error)
 	LocationWatchStop() (string, error)
+
+	// Patch 46: install APK
+	InstallApk(path string) (string, error)
 }
 
 type bridgeAPI struct{ b *bridge }
@@ -92,14 +95,14 @@ func (a *bridgeAPI) BatteryStatus() (string, error) {
 		return a.b.callStr("batteryStatus", nil)
 	})
 }
-func (a *bridgeAPI) WifiInfo() (string, error)      { return a.b.callStr("wifiInfo", nil) }
-func (a *bridgeAPI) DeviceInfo() (string, error)    {
+func (a *bridgeAPI) WifiInfo() (string, error) { return a.b.callStr("wifiInfo", nil) }
+func (a *bridgeAPI) DeviceInfo() (string, error) {
 	return a.b.cached("deviceInfo", 60*time.Second, func() (string, error) {
 		return a.b.callStr("deviceInfo", nil)
 	})
 }
-func (a *bridgeAPI) LocationLast() (string, error)  { return a.b.callStr("locationLast", nil) }
-func (a *bridgeAPI) ClipboardGet() (string, error)  { return a.b.callStr("clipboardGet", nil) }
+func (a *bridgeAPI) LocationLast() (string, error) { return a.b.callStr("locationLast", nil) }
+func (a *bridgeAPI) ClipboardGet() (string, error) { return a.b.callStr("clipboardGet", nil) }
 
 func (a *bridgeAPI) ClipboardSet(text string) error {
 	return a.b.callVoid("clipboardSet", map[string]any{"text": text})
@@ -143,87 +146,87 @@ func (a *bridgeAPI) SensorsList() (string, error) { return a.b.callStr("sensorsL
 func (a *bridgeAPI) SensorRead(name string, ms int32) (string, error) {
 	return a.b.callStr("sensorRead", map[string]any{"name": name, "ms": ms})
 }
-func (a *bridgeAPI) SystemInfo() (string, error)     {
+func (a *bridgeAPI) SystemInfo() (string, error) {
 	return a.b.cached("systemInfo", 5*time.Second, func() (string, error) {
 		return a.b.callStr("systemInfo", nil)
 	})
 }
-func (a *bridgeAPI) StorageInfo() (string, error)    {
+func (a *bridgeAPI) StorageInfo() (string, error) {
 	return a.b.cached("storageInfo", 10*time.Second, func() (string, error) {
 		return a.b.callStr("storageInfo", nil)
 	})
 }
-func (a *bridgeAPI) NetworkInfo() (string, error)    {
+func (a *bridgeAPI) NetworkInfo() (string, error) {
 	return a.b.cached("networkInfo", 3*time.Second, func() (string, error) {
 		return a.b.callStr("networkInfo", nil)
 	})
 }
-func (a *bridgeAPI) TelephonyInfo() (string, error)  {
+func (a *bridgeAPI) TelephonyInfo() (string, error) {
 	return a.b.cached("telephonyInfo", 10*time.Second, func() (string, error) {
 		return a.b.callStr("telephonyInfo", nil)
 	})
 }
-func (a *bridgeAPI) DisplayInfo() (string, error)    {
+func (a *bridgeAPI) DisplayInfo() (string, error) {
 	return a.b.cached("displayInfo", 10*time.Second, func() (string, error) {
 		return a.b.callStr("displayInfo", nil)
 	})
 }
-func (a *bridgeAPI) AudioInfo() (string, error)      {
+func (a *bridgeAPI) AudioInfo() (string, error) {
 	return a.b.cached("audioInfo", 10*time.Second, func() (string, error) {
 		return a.b.callStr("audioInfo", nil)
 	})
 }
-func (a *bridgeAPI) FeaturesList() (string, error)   {
+func (a *bridgeAPI) FeaturesList() (string, error) {
 	return a.b.cached("featuresList", 60*time.Second, func() (string, error) {
 		return a.b.callStr("featuresList", nil)
 	})
 }
-func (a *bridgeAPI) CameraList() (string, error)     {
+func (a *bridgeAPI) CameraList() (string, error) {
 	return a.b.cached("cameraList", 60*time.Second, func() (string, error) {
 		return a.b.callStr("cameraList", nil)
 	})
 }
-func (a *bridgeAPI) BatteryDetailed() (string, error){
+func (a *bridgeAPI) BatteryDetailed() (string, error) {
 	return a.b.cached("batteryDetailed", 2*time.Second, func() (string, error) {
 		return a.b.callStr("batteryDetailed", nil)
 	})
 }
-func (a *bridgeAPI) LocationDetailed() (string, error){ return a.b.callStr("locationDetailed", nil) }
-func (a *bridgeAPI) LocaleInfo() (string, error)     {
+func (a *bridgeAPI) LocationDetailed() (string, error) { return a.b.callStr("locationDetailed", nil) }
+func (a *bridgeAPI) LocaleInfo() (string, error) {
 	return a.b.cached("localeInfo", 60*time.Second, func() (string, error) {
 		return a.b.callStr("localeInfo", nil)
 	})
 }
 
-func (a *bridgeAPI) CpuDetail() (string, error)        {
+func (a *bridgeAPI) CpuDetail() (string, error) {
 	return a.b.cached("cpuDetail", 5*time.Second, func() (string, error) {
 		return a.b.callStr("cpuDetail", nil)
 	})
 }
-func (a *bridgeAPI) ThermalInfo() (string, error)      {
+func (a *bridgeAPI) ThermalInfo() (string, error) {
 	return a.b.cached("thermalInfo", 5*time.Second, func() (string, error) {
 		return a.b.callStr("thermalInfo", nil)
 	})
 }
-func (a *bridgeAPI) MemoryDetail() (string, error)     {
+func (a *bridgeAPI) MemoryDetail() (string, error) {
 	return a.b.cached("memoryDetail", 5*time.Second, func() (string, error) {
 		return a.b.callStr("memoryDetail", nil)
 	})
 }
-func (a *bridgeAPI) WifiDetailed() (string, error)     {
+func (a *bridgeAPI) WifiDetailed() (string, error) {
 	return a.b.cached("wifiDetailed", 3*time.Second, func() (string, error) {
 		return a.b.callStr("wifiDetailed", nil)
 	})
 }
-func (a *bridgeAPI) BluetoothInfo() (string, error)    { return a.b.callStr("bluetoothInfo", nil) }
-func (a *bridgeAPI) DisplayBrightness() (string, error){ return a.b.callStr("displayBrightness", nil) }
-func (a *bridgeAPI) DisplayColor() (string, error)     { return a.b.callStr("displayColor", nil) }
-func (a *bridgeAPI) MicrophoneList() (string, error)   {
+func (a *bridgeAPI) BluetoothInfo() (string, error)     { return a.b.callStr("bluetoothInfo", nil) }
+func (a *bridgeAPI) DisplayBrightness() (string, error) { return a.b.callStr("displayBrightness", nil) }
+func (a *bridgeAPI) DisplayColor() (string, error)      { return a.b.callStr("displayColor", nil) }
+func (a *bridgeAPI) MicrophoneList() (string, error) {
 	return a.b.cached("microphoneList", 60*time.Second, func() (string, error) {
 		return a.b.callStr("microphoneList", nil)
 	})
 }
-func (a *bridgeAPI) KernelInfo() (string, error)       {
+func (a *bridgeAPI) KernelInfo() (string, error) {
 	return a.b.cached("kernelInfo", 60*time.Second, func() (string, error) {
 		return a.b.callStr("kernelInfo", nil)
 	})
@@ -283,11 +286,17 @@ func (a *bridgeAPI) TTSStop() (string, error)       { return a.b.callStr("ttsSto
 func (a *bridgeAPI) ClipboardWatchStart(hz int32) (string, error) {
 	return a.b.callStr("clipboardWatchStart", map[string]any{"hz": hz})
 }
-func (a *bridgeAPI) ClipboardWatchStop() (string, error) { return a.b.callStr("clipboardWatchStop", nil) }
+func (a *bridgeAPI) ClipboardWatchStop() (string, error) {
+	return a.b.callStr("clipboardWatchStop", nil)
+}
 func (a *bridgeAPI) LocationWatchStart(hz int32) (string, error) {
 	return a.b.callStr("locationWatchStart", map[string]any{"hz": hz})
 }
 func (a *bridgeAPI) LocationWatchStop() (string, error) { return a.b.callStr("locationWatchStop", nil) }
+
+func (a *bridgeAPI) InstallApk(path string) (string, error) {
+	return a.b.callStr("installApk", map[string]any{"path": path})
+}
 
 func _atoi32(s string) int32 {
 	n, _ := strconv.Atoi(s)

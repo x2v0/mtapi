@@ -342,7 +342,7 @@ public class MainActivity extends Activity {
 
             sb.append("\n# NOTE: Android 7+ (API 24) SELinux blocks /proc of other processes.\n");
             sb.append("# Shown only own process (avc: denied /proc/pid_max for untrusted_app).\n");
-            sb.append("# For all processes — Shizuku API or root.\n");
+            sb.append("# For all processes — system-level API or root required.\n");
         } catch (Throwable t) {
             sb.append("error: ").append(t).append("\n");
         }

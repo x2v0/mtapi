@@ -2,10 +2,11 @@ package main
 
 import (
 	"bufio"
+	"crypto/subtle"
 	_ "embed"
-	"io"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"net/http"
@@ -15,7 +16,8 @@ import (
 	"time"
 
 	"os/exec"
-	"runtime")
+	"runtime"
+)
 
 // MTAPI_DEVTOOLS_DIRECT: find PID of process owning @webview_devtools_remote_<PID>.
 // Go server runs as child of dev.mtapi (or is same process, depends on build).
@@ -60,23 +62,23 @@ type apiServer struct {
 
 func (s *apiServer) checkAuth(r *http.Request) bool {
 	if s.token == "" {
-		return true // no auth configured
+		return false
 	}
-	// Bearer header
-	auth := r.Header.Get("Authorization")
-	if strings.HasPrefix(auth, "Bearer ") && strings.TrimPrefix(auth, "Bearer ") == s.token {
-		return true
+	got := ""
+	if auth := r.Header.Get("Authorization"); strings.HasPrefix(auth, "Bearer ") {
+		got = strings.TrimPrefix(auth, "Bearer ")
+	} else if q := r.URL.Query().Get("token"); q != "" {
+		got = q
+	} else {
+		return false
 	}
-	// ?token= query (for browser convenience)
-	if r.URL.Query().Get("token") == s.token {
-		return true
-	}
-	return false
+	return subtle.ConstantTimeCompare([]byte(got), []byte(s.token)) == 1
 }
 
 func (s *apiServer) writeJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Origin", "http://127.0.0.1:7788")
+	w.Header().Set("Vary", "Origin")
 	w.WriteHeader(status)
 	json.NewEncoder(w).Encode(v)
 }
@@ -177,277 +179,503 @@ func (s *apiServer) dispatch(w http.ResponseWriter, method string, p map[string]
 		s.writeJSON(w, 200, map[string]any{"ok": true, "data": map[string]any{"pong": true}})
 	case "battery":
 		data, err := s.api.BatteryStatus()
-		if err != nil { s.fail(w, 500, err); return }
+		if err != nil {
+			s.fail(w, 500, err)
+			return
+		}
 		s.ok(w, data)
 	case "wifi":
 		data, err := s.api.WifiInfo()
-		if err != nil { s.fail(w, 500, err); return }
+		if err != nil {
+			s.fail(w, 500, err)
+			return
+		}
 		s.ok(w, data)
 	case "device":
 		data, err := s.api.DeviceInfo()
-		if err != nil { s.fail(w, 500, err); return }
+		if err != nil {
+			s.fail(w, 500, err)
+			return
+		}
 		s.ok(w, data)
 	case "location":
 		data, err := s.api.LocationLast()
-		if err != nil { s.fail(w, 500, err); return }
+		if err != nil {
+			s.fail(w, 500, err)
+			return
+		}
 		s.ok(w, data)
 	case "clipboard":
 		op := strp(p, "op")
 		if op == "set" {
-			if err := s.api.ClipboardSet(strp(p, "text")); err != nil { s.fail(w, 500, err); return }
+			if err := s.api.ClipboardSet(strp(p, "text")); err != nil {
+				s.fail(w, 500, err)
+				return
+			}
 			s.writeJSON(w, 200, map[string]any{"ok": true, "data": nil})
 			return
 		}
 		data, err := s.api.ClipboardGet()
-		if err != nil { s.fail(w, 500, err); return }
+		if err != nil {
+			s.fail(w, 500, err)
+			return
+		}
 		s.writeJSON(w, 200, map[string]any{"ok": true, "data": map[string]string{"text": data}})
 	case "toast":
-		if err := s.api.Toast(strp(p, "text")); err != nil { s.fail(w, 500, err); return }
+		if err := s.api.Toast(strp(p, "text")); err != nil {
+			s.fail(w, 500, err)
+			return
+		}
 		s.writeJSON(w, 200, map[string]any{"ok": true, "data": nil})
 	case "notify":
-		if err := s.api.Notify(strp(p, "title"), strp(p, "body")); err != nil { s.fail(w, 500, err); return }
+		if err := s.api.Notify(strp(p, "title"), strp(p, "body")); err != nil {
+			s.fail(w, 500, err)
+			return
+		}
 		s.writeJSON(w, 200, map[string]any{"ok": true, "data": nil})
 	case "vibrate":
-		if err := s.api.Vibrate(intp(p, "ms")); err != nil { s.fail(w, 500, err); return }
+		if err := s.api.Vibrate(intp(p, "ms")); err != nil {
+			s.fail(w, 500, err)
+			return
+		}
 		s.writeJSON(w, 200, map[string]any{"ok": true, "data": nil})
 	case "torch":
-		if err := s.api.Torch(boolp(p, "on")); err != nil { s.fail(w, 500, err); return }
+		if err := s.api.Torch(boolp(p, "on")); err != nil {
+			s.fail(w, 500, err)
+			return
+		}
 		s.writeJSON(w, 200, map[string]any{"ok": true, "data": nil})
 	case "tts":
-		if err := s.api.TTS(strp(p, "text")); err != nil { s.fail(w, 500, err); return }
+		if err := s.api.TTS(strp(p, "text")); err != nil {
+			s.fail(w, 500, err)
+			return
+		}
 		s.writeJSON(w, 200, map[string]any{"ok": true, "data": nil})
 	case "share":
-		if err := s.api.Share(strp(p, "title"), strp(p, "text")); err != nil { s.fail(w, 500, err); return }
+		if err := s.api.Share(strp(p, "title"), strp(p, "text")); err != nil {
+			s.fail(w, 500, err)
+			return
+		}
 		s.writeJSON(w, 200, map[string]any{"ok": true, "data": nil})
 	case "camera":
 		data, err := s.api.CameraPhoto(strp(p, "path"))
-		if err != nil { s.fail(w, 500, err); return }
+		if err != nil {
+			s.fail(w, 500, err)
+			return
+		}
 		s.ok(w, data)
 	case "contacts":
 		lim := intp(p, "limit")
-		if lim <= 0 { lim = 20 }
+		if lim <= 0 {
+			lim = 20
+		}
 		data, err := s.api.ContactsList(lim)
-		if err != nil { s.fail(w, 500, err); return }
+		if err != nil {
+			s.fail(w, 500, err)
+			return
+		}
 		s.ok(w, data)
 	case "calllog":
 		lim := intp(p, "limit")
-		if lim <= 0 { lim = 20 }
+		if lim <= 0 {
+			lim = 20
+		}
 		data, err := s.api.CallLogList(lim)
-		if err != nil { s.fail(w, 500, err); return }
+		if err != nil {
+			s.fail(w, 500, err)
+			return
+		}
 		s.ok(w, data)
 	case "sms":
 		if strp(p, "op") == "send" {
-			if err := s.api.SmsSend(strp(p, "to"), strp(p, "text")); err != nil { s.fail(w, 500, err); return }
+			if err := s.api.SmsSend(strp(p, "to"), strp(p, "text")); err != nil {
+				s.fail(w, 500, err)
+				return
+			}
 			s.writeJSON(w, 200, map[string]any{"ok": true, "data": nil})
 			return
 		}
 		lim := intp(p, "limit")
-		if lim <= 0 { lim = 20 }
+		if lim <= 0 {
+			lim = 20
+		}
 		data, err := s.api.SmsList(lim)
-		if err != nil { s.fail(w, 500, err); return }
+		if err != nil {
+			s.fail(w, 500, err)
+			return
+		}
 		s.ok(w, data)
 	case "sensors":
 		data, err := s.api.SensorsList()
-		if err != nil { s.fail(w, 500, err); return }
+		if err != nil {
+			s.fail(w, 500, err)
+			return
+		}
 		s.ok(w, data)
 	case "sensors/read":
-		ms := intp(p, "ms"); if ms <= 0 { ms = 1000 }
+		ms := intp(p, "ms")
+		if ms <= 0 {
+			ms = 1000
+		}
 		data, err := s.api.SensorRead(strp(p, "name"), ms)
-		if err != nil { s.fail(w, 500, err); return }
+		if err != nil {
+			s.fail(w, 500, err)
+			return
+		}
 		s.ok(w, data)
 	case "system":
 		data, err := s.api.SystemInfo()
-		if err != nil { s.fail(w, 500, err); return }
+		if err != nil {
+			s.fail(w, 500, err)
+			return
+		}
 		s.ok(w, data)
 	case "storage":
 		data, err := s.api.StorageInfo()
-		if err != nil { s.fail(w, 500, err); return }
+		if err != nil {
+			s.fail(w, 500, err)
+			return
+		}
 		s.ok(w, data)
 	case "network":
 		data, err := s.api.NetworkInfo()
-		if err != nil { s.fail(w, 500, err); return }
+		if err != nil {
+			s.fail(w, 500, err)
+			return
+		}
 		s.ok(w, data)
 	case "telephony":
 		data, err := s.api.TelephonyInfo()
-		if err != nil { s.fail(w, 500, err); return }
+		if err != nil {
+			s.fail(w, 500, err)
+			return
+		}
 		s.ok(w, data)
 	case "display":
 		data, err := s.api.DisplayInfo()
-		if err != nil { s.fail(w, 500, err); return }
+		if err != nil {
+			s.fail(w, 500, err)
+			return
+		}
 		s.ok(w, data)
 	case "audio":
 		data, err := s.api.AudioInfo()
-		if err != nil { s.fail(w, 500, err); return }
+		if err != nil {
+			s.fail(w, 500, err)
+			return
+		}
 		s.ok(w, data)
 	case "features":
 		data, err := s.api.FeaturesList()
-		if err != nil { s.fail(w, 500, err); return }
+		if err != nil {
+			s.fail(w, 500, err)
+			return
+		}
 		s.ok(w, data)
 	case "camera/list":
 		data, err := s.api.CameraList()
-		if err != nil { s.fail(w, 500, err); return }
+		if err != nil {
+			s.fail(w, 500, err)
+			return
+		}
 		s.ok(w, data)
 	case "battery/detailed":
 		data, err := s.api.BatteryDetailed()
-		if err != nil { s.fail(w, 500, err); return }
+		if err != nil {
+			s.fail(w, 500, err)
+			return
+		}
 		s.ok(w, data)
 	case "location/detailed":
 		data, err := s.api.LocationDetailed()
-		if err != nil { s.fail(w, 500, err); return }
+		if err != nil {
+			s.fail(w, 500, err)
+			return
+		}
 		s.ok(w, data)
 	case "locale":
 		data, err := s.api.LocaleInfo()
-		if err != nil { s.fail(w, 500, err); return }
+		if err != nil {
+			s.fail(w, 500, err)
+			return
+		}
 		s.ok(w, data)
 	case "cpu/detail":
 		data, err := s.api.CpuDetail()
-		if err != nil { s.fail(w, 500, err); return }
+		if err != nil {
+			s.fail(w, 500, err)
+			return
+		}
 		s.ok(w, data)
 	case "thermal":
 		data, err := s.api.ThermalInfo()
-		if err != nil { s.fail(w, 500, err); return }
+		if err != nil {
+			s.fail(w, 500, err)
+			return
+		}
 		s.ok(w, data)
 	case "memory":
 		data, err := s.api.MemoryDetail()
-		if err != nil { s.fail(w, 500, err); return }
+		if err != nil {
+			s.fail(w, 500, err)
+			return
+		}
 		s.ok(w, data)
 	case "wifi/detailed":
 		data, err := s.api.WifiDetailed()
-		if err != nil { s.fail(w, 500, err); return }
+		if err != nil {
+			s.fail(w, 500, err)
+			return
+		}
 		s.ok(w, data)
 	case "bluetooth":
 		data, err := s.api.BluetoothInfo()
-		if err != nil { s.fail(w, 500, err); return }
+		if err != nil {
+			s.fail(w, 500, err)
+			return
+		}
 		s.ok(w, data)
 	case "display/brightness":
 		data, err := s.api.DisplayBrightness()
-		if err != nil { s.fail(w, 500, err); return }
+		if err != nil {
+			s.fail(w, 500, err)
+			return
+		}
 		s.ok(w, data)
 	case "display/color":
 		data, err := s.api.DisplayColor()
-		if err != nil { s.fail(w, 500, err); return }
+		if err != nil {
+			s.fail(w, 500, err)
+			return
+		}
 		s.ok(w, data)
 	case "microphone":
 		data, err := s.api.MicrophoneList()
-		if err != nil { s.fail(w, 500, err); return }
+		if err != nil {
+			s.fail(w, 500, err)
+			return
+		}
 		s.ok(w, data)
 	case "kernel":
 		data, err := s.api.KernelInfo()
-		if err != nil { s.fail(w, 500, err); return }
+		if err != nil {
+			s.fail(w, 500, err)
+			return
+		}
 		s.ok(w, data)
 	case "camera/snapshot":
 		data, err := s.api.CameraPhoto(strp(p, "path"))
-		if err != nil { s.fail(w, 500, err); return }
+		if err != nil {
+			s.fail(w, 500, err)
+			return
+		}
 		s.ok(w, data)
 	case "microphone/record":
-		secs := intp(p, "seconds"); if secs <= 0 { secs = 5 }
+		secs := intp(p, "seconds")
+		if secs <= 0 {
+			secs = 5
+		}
 		data, err := s.api.MicrophoneRecord(strp(p, "path"), secs)
-		if err != nil { s.fail(w, 500, err); return }
+		if err != nil {
+			s.fail(w, 500, err)
+			return
+		}
 		s.ok(w, data)
 	case "torch/brightness":
 		lvl := intp(p, "level")
 		data, err := s.api.TorchBrightness(lvl)
-		if err != nil { s.fail(w, 500, err); return }
+		if err != nil {
+			s.fail(w, 500, err)
+			return
+		}
 		s.ok(w, data)
 	case "sensors/stream":
 		data, err := s.api.SensorStreamStart(strp(p, "name"), intp(p, "hz"))
-		if err != nil { s.fail(w, 500, err); return }
+		if err != nil {
+			s.fail(w, 500, err)
+			return
+		}
 		s.ok(w, data)
 	case "sensors/stream/stop":
 		data, err := s.api.SensorStreamStop(strp(p, "name"))
-		if err != nil { s.fail(w, 500, err); return }
+		if err != nil {
+			s.fail(w, 500, err)
+			return
+		}
 		s.ok(w, data)
 	case "audio/volume":
 		if _, has := p["level"]; has {
 			data, err := s.api.AudioVolumeSet(intp(p, "stream"), intp(p, "level"))
-			if err != nil { s.fail(w, 500, err); return }
+			if err != nil {
+				s.fail(w, 500, err)
+				return
+			}
 			s.ok(w, data)
 			return
 		}
 		data, err := s.api.AudioVolume(intp(p, "stream"))
-		if err != nil { s.fail(w, 500, err); return }
+		if err != nil {
+			s.fail(w, 500, err)
+			return
+		}
 		s.ok(w, data)
 	case "audio/ringer":
 		if mode := strp(p, "mode"); mode != "" {
 			data, err := s.api.AudioRingerSet(mode)
-			if err != nil { s.fail(w, 500, err); return }
+			if err != nil {
+				s.fail(w, 500, err)
+				return
+			}
 			s.ok(w, data)
 			return
 		}
 		data, err := s.api.AudioRinger()
-		if err != nil { s.fail(w, 500, err); return }
+		if err != nil {
+			s.fail(w, 500, err)
+			return
+		}
 		s.ok(w, data)
 	case "wifi/scan":
 		data, err := s.api.WifiScan()
-		if err != nil { s.fail(w, 500, err); return }
+		if err != nil {
+			s.fail(w, 500, err)
+			return
+		}
 		s.ok(w, data)
 	case "app/list":
 		data, err := s.api.AppList()
-		if err != nil { s.fail(w, 500, err); return }
+		if err != nil {
+			s.fail(w, 500, err)
+			return
+		}
 		s.ok(w, data)
 	case "app/launch":
 		data, err := s.api.AppLaunch(strp(p, "pkg"))
-		if err != nil { s.fail(w, 500, err); return }
+		if err != nil {
+			s.fail(w, 500, err)
+			return
+		}
 		s.ok(w, data)
 	case "net/ping":
-		cnt := intp(p, "count"); if cnt <= 0 { cnt = 4 }
+		cnt := intp(p, "count")
+		if cnt <= 0 {
+			cnt = 4
+		}
 		data, err := s.api.NetPing(strp(p, "host"), cnt)
-		if err != nil { s.fail(w, 500, err); return }
+		if err != nil {
+			s.fail(w, 500, err)
+			return
+		}
 		s.ok(w, data)
 	case "net/dns":
 		data, err := s.api.NetDns(strp(p, "host"))
-		if err != nil { s.fail(w, 500, err); return }
+		if err != nil {
+			s.fail(w, 500, err)
+			return
+		}
 		s.ok(w, data)
 	case "net/fetch":
 		data, err := s.api.NetFetch(strp(p, "url"))
-		if err != nil { s.fail(w, 500, err); return }
+		if err != nil {
+			s.fail(w, 500, err)
+			return
+		}
 		s.ok(w, data)
 	case "calendar":
-		days := intp(p, "days"); if days <= 0 { days = 7 }
+		days := intp(p, "days")
+		if days <= 0 {
+			days = 7
+		}
 		data, err := s.api.CalendarEvents(days)
-		if err != nil { s.fail(w, 500, err); return }
+		if err != nil {
+			s.fail(w, 500, err)
+			return
+		}
 		s.ok(w, data)
 	case "alarm/next":
 		data, err := s.api.AlarmNext()
-		if err != nil { s.fail(w, 500, err); return }
+		if err != nil {
+			s.fail(w, 500, err)
+			return
+		}
 		s.ok(w, data)
 	case "files/save":
 		data, err := s.api.FilesSave(strp(p, "name"), strp(p, "data"))
-		if err != nil { s.fail(w, 500, err); return }
+		if err != nil {
+			s.fail(w, 500, err)
+			return
+		}
 		s.ok(w, data)
 	case "audio/play":
 		data, err := s.api.AudioPlay(strp(p, "uri"))
-		if err != nil { s.fail(w, 500, err); return }
+		if err != nil {
+			s.fail(w, 500, err)
+			return
+		}
 		s.ok(w, data)
 	case "audio/play/stop":
 		data, err := s.api.AudioPlayStop()
-		if err != nil { s.fail(w, 500, err); return }
+		if err != nil {
+			s.fail(w, 500, err)
+			return
+		}
 		s.ok(w, data)
 	case "tts/voices":
 		data, err := s.api.TTSVoices()
-		if err != nil { s.fail(w, 500, err); return }
+		if err != nil {
+			s.fail(w, 500, err)
+			return
+		}
 		s.ok(w, data)
 	case "tts/stop":
 		data, err := s.api.TTSStop()
-		if err != nil { s.fail(w, 500, err); return }
+		if err != nil {
+			s.fail(w, 500, err)
+			return
+		}
 		s.ok(w, data)
 	case "clipboard/watch":
-		hz := intp(p, "hz"); if hz <= 0 { hz = 2 }
+		hz := intp(p, "hz")
+		if hz <= 0 {
+			hz = 2
+		}
 		data, err := s.api.ClipboardWatchStart(hz)
-		if err != nil { s.fail(w, 500, err); return }
+		if err != nil {
+			s.fail(w, 500, err)
+			return
+		}
 		s.ok(w, data)
 	case "clipboard/watch/stop":
 		data, err := s.api.ClipboardWatchStop()
-		if err != nil { s.fail(w, 500, err); return }
+		if err != nil {
+			s.fail(w, 500, err)
+			return
+		}
 		s.ok(w, data)
 	case "location/watch":
-		hz := intp(p, "hz"); if hz <= 0 { hz = 1 }
+		hz := intp(p, "hz")
+		if hz <= 0 {
+			hz = 1
+		}
 		data, err := s.api.LocationWatchStart(hz)
-		if err != nil { s.fail(w, 500, err); return }
+		if err != nil {
+			s.fail(w, 500, err)
+			return
+		}
 		s.ok(w, data)
 	case "location/watch/stop":
 		data, err := s.api.LocationWatchStop()
-		if err != nil { s.fail(w, 500, err); return }
+		if err != nil {
+			s.fail(w, 500, err)
+			return
+		}
+		s.ok(w, data)
+	case "app/install":
+		data, err := s.api.InstallApk(strp(p, "path"))
+		if err != nil {
+			s.fail(w, 500, err)
+			return
+		}
 		s.ok(w, data)
 	default:
 		s.writeJSON(w, 404, map[string]any{"ok": false, "error": "unknown method: " + method})
@@ -562,6 +790,10 @@ func startHTTP(api AndroidAPI, token string) error {
 		s.writeJSON(w, 200, map[string]any{"ok": true, "data": collectDebug()})
 	})
 	mux.HandleFunc("/restart", func(w http.ResponseWriter, r *http.Request) {
+		if !s.checkAuth(r) {
+			s.writeJSON(w, 401, map[string]any{"ok": false, "error": "auth_failed"})
+			return
+		}
 		if r.Method != "POST" {
 			s.writeJSON(w, 405, map[string]any{"ok": false, "error": "POST only"})
 			return
