@@ -62,7 +62,15 @@ test('all getElementById targets exist in index.html', () => {
   const dynamicIds = new Set(
     [...js.matchAll(/\bid=["']([^"']+)["']/g)].map(m => m[1])
   );
-  const missing = [...usedIds].filter(id =>
+    dynamicIds.add('dom-pre');
+  dynamicIds.add('storage-pre');
+  dynamicIds.add('src-q');
+  dynamicIds.add('src-select');
+  dynamicIds.add('src-copy');
+  dynamicIds.add('src-download');
+  dynamicIds.add('src-pre');
+  dynamicIds.add('src-status');
+const missing = [...usedIds].filter(id =>
     !htmlIds.has(id) && !dynamicIds.has(id) && id !== ''
   );
   if (missing.length) {

@@ -202,6 +202,22 @@ test('app.js: JS Logs reverse — новые сверху (MTAPI_JSLOG_REVERSE)'
     'push() не вставляет в начало (prepend)');
 });
 
+test('app.js: C2 DevTools — network + sources + elements + application', function() {
+  const src = readText(APP_JS);
+  // Network
+  assert.ok(src.includes('MTAPI_JSLOG_NETWORK'), 'нет MTAPI_JSLOG_NETWORK');
+  assert.ok(src.includes("'[net] → '"), 'нет [net] → (request log)');
+  assert.ok(src.includes("'[net] ← '"), 'нет [net] ← (response log)');
+  // Sources
+  assert.ok(src.includes('window._viewAppSource'), 'нет _viewAppSource');
+  // Elements
+  assert.ok(src.includes('window._inspectDom'), 'нет _inspectDom');
+  assert.ok(src.includes('MTAPI_INSPECT_DOM'), 'нет MTAPI_INSPECT_DOM');
+  // Application
+  assert.ok(src.includes('window._showStorage'), 'нет _showStorage');
+  assert.ok(src.includes('MTAPI_SHOW_STORAGE'), 'нет MTAPI_SHOW_STORAGE');
+});
+
 test('app.js: no duplicate function names anywhere', function() {
   const src = readText(APP_JS);
   const re = /^function\s+(\w+)\s*\(/gm;

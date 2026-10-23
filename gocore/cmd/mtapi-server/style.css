@@ -324,3 +324,52 @@ mark.tbl-hl {
   display: block;
   white-space: pre;
 }
+
+/* MTAPI_SCROLLBARS: видимые скроллбары для devtools-frame и src-pre */
+#devtools-frame {
+  scrollbar-width: thin;
+  scrollbar-color: #555 #222;
+}
+#devtools-frame::-webkit-scrollbar,
+#src-pre::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+#devtools-frame::-webkit-scrollbar-track,
+#src-pre::-webkit-scrollbar-track {
+  background: #222;
+  border-radius: 4px;
+}
+#devtools-frame::-webkit-scrollbar-thumb,
+#src-pre::-webkit-scrollbar-thumb {
+  background: #555;
+  border-radius: 4px;
+}
+#devtools-frame::-webkit-scrollbar-thumb:hover,
+#src-pre::-webkit-scrollbar-thumb:hover {
+  background: #777;
+}
+#src-pre {
+  scrollbar-width: thin;
+  scrollbar-color: #555 #222;
+  scroll-behavior: smooth;
+}
+
+/* MTAPI_SECTIONS: визуальное разделение Logcat / JS Logs / Eval / Perf / DevTools */
+#logcat-sub > summary {
+  border-left: 3px solid #f80;
+  padding-left: 6px;
+  font-weight: 600;
+}
+#jslog-sub > summary,
+#eval-sub > summary,
+#perf-sub > summary {
+  border-left: 3px solid #08f;
+  padding-left: 6px;
+  font-weight: 600;
+}
+#devtools-sub > summary {
+  border-left: 3px solid #a0a;
+  padding-left: 6px;
+  font-weight: 600;
+}

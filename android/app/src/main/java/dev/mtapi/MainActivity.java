@@ -278,25 +278,92 @@ public class MainActivity extends Activity {
     }
 
 
-    // MTAPI_311: processList — все процессы через ActivityManager
+    // MTAPI_311: processList — подробно свой процесс (Android 7+ SELinux)
     @android.webkit.JavascriptInterface
     public String processList() {
+        StringBuilder sb = new StringBuilder();
         try {
             android.app.ActivityManager am = (android.app.ActivityManager)
                 getSystemService(android.content.Context.ACTIVITY_SERVICE);
             java.util.List<android.app.ActivityManager.RunningAppProcessInfo> procs =
                 am.getRunningAppProcesses();
-            StringBuilder sb = new StringBuilder();
-            sb.append("=== all processes (").append(procs.size()).append(") ===\n");
+            sb.append("=== mtapi process (").append(procs.size()).append(") ===\n");
             for (android.app.ActivityManager.RunningAppProcessInfo p : procs) {
-                sb.append(p.pid).append(" ").append(p.processName)
+                sb.append("pid=").append(p.pid)
+                  .append(" name=").append(p.processName)
                   .append(" uid=").append(p.uid)
-                  .append(" importance=").append(p.importance).append("\n");
+                  .append(" importance=").append(p.importance)
+                  .append(" reasonCode=").append(p.importanceReasonCode)
+                  .append("\n");
             }
-            return sb.toString();
+
+            // /proc/self — детали своего процесса (доступно без root)
+            try {
+                String cmdline = _readFile("/proc/self/cmdline").replace("\u0000", " ").trim();
+                if (cmdline.length() > 0) sb.append("cmdline=").append(cmdline).append("\n");
+
+                String status = _readFile("/proc/self/status");
+                if (status.length() > 0) {
+                    sb.append("\n=== /proc/self/status ===\n");
+                    String[] lines = status.split("\n");
+                    for (String line : lines) {
+                        if (line.startsWith("Name:") || line.startsWith("State:")
+                            || line.startsWith("Pid:") || line.startsWith("PPid:")
+                            || line.startsWith("Threads:") || line.startsWith("VmRSS:")
+                            || line.startsWith("VmSize:") || line.startsWith("VmData:")
+                            || line.startsWith("VmStk:") || line.startsWith("VmExe:")
+                            || line.startsWith("VmPeak:") || line.startsWith("VmSwap:")) {
+                            sb.append(line).append("\n");
+                        }
+                    }
+                }
+
+                // threads / vsize / rss из /proc/self/stat
+                String stat = _readFile("/proc/self/stat");
+                if (stat.length() > 0) {
+                    String[] parts = stat.split(" ");
+                    if (parts.length > 23) {
+                        sb.append("\nthreads=").append(parts[19])
+                          .append(" starttime=").append(parts[21])
+                          .append(" vsize=").append(parts[22])
+                          .append(" rss_pages=").append(parts[23]).append("\n");
+                    }
+                }
+
+                // открытые fd
+                try {
+                    java.io.File fdDir = new java.io.File("/proc/self/fd");
+                    String[] fds = fdDir.list();
+                    if (fds != null) sb.append("open_fds=").append(fds.length).append("\n");
+                } catch (Throwable ignored) {}
+            } catch (Throwable t) {
+                sb.append("/proc error: ").append(t).append("\n");
+            }
+
+            sb.append("\n# NOTE: Android 7+ (API 24) SELinux blocks /proc of other processes.\n");
+            sb.append("# Shown only own process (avc: denied /proc/pid_max for untrusted_app).\n");
+            sb.append("# For all processes — Shizuku API or root.\n");
         } catch (Throwable t) {
-            return "error: " + t;
+            sb.append("error: ").append(t).append("\n");
         }
+        return sb.toString();
+    }
+
+    // Helper: read file as string
+    private String _readFile(String path) {
+        try {
+            java.io.BufferedReader r = new java.io.BufferedReader(new java.io.FileReader(path));
+            StringBuilder sb = new StringBuilder();
+            String line;
+            boolean first = true;
+            while ((line = r.readLine()) != null) {
+                if (!first) sb.append("\n");
+                sb.append(line);
+                first = false;
+            }
+            r.close();
+            return sb.toString();
+        } catch (Throwable t) { return ""; }
     }
 
 }
