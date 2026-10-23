@@ -34,7 +34,7 @@ make apk                # собрать .so + mtapi.apk (~30s)
 ### Install
 
 ```bash
-make install            # через rish (Shizuku) / adb
+make install            # через adb install (или /app/install в дашборде)
 # или вручную: /sdcard/Download/mtapi.apk → Install
 ```
 
@@ -57,7 +57,7 @@ make install            # через rish (Shizuku) / adb
 | `make build` | `.so` + APK | ~30s |
 | `make apk` | `.so` → APK (без цикла) | ~25s |
 | `make so` | только `.so` (Go cross-compile) | ~10s |
-| `make install` | APK → телефон через `rish` / `adb` | ~5s |
+| `make install` | APK → телефон через `adb install` или `/app/install` | ~5s |
 | `make clean` | `build/`, `*.idsig`, `*.tmp` (НЕ трогает `.so`) | ~1s |
 | `make distclean` | + `*.bak`, binary, log, temp | ~2s |
 | `make clean-dry` | preview перед clean/distclean | ~1s |
@@ -254,7 +254,7 @@ cp ~/.config/w2a/keystore.p12 ~/.config/w2a/sign.yaml /sdcard/Download/
 
 ## DevTools (WebView inspection)
 
-`/devtools/json` работает без adb, без ПК, без wireless debugging. Go-сервер и WebView — один UID, поэтому Go подключается к abstract socket `@webview_devtools_remote_<PID>` напрямую.
+`/devtools/json` работает **без adb и без ПК** — отдаёт JSON-список страниц WebView. Go-сервер и WebView в одном UID, поэтому Go читает abstract socket `@webview_devtools_remote_<PID>` напрямую. **Ограничение:** для полноценного Chrome DevTools UI (Elements / Network / Console) всё равно нужен `adb forward tcp:9222` — abstract socket доступен только изнутри процесса. `/devtools/json` — это про JSON-эндпоинт, не про UI.
 
 ### In-app
 
