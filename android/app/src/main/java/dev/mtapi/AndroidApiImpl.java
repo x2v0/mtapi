@@ -352,9 +352,30 @@ public class AndroidApiImpl implements AndroidAPI {
         return arr.toString();
     }
 
+    private static final long SMS_RATE_LIMIT_MS = 30_000L;
+    private static final int SMS_MAX_LEN = 1000;
+    private static final String SMS_PREFS = "mtapi_sms";
+    private static final String SMS_KEY_LAST = "last_send_ms";
+
     @Override
     public void smsSend(String to, String text) throws Exception {
         need(Manifest.permission.SEND_SMS);
+        if (to == null || to.isEmpty()) throw new RuntimeException("sms_to_required");
+        String digits = to.replaceAll("[^0-9+]", "");
+        if (!digits.matches("^\\+?[0-9]{5,15}$")) {
+            throw new RuntimeException("sms_to_invalid: " + to);
+        }
+        if (text == null) text = "";
+        if (text.length() > SMS_MAX_LEN) {
+            throw new RuntimeException("sms_text_too_long: max=" + SMS_MAX_LEN);
+        }
+        android.content.SharedPreferences sp = ctx.getSharedPreferences(SMS_PREFS, Context.MODE_PRIVATE);
+        long now = System.currentTimeMillis();
+        long last = sp.getLong(SMS_KEY_LAST, 0L);
+        if (now - last < SMS_RATE_LIMIT_MS) {
+            long wait = (SMS_RATE_LIMIT_MS - (now - last)) / 1000;
+            throw new RuntimeException("sms_rate_limited: wait " + wait + "s");
+        }
         SmsManager sm;
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             sm = ctx.getSystemService(SmsManager.class);
@@ -363,6 +384,7 @@ public class AndroidApiImpl implements AndroidAPI {
         }
         if (sm == null) throw new RuntimeException("sms_manager_unavailable");
         sm.sendTextMessage(to, null, text, null, null);
+        sp.edit().putLong(SMS_KEY_LAST, now).apply();
     }
     // ─── Extended info (patch 34) ───────────────────────────
 
@@ -1184,7 +1206,15 @@ public class AndroidApiImpl implements AndroidAPI {
             d.mkdirs();
             outFile = new java.io.File(d, "img_" + System.currentTimeMillis() + ".jpg");
         } else {
-            outFile = new java.io.File(path);
+            java.io.File candidate = new java.io.File(path).getCanonicalFile();
+            String cp = candidate.getPath();
+            boolean allowed = cp.startsWith("/sdcard/")
+                    || cp.startsWith("/storage/emulated/0/")
+                    || cp.startsWith("/storage/self/primary/")
+                    || cp.startsWith("/data/data/dev.mtapi/")
+                    || cp.startsWith("/data/user/0/dev.mtapi/");
+            if (!allowed) throw new SecurityException("path_not_allowed: " + cp);
+            outFile = candidate;
             java.io.File p = outFile.getParentFile();
             if (p != null) p.mkdirs();
         }
@@ -1312,7 +1342,15 @@ public class AndroidApiImpl implements AndroidAPI {
             d.mkdirs();
             outFile = new java.io.File(d, "rec_" + System.currentTimeMillis() + ".m4a");
         } else {
-            outFile = new java.io.File(path);
+            java.io.File candidate = new java.io.File(path).getCanonicalFile();
+            String cp = candidate.getPath();
+            boolean allowed = cp.startsWith("/sdcard/")
+                    || cp.startsWith("/storage/emulated/0/")
+                    || cp.startsWith("/storage/self/primary/")
+                    || cp.startsWith("/data/data/dev.mtapi/")
+                    || cp.startsWith("/data/user/0/dev.mtapi/");
+            if (!allowed) throw new SecurityException("path_not_allowed: " + cp);
+            outFile = candidate;
             java.io.File p = outFile.getParentFile();
             if (p != null) p.mkdirs();
         }
@@ -1418,14 +1456,7 @@ public class AndroidApiImpl implements AndroidAPI {
         final SensorEventListener[] self = new SensorEventListener[1];
         self[0] = new SensorEventListener() {
             @Override public void onSensorChanged(SensorEvent e) {
-                try {
-                    JSONArray vals = new JSONArray();
-                    for (float v : e.values) vals.put((double) v);
-                    JSONObject ev = new JSONObject();
-                    ev.put("ts_ns", e.timestamp);
-                    ev.put("values", vals);
-                    android.util.Log.i("mtapi-sse", ev.toString());
-                } catch (Throwable ignored) {}
+                // privacy: sensor data not logged to logcat (security audit B.4)
             }
             @Override public void onAccuracyChanged(Sensor s, int a) {}
         };
@@ -1704,9 +1735,18 @@ public class AndroidApiImpl implements AndroidAPI {
         return o.toString();
     }
 
+    private static String sanitizeFilename(String name) {
+        if (name == null || name.isEmpty()) return "mtapi.txt";
+        String s = name.replaceAll("[^a-zA-Z0-9._-]", "_");
+        while (s.contains("..")) s = s.replace("..", "_");
+        if (s.startsWith(".")) s = "_" + s;
+        if (s.isEmpty()) s = "mtapi.txt";
+        return s;
+    }
+
     @Override
     public String filesSave(String name, String data) throws Exception {
-        if (name == null || name.isEmpty()) name = "mtapi.txt";
+        name = sanitizeFilename(name);
         byte[] bytes = data == null ? new byte[0] : data.getBytes("UTF-8");
 
         if (Build.VERSION.SDK_INT >= 29) {
@@ -1729,7 +1769,8 @@ public class AndroidApiImpl implements AndroidAPI {
         } else {
             java.io.File d = new java.io.File("/sdcard/Download");
             if (!d.exists()) d.mkdirs();
-            java.io.File f = new java.io.File(d, name);
+            java.io.File f = new java.io.File(d, name).getCanonicalFile();
+            if (!f.getPath().startsWith(d.getCanonicalPath() + "/")) throw new SecurityException("files_save_traversal: " + f.getPath());
             try (java.io.FileOutputStream fos = new java.io.FileOutputStream(f)) {
                 fos.write(bytes);
             }
@@ -1855,10 +1896,7 @@ public class AndroidApiImpl implements AndroidAPI {
                     String s = t.toString();
                     if (last[0] == null || !last[0].equals(s)) {
                         last[0] = s;
-                        JSONObject ev = new JSONObject();
-                        ev.put("ts_ms", System.currentTimeMillis());
-                        ev.put("text", s);
-                        android.util.Log.i("mtapi-clip", ev.toString());
+                        // privacy: clipboard content not logged to logcat (security audit B.4)
                     }
                 } catch (InterruptedException ie) {
                     return;
@@ -1893,16 +1931,7 @@ public class AndroidApiImpl implements AndroidAPI {
         locWatchThread = new Thread(() -> {
             final LocationListener listener = new LocationListener() {
                 @Override public void onLocationChanged(Location l) {
-                    try {
-                        JSONObject ev = new JSONObject();
-                        ev.put("lat", l.getLatitude());
-                        ev.put("lon", l.getLongitude());
-                        ev.put("alt", l.getAltitude());
-                        ev.put("acc", l.getAccuracy());
-                        ev.put("provider", l.getProvider());
-                        ev.put("ts_ms", l.getTime());
-                        android.util.Log.i("mtapi-loc", ev.toString());
-                    } catch (Throwable ignored) {}
+                    // privacy: location not logged to logcat (security audit B.4)
                 }
                 @Override public void onStatusChanged(String p, int s, android.os.Bundle b) {}
                 @Override public void onProviderEnabled(String p) {}

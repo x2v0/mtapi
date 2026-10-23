@@ -57,6 +57,22 @@ func (b *bridge) start() {
 	}
 }
 
+func bridgeTimeout(method string) time.Duration {
+	switch method {
+	case "cameraPhoto":
+		return 35 * time.Second
+	case "microphoneRecord":
+		return 65 * time.Second
+	case "netPing":
+		return 35 * time.Second
+	case "audioPlay":
+		return 15 * time.Second
+	case "sensorRead":
+		return 15 * time.Second
+	}
+	return 5 * time.Second
+}
+
 func (b *bridge) call(method string, params map[string]any) (*response, error) {
 	id := b.seq.Add(1)
 	ch := make(chan *response, 1)
@@ -76,7 +92,7 @@ func (b *bridge) call(method string, params map[string]any) (*response, error) {
 	var r *response
 	select {
 	case r = <-ch:
-	case <-time.After(5 * time.Second): // MTAPI_BRIDGE_TIMEOUT
+	case <-time.After(bridgeTimeout(method)): // per-method timeout (security audit B.3)
 		b.pend.Delete(id)
 		return nil, fmt.Errorf("bridge timeout: %s", method)
 	}
