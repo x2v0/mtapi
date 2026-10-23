@@ -1,6 +1,24 @@
 #!/usr/bin/env bash
 # Search Android SDK / NDK / JDK in several common locations, not just ~/w2a.
-cd ~/dwn/mtapi
+cd "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+# ── clone or update w2a ─────────────────────────────────────
+W2A_DIR="${W2A_DIR:-$HOME/w2a}"
+W2A_REPO="${W2A_REPO:-https://github.com/x2v0/w2a.git}"
+if [ -d "$W2A_DIR/.git" ]; then
+    echo "w2a: updating $W2A_DIR"
+    git -C "$W2A_DIR" pull --ff-only || echo "w2a: pull failed (keeping local)"
+elif [ -d "$W2A_DIR" ]; then
+    echo "w2a: $W2A_DIR exists but not a git repo — skipping clone"
+else
+    echo "w2a: cloning $W2A_REPO → $W2A_DIR"
+    git clone --depth 1 "$W2A_REPO" "$W2A_DIR"
+fi
+if [ -d "$W2A_DIR" ]; then
+    echo "w2a: OK at $W2A_DIR"
+else
+    echo "WARNING: w2a not found — 'make apk' will fail"
+fi
 mkdir -p ~/tmp
 export TMPDIR=~/tmp
 set -euo pipefail

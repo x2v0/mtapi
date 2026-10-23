@@ -499,3 +499,16 @@ MIT — see [LICENSE](LICENSE).
 ## Author
 
 MTAPI — Mobile Terminal API. Сделано в Termux.
+
+## Зависимости
+
+- **[w2a](https://github.com/x2v0/w2a)** — YAML→APK сборщик. Нужен для `make apk`, `scripts/build_apk.sh`.
+  Клонируется автоматически через `scripts/setup_w2a.sh` (в `$HOME/w2a`, ветка `main`).
+  Вручную: `git clone https://github.com/x2v0/w2a.git ~/w2a`
+- **Android SDK build-tools** — `aapt2`, `d8`, `apksigner`, `zipalign`. См. `w2a/README.md`.
+- **JDK 17+** — для `javac`/`jar` при сборке APK.
+
+`scripts/setup_w2a.sh` ищет SDK/NDK/JDK и генерирует `scripts/env.sh` + `android/local.properties`.
+
+CI mtapi **не требует** w2a (тесты Go/JS не собирают APK).
+
