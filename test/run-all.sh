@@ -28,9 +28,10 @@ section() {
 }
 
 run_all_tests() {
-  # pipeline: preserve node's exit code (was swallowed by tail)
-  node --test mtapi-*.test.js 2>&1 | tail -30
-  return "${PIPESTATUS[0]}"
+  # Full output to log + capture node exit code.
+  # Do NOT tail-trim: CI needs all failures visible.
+  node --test --test-reporter=spec mtapi-*.test.js
+  return $?
 }
 
 section "mtapi: all *.test.js"  run_all_tests
