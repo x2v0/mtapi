@@ -100,18 +100,24 @@ public class MainActivity extends Activity {
             @android.webkit.JavascriptInterface
             public String getLogcat(int lines) {
                 if (lines <= 0) lines = 100;
-                try {
-                    java.lang.Process p = Runtime.getRuntime().exec(new String[]{"logcat", "-d", "-t", String.valueOf(lines)});
-                    java.io.BufferedReader r = new java.io.BufferedReader(new java.io.InputStreamReader(p.getInputStream()));
-                    StringBuilder sb = new StringBuilder();
-                    String line;
-                    while ((line = r.readLine()) != null) sb.append(line).append('\n');
-                    r.close();
-                    p.waitFor();
-                    return sb.toString();
-                } catch (Throwable t) {
-                    return "(logcat error: " + t + ")";
+                String[] bins = new String[]{"/system/bin/logcat", "logcat"};
+                for (String bin : bins) {
+                    try {
+                        java.lang.Process p = Runtime.getRuntime().exec(new String[]{bin, "-d", "-t", String.valueOf(lines)});
+                        java.io.BufferedReader out = new java.io.BufferedReader(new java.io.InputStreamReader(p.getInputStream()));
+                        java.io.BufferedReader err = new java.io.BufferedReader(new java.io.InputStreamReader(p.getErrorStream()));
+                        StringBuilder sb = new StringBuilder();
+                        StringBuilder errs = new StringBuilder();
+                        String line;
+                        while ((line = out.readLine()) != null) sb.append(line).append('\n');
+                        while ((line = err.readLine()) != null) errs.append(line).append('\n');
+                        out.close(); err.close();
+                        int rc = p.waitFor();
+                        if (sb.length() > 0) return sb.toString();
+                        if (errs.length() > 0) return "(logcat empty via " + bin + " (rc=" + rc + "), stderr: " + errs.toString().trim() + ")";
+                    } catch (Throwable t) {}
                 }
+                return "(logcat unavailable — Android 11+ restricts logcat for untrusted apps without root. Use adb logcat.)";
             }
 }, "Android");
         WebSettings ws = webView.getSettings();

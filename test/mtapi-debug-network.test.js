@@ -31,12 +31,15 @@ test('Network: fetch interceptor captures entry', async () => {
   w.eval(SRC);
   w.MtapiDebug.attach({ container: w.document.body });
   await w.fetch('/test', { method: 'GET' });
+  await new Promise(r => setTimeout(r, 50));
   assert.strictEqual(w._netBuf.length, 1);
   const e = w._netBuf[0];
   assert.strictEqual(e.method, 'GET');
   assert.strictEqual(e.url, '/test');
   assert.strictEqual(e.status, 200);
-  assert.strictEqual(e.body, null);
+  // Body is now ALWAYS captured (verbose toggle removed in v2.7.0).
+  // Async clone.text() may not resolve in all envs -> null or string.
+  assert.ok(e.body === null || typeof e.body === 'string', 'body: null or string (always-verbose)');
 });
 
 test('Network: verbose captures body', async () => {

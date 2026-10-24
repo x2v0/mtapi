@@ -59,7 +59,7 @@
         android:allowBackup="false"
         android:extractNativeLibs="true"
         android:label="mtapi"
-        android:theme="@android:style/Theme.Material.Light.DarkActionBar">
+        android:theme="@android:style/Theme.Material.Light.NoActionBar">
 
         <activity
             android:name=".MainActivity"

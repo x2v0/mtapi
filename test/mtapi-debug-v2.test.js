@@ -28,7 +28,8 @@ test('Logcat reverse: split + reverse', () => {
   const logcat = w.document.getElementById('mtapi-debug-logcat');
   assert.ok(logcat, 'Logcat <pre> должен быть в card');
   // Первая строка должна быть "line3" (reverse)
-  const first = logcat.textContent.split('\n')[0];
+  const cells = logcat.querySelectorAll('td.logcat-line');
+  const first = cells.length ? cells[0].textContent : logcat.textContent.split('\n')[0];
   assert.strictEqual(first, 'line3', 'logcat должен быть reverse (line3 сверху)');
 });
 
@@ -82,7 +83,8 @@ test('Clear: счётчик (N) → (0)', () => {
   // With runScripts: 'outside-only', inline onclick is not compiled to a function.
   // Read the attribute string and eval it in the window context.
   const clearBtns = Array.from(w.document.querySelectorAll('button')).filter(b =>
-    b.textContent === 'Clear' && b.getAttribute('onclick')
+    (b.getAttribute('aria-label') === 'Clear' || b.getAttribute('title') === 'Clear' || b.textContent === 'Clear') &&
+    b.getAttribute('onclick')
   );
   const jslogClear = clearBtns.find(b => (b.getAttribute('onclick') || '').includes('_jslogBuf'));
   assert.ok(jslogClear, 'Clear JS Logs button (by onclick attribute)');
