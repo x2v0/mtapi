@@ -10,7 +10,7 @@ APK_OUT  := $(CURDIR)/build/mtapi.apk
 APKS_DIR := $(HOME)/dwn/apks
 W2A      := $(HOME)/w2a
 
-.PHONY: all test build install so apk clean help
+.PHONY: all test build install so apk clean help dump
 
 all: test build
 
@@ -120,6 +120,31 @@ install: build
 	@echo ""
 	@echo "  Если «Приложение не установлено» — удали старую версию"
 	@echo "  Настройки → Приложения → mtapi → Удалить"
+
+# dump: показать всё про APK одной командой
+dump:
+	@echo "══════════════════════════════════════════════════"
+	@echo "  DUMP APK"
+	@echo "══════════════════════════════════════════════════"
+	@APK="$(APK_OUT)"; \
+	 if [ ! -f "$$APK" ]; then echo "✗ APK not found: $$APK"; exit 1; fi; \
+	 echo "  path:   $$APK"; \
+	 echo "  size:   $$(ls -lh "$$APK" | awk '{print $$5}')"; \
+	 echo "  date:   $$(ls -l --time-style='+%Y-%m-%d %H:%M' "$$APK" | awk '{print $$6, $$7}')"; \
+	 echo "  sha256: $$(sha256sum "$$APK" | awk '{print $$1}')"; \
+	 echo ""; \
+	 echo "── badging ──"; \
+	 AAPT2=$$(command -v aapt2 2>/dev/null || echo "$$HOME/android-sdk/build-tools/34.0.4/aapt2"); \
+	 "$$AAPT2" dump badging "$$APK" 2>/dev/null | grep -E "package:|versionName|sdkVersion|targetSdkVersion|native-code|application-label" | head -8; \
+	 echo ""; \
+	 echo "── signature ──"; \
+	 APKSIGNER=$$(command -v apksigner 2>/dev/null || echo "$$HOME/android-sdk/build-tools/34.0.4/apksigner"); \
+	 "$$APKSIGNER" verify --print-certs "$$APK" 2>/dev/null | head -5; \
+	 echo ""; \
+	 echo "── permissions ──"; \
+	 "$$AAPT2" dump permissions "$$APK" 2>/dev/null | head -20; \
+	 echo ""
+
 
 help:
 	@echo "mtapi Makefile"

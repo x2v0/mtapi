@@ -9,17 +9,23 @@ const os = require('node:os');
 const APP_JS = path.resolve(__dirname, '..', 'gocore/cmd/mtapi-server/app.js');
 
 function findEslint() {
+  const root = path.resolve(__dirname, '..');
+
+  // 1. Prefer local node_modules/.bin/eslint (from `npm ci`)
+  const local = path.join(root, 'node_modules', '.bin', 'eslint');
+  if (fs.existsSync(local)) return local;
+
+  // 2. Then global PATH
   try {
     execFileSync('which', ['eslint'], { stdio: 'pipe' });
     return 'eslint';
   } catch (_) {}
+
+  // 3. Then ~/.npm-global/bin/eslint
   if (process.env.HOME) {
     const p = path.join(process.env.HOME, '.npm-global', 'bin', 'eslint');
     if (fs.existsSync(p)) return p;
   }
-  const root = path.resolve(__dirname, '..');
-  const local = path.join(root, 'node_modules', '.bin', 'eslint');
-  if (fs.existsSync(local)) return local;
   return null;
 }
 

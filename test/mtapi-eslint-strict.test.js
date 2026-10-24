@@ -7,13 +7,9 @@ const test = require('node:test');
 const assert = require('node:assert');
 const path = require('node:path');
 
-let ESLint;
-try {
-  ESLint = require('eslint').ESLint;
-} catch (e) {
-  test('eslint strict: not installed', () => {});
-  process.exit(0);
-}
+// Explicit require — fail fast if eslint is not installed.
+// Run `npm ci` before tests.
+const { ESLint } = require('eslint');
 
 const APP_JS = path.resolve(__dirname, '../gocore/cmd/mtapi-server/app.js');
 

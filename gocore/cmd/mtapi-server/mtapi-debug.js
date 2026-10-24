@@ -282,8 +282,8 @@
 
   // ─── chrome (FAB + overlay + tabs + side panel) ───────────
   var _activeTab = 'logs';
-  var _tabs = ['logs', 'logcat', 'devtools', 'system', 'dom'];
-  var _tabLabels = {logs:'Logs', logcat:'Logcat', devtools:'DevTools', system:'System', dom:'DOM'};
+  var _tabs = ['logs', 'logcat', 'devtools', 'system', 'network', 'errors', 'dom'];
+  var _tabLabels = {logs:'Logs', logcat:'Logcat', devtools:'DevTools', system:'System', network:'Network', errors:'Errors', dom:'DOM'};
 
   global._setTab = function(name){
     if (_tabs.indexOf(name) === -1) return;
@@ -303,6 +303,9 @@
   global._debugClose = function(){ var ov = global.document && global.document.getElementById('mtapi-debug-overlay'); if (ov) ov.setAttribute('hidden', ''); global._sidePanelClose(); };
 
   var CSS = [
+    '.mtapi-debug-fab-inline{width:28px;height:28px;border-radius:50%;border:1px solid var(--border,#444);background:var(--bg3,#2a2a2a);color:var(--accent,#f0f);font-size:16px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;padding:0;line-height:1;font-family:inherit;margin:0;box-shadow:none}',
+    '.mtapi-debug-fab-inline:hover{background:var(--bg4,#3a3a3a)}',
+    '.mtapi-debug-back{font-weight:bold;letter-spacing:1px}',
     '.mtapi-debug-fab{position:fixed;top:8px;right:8px;z-index:999999;width:32px;height:32px;border-radius:50%;border:1px solid #444;background:#2a2a2a;color:#f0f;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 6px rgba(0,0,0,0.4);padding:0;line-height:1;font-family:monospace}',
     '.mtapi-debug-fab:hover{background:#3a3a3a}',
     '.mtapi-debug-overlay{position:fixed;top:0;left:0;right:0;bottom:0;z-index:9999998;background:#1a1a1a;color:#ddd;font-family:monospace;font-size:12px;display:flex;flex-direction:column}',
@@ -345,12 +348,20 @@
     html += '<details class="mtapi-debug-section"><summary>Console Eval</summary>';
     html += '<div style="margin:4px 0;display:flex;gap:4px;align-items:center"><input class="mtapi-dbg-eval-input" placeholder="JS..." style="flex:1;padding:4px;background:#000;color:#ddd;border:1px solid #444;font-family:monospace"><button onclick="window._evalConsole()">\u25B6 Run</button><button onclick="window._setTab(\'dom\')" title="Open DOM tree">\uD83C\uDF33 DOM</button></div>';
     html += '<pre id="mtapi-debug-eval-out" class="mtapi-debug-pre" style="color:#ddd">\u2014</pre></details>';
-    html += '<details class="mtapi-debug-section"><summary>Errors (persistent)</summary>';
+    html += '</div>';
+
+    // Network tab
+    html += '<div data-tab-content="network" class="' + (_activeTab==='network'?'active':'') + '">';
+    html += '<details class="mtapi-debug-section" open data-refresh="network"><summary>Requests <span id="mtapi-debug-net-count">('+global._netBuf.length+')</span></summary>';
+    html += '<div style="margin:4px 0"><label style="font-size:10px"><input type="checkbox" id="mtapi-debug-netverbose" '+((global._netVerbose===true)?'checked':'')+' onchange="window._netVerbose=this.checked"> verbose</label> <button onclick="window._netBuf=[];window._netRefresh&&window._netRefresh()">Clear</button></div>';
+    html += '<div id="mtapi-debug-network" style="max-height:400px;overflow:auto">'+renderNetwork()+'</div></details>';
+    html += '</div>';
+
+    // Errors tab
+    html += '<div data-tab-content="errors" class="' + (_activeTab==='errors'?'active':'') + '">';
+    html += '<details class="mtapi-debug-section" open data-refresh="errors"><summary>Errors (persistent)</summary>';
     html += '<div style="margin:4px 0"><button onclick="localStorage.removeItem(\'mtapi-errors\');document.getElementById(\'mtapi-debug-errors\').textContent=\'\'">Clear</button></div>';
     html += '<pre id="mtapi-debug-errors" class="mtapi-debug-pre" style="color:#f66">'+esc(p3)+'</pre></details>';
-    html += '<details class="mtapi-debug-section"><summary>Network <span id="mtapi-debug-net-count">('+global._netBuf.length+')</span></summary>';
-    html += '<div style="margin:4px 0"><label style="font-size:10px"><input type="checkbox" id="mtapi-debug-netverbose" '+((global._netVerbose===true)?'checked':'')+' onchange="window._netVerbose=this.checked"> verbose</label> <button onclick="window._netBuf=[];window._netRefresh&&window._netRefresh()">Clear</button></div>';
-    html += '<div id="mtapi-debug-network" style="max-height:300px;overflow:auto">'+renderNetwork()+'</div></details>';
     html += '</div>';
 
     html += '<div data-tab-content="logcat" class="' + (_activeTab==='logcat'?'active':'') + '">';
@@ -366,7 +377,7 @@
     html += '</div></details></div>';
 
     html += '<div data-tab-content="system" class="' + (_activeTab==='system'?'active':'') + '">';
-    html += '<details class="mtapi-debug-section" open><summary>Performance</summary><div style="margin:4px 0"><button onclick="window._perfReset()">\uD83D\uDD04 Reset</button></div><pre id="mtapi-debug-perf" class="mtapi-debug-pre" style="color:#ddd">'+esc(renderPerf())+'</pre></details>';
+    html += '<details class="mtapi-debug-section" open data-refresh="perf"><summary>Performance</summary><div style="margin:4px 0"><button onclick="window._perfReset()">\uD83D\uDD04 Reset</button></div><pre id="mtapi-debug-perf" class="mtapi-debug-pre" style="color:#ddd">'+esc(renderPerf())+'</pre></details>';
     html += '<details class="mtapi-debug-section"><summary>System info</summary><pre id="mtapi-debug-system-info" class="mtapi-debug-pre" style="color:#aaa">(loading...)</pre></details>';
     html += '</div>';
 
@@ -398,7 +409,7 @@
 
     var backBtn = doc.createElement('button');
     backBtn.id = 'mtapi-debug-back';
-    backBtn.textContent = '\u2190';
+    backBtn.textContent = 'MTAPI'; backBtn.classList.add('mtapi-debug-back');
     backBtn.title = 'Back to app';
     backBtn.setAttribute('onclick', 'window._debugClose()');
     tb.appendChild(backBtn);
@@ -448,13 +459,36 @@
     fab.setAttribute('onclick', 'window._debugOpen()');
 
     var host = CONFIG.container || doc.body;
-    host.appendChild(fab);
+    var headerRight = doc.querySelector('.head-right');
+    if (headerRight && !CONFIG.container) {
+      fab.className = 'mtapi-debug-fab-inline';
+      headerRight.appendChild(fab);
+    } else {
+      fab.className = 'mtapi-debug-fab';
+      host.appendChild(fab);
+    }
     host.appendChild(ov);
+    _installToggleListener(doc);
 
     return ov;
   }
 
   // ─── public API ───────────────────────────────────────────
+  function _installToggleListener(doc){
+    if (!doc || doc.__mtapiToggleInstalled) return;
+    doc.__mtapiToggleInstalled = true;
+    doc.addEventListener('toggle', function(ev){
+      var el = ev.target;
+      if (!el || el.tagName !== 'DETAILS' || !el.open) return;
+      var r = el.getAttribute('data-refresh');
+      if (!r) return;
+      if (r === 'network') global._netRefresh && global._netRefresh();
+      else if (r === 'errors') { var pre=doc.getElementById('mtapi-debug-errors'); if(pre){try{var er=JSON.parse(global.localStorage.getItem('mtapi-errors')||'[]');pre.textContent=er.map(function(x){return fmtTime(x.t)+' ['+x.lvl+'] '+x.m;}).join('\n');}catch(e){}} }
+      else if (r === 'perf') global._perfRefresh && global._perfRefresh();
+      else if (r === 'logcat') global._logcatRefresh && global._logcatRefresh();
+    }, true);
+  }
+
   global.MtapiDebug = {
     attach: function(o){
       global._mtapiAttachStart = (global.performance && global.performance.now) ? global.performance.now() : Date.now();
