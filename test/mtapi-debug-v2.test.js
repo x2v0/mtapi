@@ -41,7 +41,9 @@ test('perf API: MtapiDebug.perf(label, ms)', () => {
   const res = w.MtapiDebug.perf('test-metric', 42);
   assert.strictEqual(res, 'test-metric: 42ms');
   const perfPre = w.document.getElementById('mtapi-debug-perf');
-  assert.ok(perfPre.textContent.includes('test-metric : 42ms'), 'Performance должен показать test-metric');
+  // v2.10.0: renderPerf() -> <table> (Metric | Value), so textContent no longer has ' : '
+  assert.ok(perfPre.textContent.includes('test-metric'), 'Performance: metric name');
+  assert.ok(perfPre.textContent.includes('42'), 'Performance: metric value 42ms');
 });
 
 test('perf API: time + timeEnd', () => {

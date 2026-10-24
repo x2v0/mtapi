@@ -1,8 +1,8 @@
 app:
   name: "mtapi"
   package: dev.mtapi
-  versionCode: 220
-  versionName: "2.2.0"
+  versionCode: 290
+  versionName: "2.9.0"
 
 type: custom
 

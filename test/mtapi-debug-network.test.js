@@ -72,7 +72,10 @@ test('DOM inspector: helpers exist', () => {
   w.MtapiDebug.attach({ container: w.document.body });
   assert.strictEqual(typeof w._domRefresh, 'function');
   assert.strictEqual(typeof w._domInspect, 'function');
-  assert.ok(w.document.getElementById('mtapi-debug-dom-tree'), 'DOM tree container exists');
+  // v2.11.0: DOM tree is lazy — created by _domShowFloating()
+  assert.strictEqual(typeof w._domShowFloating, 'function');
+  w._domShowFloating();
+  assert.ok(w.document.getElementById('mtapi-debug-dom-tree'), 'DOM tree container exists (after _domShowFloating)');
   assert.ok(w.document.getElementById('mtapi-debug-dom-info'), 'DOM info panel exists');
 });
 
@@ -80,6 +83,8 @@ test('DOM inspector: _domRefresh builds tree with data-tag', () => {
   const w = mk().window;
   w.eval(SRC);
   w.MtapiDebug.attach({ container: w.document.body });
+  // v2.11.0: floating DOM is lazy — create it first
+  w._domShowFloating();
   w._domRefresh();
   const tree = w.document.getElementById('mtapi-debug-dom-tree');
   assert.ok(tree, 'tree container exists');

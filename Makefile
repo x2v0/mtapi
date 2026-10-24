@@ -72,8 +72,8 @@ apk: so
 	 '  name: "mtapi"' \
 	 '  package: dev.mtapi' \
 	 '  targetSdk: 34' \
-	 '  versionCode: 220' \
-	 '  versionName: "2.2.0"' \
+	 '  versionCode: 290' \
+	 '  versionName: "2.9.0"' \
 	 'type: custom' \
 	 'custom:' \
 	 '  sources:' \
@@ -262,3 +262,25 @@ ci:
 	@echo "  ✅ CI PIPELINE COMPLETE"
 	@echo "══════════════════════════════════════════════════"
 
+
+# ── version management ──
+.PHONY: version bump
+version:
+	@echo "── mtapi.yaml ──"
+	@grep -E "versionCode:|versionName:" mtapi.yaml
+	@echo "── Makefile ──"
+	@grep -E "versionCode:|versionName:" Makefile | head -2
+	@echo "── APK ──"
+	@if [ -f "$(APK_OUT)" ]; then \
+	 AAPT2=$$(command -v aapt2 2>/dev/null || echo "$$HOME/android-sdk/build-tools/34.0.4/aapt2"); \
+	 "$$AAPT2" dump badging "$(APK_OUT)" 2>/dev/null | grep -E "^package:" | head -1; \
+	 else echo "  (not built — run make apk)"; fi
+
+# Usage:
+#   make bump MODE=patch   → 2.9.0 (290) → 2.9.1 (291)
+#   make bump MODE=minor   → 2.9.0 → 2.10.0
+#   make bump MODE=major   → 2.9.0 → 3.0.0
+#   make bump V=2.10.5     → explicit versionName
+bump:
+	@test -n "$(MODE)$(V)" || (echo "Usage: make bump MODE=patch|minor|major" && echo "       make bump V=2.9.1" && exit 1)
+	@MODE="$(MODE)" V="$(V)" bash scripts/bump-version.sh

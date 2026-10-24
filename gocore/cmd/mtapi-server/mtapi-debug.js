@@ -104,18 +104,31 @@
   global._perf = global._perf || {};
   global._perfReset = function(){ global._perf = {}; global._mtapiCustomPerf = {}; if (global._perfRefresh) global._perfRefresh(); };
   function renderPerf(){
-    var o = '';
+    var rows = [];
     var p = global._perf || {};
-    if (p.render != null) o += 'render()       : ' + p.render + 'ms\n';
-    if (p.reloadLogcat != null) o += 'reloadLogcat() : ' + p.reloadLogcat + 'ms\n';
-    if (p.loadDebugCard != null) o += 'loadDebugCard(): ' + p.loadDebugCard + 'ms\n';
-    if (global.performance && global.performance.timing) { var t = global.performance.timing, dr = t.domContentLoadedEventEnd - t.navigationStart; if (dr > 0) o += 'domReady       : ' + dr + 'ms\n'; }
-    if (global._mtapiAttachStart != null) o += 'attach()       : ' + Math.round((global.performance.now ? global.performance.now() : Date.now()) - global._mtapiAttachStart) + 'ms\n';
-    o += 'jslogCount     : ' + global._jslogBuf.length + '\n';
-    if (global._mtapiCustomPerf) Object.keys(global._mtapiCustomPerf).forEach(function(k){ o += k + ' : ' + global._mtapiCustomPerf[k] + 'ms\n'; });
-    return o || '(no metrics yet)';
+    if (p.render != null) rows.push({k: 'render()', v: p.render + 'ms'});
+    if (p.reloadLogcat != null) rows.push({k: 'reloadLogcat()', v: p.reloadLogcat + 'ms'});
+    if (p.loadDebugCard != null) rows.push({k: 'loadDebugCard()', v: p.loadDebugCard + 'ms'});
+    if (global.performance && global.performance.timing) {
+      var t = global.performance.timing, dr = t.domContentLoadedEventEnd - t.navigationStart;
+      if (dr > 0) rows.push({k: 'domReady', v: dr + 'ms'});
+    }
+    if (global._mtapiAttachStart != null) {
+      rows.push({k: 'attach()', v: Math.round((global.performance.now ? global.performance.now() : Date.now()) - global._mtapiAttachStart) + 'ms'});
+    }
+    rows.push({k: 'jslogCount', v: String(global._jslogBuf.length)});
+    if (global._mtapiCustomPerf) {
+      Object.keys(global._mtapiCustomPerf).forEach(function(k){ rows.push({k: k, v: global._mtapiCustomPerf[k] + 'ms'}); });
+    }
+    if (!rows.length) return '<table class="mtapi-debug-table"><tbody><tr><td colspan="2" style="color:#666">(no metrics yet)</td></tr></tbody></table>';
+    var html = '<table class="mtapi-debug-table"><thead><tr><th>Metric</th><th>Value</th></tr></thead><tbody>';
+    rows.forEach(function(r){
+      html += '<tr><td style="color:#888">' + esc(r.k) + '</td><td style="color:#ddd">' + esc(r.v) + '</td></tr>';
+    });
+    html += '</tbody></table>';
+    return html;
   }
-  global._perfRefresh = function(){ var el = global.document && global.document.getElementById('mtapi-debug-perf'); if (el) el.textContent = renderPerf(); };
+  global._perfRefresh = function(){ var el = global.document && global.document.getElementById('mtapi-debug-perf'); if (el) el.innerHTML = renderPerf(); };
 
   // ─── eval console ─────────────────────────────────────────
   function _renderEvalOutput(r) {
@@ -136,6 +149,86 @@
     var inp = global.document && global.document.querySelector('.mtapi-dbg-eval-input');
     if (inp) inp.value = '';
   };
+
+  global._evalHelp = function() {
+    var help = [
+      '=== Console Eval — help ===',
+      '',
+      '--- DOM query ---',
+      '$("selector")              — document.querySelector',
+      '$$("selector")             — array of elements',
+      'Examples:',
+      '  $("#main")                → <main id=main>',
+      '  $$("details").length      → 5',
+      '  $("h1").textContent       → "mtapi"',
+      '',
+      '--- Inspect ---',
+      'inspect(el)                — highlight + show in DOM info panel',
+      'domInspect()               — toggle select mode (click any element)',
+      'domInspectStop()           — exit select mode',
+      'domShowFloating()          — open floating DOM tree window',
+      'Examples:',
+      '  inspect($("#main"))',
+      '  domInspect()  // then tap element on page',
+      '',
+      '--- AI Snap (copy prompt for DeepSeek/ChatGPT) ---',
+      '_aiSnapWithRequest("make it red")   — prompt with custom task',
+      '_captureElement()                   — copy outerHTML of selected',
+      'Examples:',
+      '  _aiSnapWithRequest("convert to flexbox")',
+      '  _aiSnapWithRequest("dark mode variant")',
+      '',
+      '--- JS Logs ---',
+      'log(...) / warn(...) / error(...)   — push to JS Logs',
+      'Examples:',
+      '  log("test", 123, {a: 1})',
+      '  error("oops")',
+      '',
+      '--- MtapiDebug API ---',
+      'MtapiDebug.open()          — open debug overlay',
+      'MtapiDebug.close()         — close overlay',
+      'MtapiDebug.setTab("logs")  — switch tab',
+      'MtapiDebug.buffer()        — JS logs array',
+      'MtapiDebug.errors()        — persistent errors array',
+      'MtapiDebug.perf(label, ms) — record perf metric',
+      'MtapiDebug.time("label")   — start timer',
+      'MtapiDebug.timeEnd("label")— end timer + record',
+      'MtapiDebug.selectElement("selector")  — select + inspect',
+      'Examples:',
+      '  MtapiDebug.perf("my-test", 42)',
+      '  MtapiDebug.selectElement("#main h1")',
+      '',
+      '--- Network ---',
+      'fetch("url")               — logged to Network tab',
+      'Examples:',
+      '  fetch("/battery").then(r => r.json()).then(j => log(j))',
+      '',
+      '--- Clear ---',
+      'clearEval()                — clear output',
+      '',
+      '--- Native bridge ---',
+      'Android.getLogcat(n)       — logcat (n lines)',
+      'Android.processList()      — running processes',
+      '',
+      '--- Events ---',
+      'mtapi-debug-inspect        — toggle select mode',
+      'mtapi-debug-select         — select element',
+      'Examples:',
+      '  document.dispatchEvent(new CustomEvent("mtapi-debug-select", {detail:{selector:"#main"}}))',
+      '',
+      '=== End of help ===',
+    ].join('\n');
+    var out = global.document.getElementById('mtapi-debug-eval-out');
+    if (out) out.innerHTML = '<pre style="margin:0;white-space:pre-wrap;color:#aaa;font-size:10px">' + esc(help) + '</pre>';
+  };
+  global.$ = function(sel){ return global.document.querySelector(sel); };
+  global.$$ = function(sel){ return Array.prototype.slice.call(global.document.querySelectorAll(sel)); };
+  global.help = global._evalHelp;
+  global.domShowFloating = function(){ if (typeof global._domShowFloating === "function") global._domShowFloating(); };
+  global.domRefresh = function(){ if (typeof global._domRefresh === "function") global._domRefresh(); };
+  global.clearEval = global._evalClear;
+  global.domInspect = function(){ if (typeof global._domInspect === 'function') global._domInspect(); };
+  global.domInspectStop = function(){ if (typeof global._domInspectStop === 'function') global._domInspectStop(); };
 
   global._evalConsole = function(){
     var inp = global.document.querySelector('.mtapi-dbg-eval-input'); if(!inp) return;
@@ -351,6 +444,8 @@
     pre.innerHTML = _renderJslogWithQuery(inp ? inp.value : '');
     var cnt = global.document.getElementById('mtapi-debug-jslog-count');
     if (cnt) cnt.textContent = '(' + global._jslogBuf.length + ')';
+    // Re-apply level filters (V/D/I/W/E/F checkboxes) after re-render
+    if (global._jslogFilter) { try { global._jslogFilter(); } catch(e){} }
   };
 
   function _renderErrorsWithQuery(q) {
@@ -425,6 +520,8 @@
     var log = _getLogcatFromBridge();
     if (log != null) {
       pre.innerHTML = _renderLogcatWithQuery('');
+      // Re-apply level filter (Logcat) after re-render
+      if (global._logcatFilter) { try { global._logcatFilter(); } catch(e){} }
       return;
     }
     var token = ''; try { var m = global.location.search.match(/[?&]token=([^&]+)/); if (m) token = m[1]; } catch(e) {}
@@ -489,10 +586,32 @@
   }
   function inspectElement(el){
     if (!el) return;
-    try { var old = el.style.outline; el.style.outline = '2px solid #f0f'; setTimeout(function(){ try { el.style.outline = old; } catch(x){} }, 1500); } catch(x) {}
+    global._lastInspected = el;
+    var aiBtn = global.document.getElementById('mtapi-debug-ai-snap-btn');
+    if (aiBtn) { try { aiBtn.disabled = !(global._domInspectActive || global._domInspectActive === true); } catch(e){} }
+    try {
+      var selBox = global.document.getElementById('mtapi-debug-select-box');
+      if (!selBox) {
+        selBox = global.document.createElement('div');
+        selBox.id = 'mtapi-debug-select-box';
+        selBox.style.cssText = 'position:fixed;pointer-events:none;z-index:10000002;border:2px solid #f0f;background:rgba(240,0,240,0.2);display:none;border-radius:2px;transition:opacity 0.3s';
+        global.document.body.appendChild(selBox);
+      }
+      var r = el.getBoundingClientRect();
+      selBox.style.left = r.left + 'px';
+      selBox.style.top = r.top + 'px';
+      selBox.style.width = r.width + 'px';
+      selBox.style.height = r.height + 'px';
+      selBox.style.display = 'block';
+      selBox.style.opacity = '1';
+      clearTimeout(selBox.__timer);
+      selBox.__timer = setTimeout(function() { try { selBox.style.opacity = '0'; setTimeout(function(){ selBox.style.display = 'none'; }, 300); } catch(e){} }, 1500);
+    } catch(x) {}
     var info = global.document.getElementById('mtapi-debug-dom-info'); if (!info) return;
     var parts = [];
-    parts.push('<b>Selector:</b> ' + esc(getCssSelector(el)));
+    var sel = '?';
+    try { sel = (typeof getCssSelector === 'function') ? getCssSelector(el) : (el.tagName || '?').toLowerCase(); } catch(e) { sel = (el.tagName || '?').toLowerCase(); }
+    parts.push('<b>Selector:</b> ' + esc(sel));
     parts.push('<b>Tag:</b> ' + esc(el.tagName || '?'));
     if (el.id) parts.push('<b>ID:</b> ' + esc(el.id));
     if (el.className && typeof el.className === 'string') parts.push('<b>Classes:</b> ' + esc(el.className));
@@ -531,6 +650,328 @@
     }
     return ul;
   }
+  global._domCloseFloating = function() {
+    var all = global.document.querySelectorAll('[id^="mtapi-debug-dom-floating"]');
+    for (var i = 0; i < all.length; i++) {
+      try { all[i].remove(); } catch(e){}
+    }
+  };
+
+  global._domShowFloating = function() {
+    if (global._domCloseFloating) global._domCloseFloating();
+
+    var vw = global.innerWidth || 400;
+    var vh = global.innerHeight || 600;
+    var ww = Math.round(vw * 1.3);
+    var wh = Math.min(520, vh - 60);
+    var wl = 10;
+
+    var w = global.document.createElement('div');
+    w.id = 'mtapi-debug-dom-floating';
+    w.style.cssText = 'position:fixed;top:60px;left:' + wl + 'px;width:' + ww + 'px;height:' + wh + 'px;min-width:280px;min-height:160px;max-height:none;background:var(--bg2,#0d0d0d);border:2px solid var(--accent,#4fc3f7);border-radius:6px;z-index:10000000;display:flex;flex-direction:column;box-shadow:0 8px 32px rgba(0,0,0,0.7);overflow:hidden';
+
+    var header = global.document.createElement('div');
+    header.id = 'mtapi-debug-dom-floating-header';
+    header.style.cssText = 'display:flex;justify-content:space-between;align-items:center;padding:6px 8px;background:var(--bg3,#222);border-bottom:1px solid var(--bg4,#444);flex-shrink:0;cursor:move;user-select:none;gap:4px';
+    header.innerHTML = '<b style="color:var(--accent,#4fc3f7);font-family:monospace;white-space:nowrap">\uD83C\uDF33 DOM</b>'
+      + '<div style="display:flex;gap:3px;flex-wrap:nowrap">'
+      + '<button class="icon-btn-sm accent" onclick="event.stopPropagation();window._domRefresh&&window._domRefresh()" title="Refresh">\u21bb</button>'
+      + '<button class="icon-btn-sm" id="mtapi-debug-inspect-btn" onclick="event.stopPropagation();window._domInspect&&window._domInspect()" title="Select element (toggle)">\u25A3</button>'
+            + '<button class="icon-btn-sm" onclick="event.stopPropagation();window._captureElement&&window._captureElement()" title="Copy HTML of selected element">\uD83D\uDCCB</button>'
+      + '<button class="icon-btn-sm accent" id="mtapi-debug-ai-snap-btn" onclick="event.stopPropagation();window._aiSnap&&window._aiSnap()" title="AI Snap (select element first)" disabled>\u2728</button>'
+      
+      
+      + '<button class="icon-btn-sm danger" onclick="event.stopPropagation();window._domCloseFloating&&window._domCloseFloating()" title="Close">\u2715</button>'
+      + '</div>';
+    w.appendChild(header);
+
+    var body = global.document.createElement('div');
+    body.id = 'mtapi-debug-dom-floating-body';
+    body.style.cssText = 'flex:1 1 0;display:flex;flex-direction:row;align-items:stretch;gap:0;overflow:hidden;min-height:0;min-width:0;height:100%';
+    body.innerHTML = '<div id="mtapi-debug-dom-tree" style="flex:1 1 0;min-width:80px;min-height:40px;max-width:none;max-height:none;overflow:auto;background:#000;padding:4px;font-family:monospace;font-size:11px;resize:both">(loading...)</div>'
+      + '<div id="mtapi-debug-dom-splitter" title="Drag to resize (double-click to reset)" style="flex:0 0 14px;height:100%;cursor:col-resize;background:var(--bg4,#444);user-select:none;display:flex;align-items:center;justify-content:center;color:var(--fg3,#888);font-size:14px;line-height:1;letter-spacing:-2px">\u22ee\u22ee</div>'
+      + '<div id="mtapi-debug-dom-info" style="flex:0 0 220px;min-width:80px;min-height:40px;max-width:none;max-height:none;overflow-y:scroll;overflow-x:auto;background:#0d0d0d;padding:4px;font-size:10px;resize:both">(tap element)</div>';
+    w.appendChild(body);
+
+    // 8 edge/corner resize handles (with visible grip icon)
+    // ── edge resize state + handlers (8 directions) ──
+    var er = {active: false, dir: '', startX: 0, startY: 0, startW: 0, startH: 0, startL: 0, startT: 0};
+    function _edgeStart(e, dir) {
+      er.active = true; er.dir = dir;
+      var c = _dgc(e); er.startX = c.x; er.startY = c.y;
+      var r = w.getBoundingClientRect();
+      er.startW = r.width; er.startH = r.height; er.startL = r.left; er.startT = r.top;
+      global.document.addEventListener('mousemove', _edgeMove);
+      global.document.addEventListener('mouseup', _edgeEnd);
+      global.document.addEventListener('touchmove', _edgeMove, {passive: false});
+      global.document.addEventListener('touchend', _edgeEnd);
+      e.preventDefault(); e.stopPropagation();
+    }
+    function _edgeMove(e) {
+      if (!er.active) return;
+      var c = _dgc(e); var dx = c.x - er.startX, dy = c.y - er.startY;
+      var d = er.dir;
+      var nw = er.startW, nh = er.startH, nl = er.startL, nt = er.startT;
+      if (d.indexOf('e') !== -1) nw = Math.max(200, er.startW + dx);
+      if (d.indexOf('s') !== -1) nh = Math.max(120, er.startH + dy);
+      if (d.indexOf('w') !== -1) { nw = Math.max(200, er.startW - dx); nl = er.startL + (er.startW - nw); }
+      if (d.indexOf('n') !== -1) { nh = Math.max(120, er.startH - dy); nt = er.startT + (er.startH - nh); }
+      w.style.width = nw + 'px';
+      w.style.height = nh + 'px';
+      w.style.left = nl + 'px';
+      w.style.top = nt + 'px';
+      if (e.cancelable) e.preventDefault();
+    }
+    function _edgeEnd() {
+      er.active = false;
+      global.document.removeEventListener('mousemove', _edgeMove);
+      global.document.removeEventListener('mouseup', _edgeEnd);
+      global.document.removeEventListener('touchmove', _edgeMove);
+      global.document.removeEventListener('touchend', _edgeEnd);
+    }
+
+    var edges = [
+      {id: 'n',  css: 'top:0;left:20px;right:20px;height:8px;cursor:ns-resize',  dir: 'n'},
+      {id: 's',  css: 'bottom:0;left:20px;right:20px;height:8px;cursor:ns-resize', dir: 's'},
+      {id: 'w',  css: 'left:0;top:20px;bottom:20px;width:8px;cursor:ew-resize',   dir: 'w'},
+      {id: 'e',  css: 'right:0;top:20px;bottom:20px;width:8px;cursor:ew-resize',  dir: 'e'},
+      {id: 'nw', css: 'left:0;top:0;width:16px;height:16px;cursor:nwse-resize',    dir: 'nw'},
+      {id: 'ne', css: 'right:0;top:0;width:16px;height:16px;cursor:nesw-resize',   dir: 'ne'},
+      {id: 'sw', css: 'left:0;bottom:0;width:16px;height:16px;cursor:nesw-resize', dir: 'sw'},
+      {id: 'se', css: 'right:0;bottom:0;width:16px;height:16px;cursor:nwse-resize',dir: 'se'}
+    ];
+    edges.forEach(function(e) {
+      var h = global.document.createElement('div');
+      h.className = 'mtapi-debug-resize-edge';
+      h.setAttribute('data-dir', e.dir);
+      var grip = (e.dir === 'se' || e.dir === 'nw' || e.dir === 'ne' || e.dir === 'sw') ? '\u25E2' : '';
+      h.style.cssText = 'position:absolute;z-index:2;' + e.css + ';background:transparent';
+      if (grip) h.textContent = grip;
+      h.style.color = 'var(--accent,#4fc3f7)';
+      h.style.fontSize = '12px';
+      h.style.lineHeight = '12px';
+      h.style.textAlign = (e.dir === 'se') ? 'right' : (e.dir === 'nw' || e.dir === 'sw') ? 'left' : 'center';
+      h.addEventListener('mousedown', function(ev) { _edgeStart(ev, e.dir); });
+      h.addEventListener('touchstart', function(ev) { _edgeStart(ev, e.dir); }, {passive: false});
+      w.appendChild(h);
+    });
+
+    global.document.body.appendChild(w);
+
+    var drag = {active: false, startX: 0, startY: 0, left: 0, top: 0};
+    function _clamp(v, min, max) { return Math.max(min, Math.min(max, v)); }
+    function _dgc(e) { var t = (e.touches && e.touches[0]) ? e.touches[0] : e; return {x: t.clientX, y: t.clientY}; }
+    function _dInt(el) { if (!el) return false; return el.tagName === 'BUTTON' || el.tagName === 'INPUT' || el.tagName === 'SELECT' || el.tagName === 'TEXTAREA' || (el.closest && el.closest('button, input, select, textarea')); }
+    function _dStart(e) {
+      var t = e.target || (e.touches && e.touches[0] && e.touches[0].target);
+      if (_dInt(t)) return;
+      drag.active = true;
+      var c = _dgc(e); drag.startX = c.x; drag.startY = c.y;
+      var r = w.getBoundingClientRect();
+      drag.left = r.left; drag.top = r.top;
+      w.style.right = 'auto';
+      w.style.left = drag.left + 'px';
+      w.style.top = drag.top + 'px';
+      global.document.addEventListener('mousemove', _dMove);
+      global.document.addEventListener('mouseup', _dEnd);
+      global.document.addEventListener('touchmove', _dMove, {passive: false});
+      global.document.addEventListener('touchend', _dEnd);
+      e.preventDefault();
+    }
+    function _dMove(e) {
+      if (!drag.active) return;
+      var c = _dgc(e); var dx = c.x - drag.startX, dy = c.y - drag.startY;
+      var minL = -w.offsetWidth + 60, maxL = global.innerWidth - 60;
+      var minT = -w.offsetHeight + 60, maxT = global.innerHeight - 60;
+      w.style.left = _clamp(drag.left + dx, minL, maxL) + 'px';
+      w.style.top = _clamp(drag.top + dy, minT, maxT) + 'px';
+      if (e.cancelable) e.preventDefault();
+    }
+    function _dEnd() {
+      drag.active = false;
+      global.document.removeEventListener('mousemove', _dMove);
+      global.document.removeEventListener('mouseup', _dEnd);
+      global.document.removeEventListener('touchmove', _dMove);
+      global.document.removeEventListener('touchend', _dEnd);
+    }
+    header.addEventListener('mousedown', _dStart);
+    header.addEventListener('touchstart', _dStart, {passive: false});
+
+    // (old _rz* removed; using _edge*)
+
+
+    var split = {active: false};
+    var splitter = global.document.getElementById('mtapi-debug-dom-splitter');
+    var infoPane = global.document.getElementById('mtapi-debug-dom-info');
+    if (splitter && infoPane) {
+      splitter.addEventListener('dblclick', function() {
+        infoPane.style.flex = '0 0 220px';
+      });
+      splitter.addEventListener('mousedown', function(e) {
+        if (e.button !== 0) return;
+        split.active = true; e.preventDefault();
+        splitter.style.background = 'var(--accent,#4fc3f7)';
+        splitter.style.color = '#000';
+        global.document.addEventListener('mousemove', _splitMove);
+        global.document.addEventListener('mouseup', _splitEnd);
+      });
+      splitter.addEventListener('touchstart', function(e) {
+        split.active = true; e.preventDefault();
+        splitter.style.background = 'var(--accent,#4fc3f7)';
+        global.document.addEventListener('touchmove', _splitMove, {passive:false});
+        global.document.addEventListener('touchend', _splitEnd);
+      }, {passive: false});
+      function _splitMove(e) {
+        if (!split.active) return;
+        var c = _dgc(e); var r = body.getBoundingClientRect();
+        var fromRight = _clamp(r.right - c.x, 80, r.width - 100);
+        infoPane.style.flex = '0 0 ' + fromRight + 'px';
+        if (e.cancelable) e.preventDefault();
+      }
+      function _splitEnd() {
+        split.active = false;
+        splitter.style.background = 'var(--bg4,#444)';
+        splitter.style.color = 'var(--fg3,#888)';
+        global.document.removeEventListener('mousemove', _splitMove);
+        global.document.removeEventListener('mouseup', _splitEnd);
+        global.document.removeEventListener('touchmove', _splitMove);
+        global.document.removeEventListener('touchend', _splitEnd);
+      }
+    }
+
+    var _rt = function() {
+      try {
+        if (typeof global._domRefresh === 'function') global._domRefresh();
+        else if (typeof _domRefresh === 'function') _domRefresh();
+      } catch(e) { try { global.console.error('[dom] refresh:', e); } catch(x){} }
+    };
+    setTimeout(_rt, 50);
+    setTimeout(_rt, 300);
+  };
+
+  global._domMinimize = function() {
+    var w = global.document.getElementById('mtapi-debug-dom-floating');
+    if (!w) return;
+    var body = global.document.getElementById('mtapi-debug-dom-floating-body');
+    if (!body) return;
+    var isMin = body.style.display === 'none';
+    if (isMin) {
+      body.style.display = 'flex';
+      w.style.height = w.getAttribute('data-prev-height') || '520px';
+      w.style.minHeight = w.getAttribute('data-prev-minheight') || '160px';
+    } else {
+      w.setAttribute('data-prev-height', w.style.height || '520px');
+      w.setAttribute('data-prev-minheight', w.style.minHeight || '160px');
+      body.style.display = 'none';
+      w.style.height = 'auto';
+      w.style.minHeight = '0';
+    }
+    body.style.flexDirection = 'row';
+    body.style.alignItems = 'stretch';
+    var btn = w.querySelector('button[title="Minimize"]');
+    if (btn) btn.textContent = isMin ? '\u2013' : '+';
+  };
+
+  global._mtapiToast = function(msg) {
+    try {
+      var t = global.document.getElementById('mtapi-debug-toast');
+      if (!t) {
+        t = global.document.createElement('div');
+        t.id = 'mtapi-debug-toast';
+        t.style.cssText = 'position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--accent,#4fc3f7);color:#000;padding:8px 16px;border-radius:4px;font-family:monospace;font-size:12px;z-index:10000001;opacity:0;transition:opacity 0.2s;pointer-events:none';
+        global.document.body.appendChild(t);
+      }
+      t.textContent = msg;
+      t.style.opacity = '1';
+      clearTimeout(t.__timer);
+      t.__timer = setTimeout(function() { t.style.opacity = '0'; }, 2000);
+    } catch(e) {}
+  };
+
+  global._domHide = function() {
+    var w = global.document.getElementById('mtapi-debug-dom-floating');
+    if (!w) return;
+    var hidden = w.style.opacity === '0';
+    w.style.opacity = hidden ? '1' : '0';
+    w.style.pointerEvents = hidden ? 'auto' : 'none';
+    var btn = w.querySelector('button[title="Hide"]');
+    if (btn) btn.textContent = hidden ? '\uD83D\uDC41' : '\uD83D\uDC41\u200D\uD83D\uDDE8';
+  };
+
+  function _buildAISnapshot(el, userRequest) {
+    var cs = global.getComputedStyle ? global.getComputedStyle(el) : null;
+    var sel = (typeof getCssSelector === 'function') ? getCssSelector(el) : (el.tagName || '?').toLowerCase();
+    var md = '## Element: `' + sel + '`\n\n';
+    md += 'Tag: `' + (el.tagName || '?').toLowerCase() + '`\n';
+    if (el.id) md += 'ID: `#' + el.id + '`\n';
+    if (el.className && typeof el.className === 'string') md += 'Classes: `.' + el.className.split(/\s+/).filter(Boolean).join('.') + '`\n';
+    md += '\n### HTML\n```html\n' + ((el.outerHTML || '').slice(0, 3000)) + '\n```\n\n';
+    md += '### Computed CSS\n```css\n';
+    if (cs) {
+      ['display','position','width','height','min-width','min-height','max-width','max-height','padding','margin','border','color','background-color','font-size','font-weight','font-family','line-height','flex','flex-direction','grid','grid-template-columns','gap','overflow','z-index','opacity','transform','transition'].forEach(function(k){
+        try { var v = cs.getPropertyValue(k); if (v) md += k + ': ' + v + ';\n'; } catch(e){}
+      });
+    }
+    md += '```\n\n';
+    if (el.parentElement) md += '### Parent\n`' + (el.parentElement.tagName || '?').toLowerCase() + (el.parentElement.id ? '#' + el.parentElement.id : '') + '`\n\n';
+    if (el.children && el.children.length) {
+      md += '### Children (' + el.children.length + ')\n';
+      for (var i = 0; i < Math.min(el.children.length, 10); i++) {
+        md += '- `' + (el.children[i].tagName || '?').toLowerCase() + '`';
+        if (el.children[i].className && typeof el.children[i].className === 'string') md += ' .' + el.children[i].className.split(/\s+/).filter(Boolean).join('.');
+        md += '\n';
+      }
+      md += '\n';
+    }
+    if (userRequest) {
+      md += '### User Request\n' + userRequest + '\n\n### Task\nModify the HTML/CSS above according to the request. Return the complete updated element or CSS changes.\n';
+    } else {
+      md += '### Task\nExplain this element and suggest improvements. Return CSS-only modifications if possible.\n';
+    }
+    return md;
+  }
+  function _copyAiSnap(md) {
+    if (global.navigator.clipboard && global.navigator.clipboard.writeText) {
+      global.navigator.clipboard.writeText(md).then(function(){ try { console.log('[aiSnap] copied (' + md.length + ' chars)'); } catch(e){} }).catch(function(){ if (typeof _copyFallback === 'function') _copyFallback(md); });
+    } else if (typeof _copyFallback === 'function') {
+      _copyFallback(md);
+    }
+  }
+  global._captureElement = function() {
+    var el = global._lastInspected;
+    if (!el) {
+      if (global._mtapiToast) global._mtapiToast('Select element first (🔍 then tap)');
+      return;
+    }
+    var html = el.outerHTML || '';
+    if (global.navigator.clipboard && global.navigator.clipboard.writeText) {
+      global.navigator.clipboard.writeText(html).then(function() {
+        if (global._mtapiToast) global._mtapiToast('Copied HTML (' + html.length + ' chars)');
+      }).catch(function() {
+        if (typeof _copyFallback === 'function') _copyFallback(html);
+        if (global._mtapiToast) global._mtapiToast('Copied HTML (fallback)');
+      });
+    } else if (typeof _copyFallback === 'function') {
+      _copyFallback(html);
+      if (global._mtapiToast) global._mtapiToast('Copied HTML (fallback)');
+    }
+  };
+
+  global._aiSnap = function() {
+    var el = global._lastInspected;
+    if (!el) { if (global._mtapiToast) global._mtapiToast('Select element first (🔍 then tap)'); return; }
+    var md = _buildAISnapshot(el, '');
+    _copyAiSnap(md);
+    if (global._mtapiToast) global._mtapiToast('Copied AI prompt (' + md.length + ' chars) → paste into DeepSeek/ChatGPT');
+  };
+  global._aiSnapWithRequest = function(prompt) {
+    var el = global._lastInspected;
+    if (!el) { try { alert('Select an element first'); } catch(e){} return; }
+    var req = prompt || (global.prompt ? global.prompt('Describe the change you want:') : '');
+    if (!req) return;
+    _copyAiSnap(_buildAISnapshot(el, req));
+  };
+
   global._domRefresh = function(){
     var container = global.document && global.document.getElementById('mtapi-debug-dom-tree'); if (!container) return;
     container.innerHTML = '';
@@ -546,13 +987,150 @@
     container.appendChild(rootDet);
   };
   var _domInspectActive = false;
-  function _domClickHandler(ev){ if (!_domInspectActive) return; ev.preventDefault(); ev.stopPropagation(); inspectElement(ev.target); }
+  global._domInspectActive = false;
+  global._domInspectStop = function() {
+    _domInspectActive = false;
+    global._domInspectActive = false;
+    try { global.document.removeEventListener('click', _domClickHandler, true); } catch(e){}
+    try { global.document.removeEventListener('mousemove', _domHoverHandler, true); } catch(e){}
+    if (typeof _domEscHandler === 'function') { try { global.document.removeEventListener('keydown', _domEscHandler, true); } catch(e){} }
+    if (typeof _domHoverHide === 'function') { try { _domHoverHide(); } catch(e){} }
+    var selBtn = global.document.getElementById('mtapi-debug-inspect-btn');
+    if (selBtn) { try { selBtn.style.background = ''; selBtn.style.color = ''; selBtn.style.borderColor = ''; } catch(e){} }
+    var aiBtn = global.document.getElementById('mtapi-debug-ai-snap-btn');
+    if (aiBtn) { try { aiBtn.disabled = true; } catch(e){} }
+    var ov = global.document.getElementById('mtapi-debug-overlay');
+    if (ov) { try { ov.style.pointerEvents = ''; } catch(e){} }
+    var ind = global.document.getElementById('mtapi-debug-dom-inspect-ind');
+    if (ind) ind.textContent = '\u25CB off';
+  };
+  function _domClickHandler(ev){
+    if (!_domInspectActive) return;
+    var t = ev.target;
+    if (!t) return;
+    // Never block <summary> in DOM tree — let <details> toggle naturally
+    if (t.tagName === 'SUMMARY' && t.closest && t.closest('#mtapi-debug-dom-tree, #mtapi-debug-dom-floating')) return;
+
+    var x = ev.clientX, y = ev.clientY;
+    var fl = global.document.getElementById('mtapi-debug-dom-floating');
+    var ov = global.document.getElementById('mtapi-debug-overlay');
+    var tree = global.document.getElementById('mtapi-debug-dom-tree');
+    var info = global.document.getElementById('mtapi-debug-dom-info');
+
+    // Determine actual point: what's under cursor when overlay/floating are transparent
+    var flRect = fl ? fl.getBoundingClientRect() : null;
+    var inFloating = flRect && x >= flRect.left && x <= flRect.right && y >= flRect.top && y <= flRect.bottom;
+
+    if (inFloating) {
+      // Click inside floating: pick the element inside (tree, info, or chrome)
+      var underFl = t;
+      if (t.closest && t.closest('button, input, select, textarea, #mtapi-debug-dom-floating-header, #mtapi-debug-dom-splitter')) return;
+      ev.preventDefault(); ev.stopPropagation();
+      try { inspectElement(underFl); } catch(e) { try { global.console.error('[inspect]', e); } catch(x){} }
+      return;
+    }
+
+    // Click outside floating: pick overlay element OR page (via elementFromPoint)
+    // First: is target an overlay UI element? (tabs, topbar, buttons, etc.)
+    var isOverlayEl = ov && ov.contains(t);
+    if (isOverlayEl && !(t.closest && t.closest('.mtapi-debug-fab'))) {
+      // Select the overlay element directly (do not pierce)
+      ev.preventDefault(); ev.stopPropagation();
+      try { inspectElement(t); } catch(e) { try { global.console.error('[inspect]', e); } catch(x){} }
+      return;
+    }
+    // Page element: pierce overlay (but not floating — keep floating as-is)
+    var pe1 = ov ? ov.style.pointerEvents : '';
+    if (ov) ov.style.pointerEvents = 'none';
+    var under = global.document.elementFromPoint(x, y);
+    if (ov) ov.style.pointerEvents = pe1;
+    if (!under) return;
+    // Skip fab and floating chrome
+    if (under.closest && under.closest('.mtapi-debug-fab')) return;
+    ev.preventDefault(); ev.stopPropagation();
+    try { inspectElement(under); } catch(e) { try { global.console.error('[inspect]', e); } catch(x){} }
+  }
+  var _lastHovered = null;
+  var _hoverBox = null;
+  function _ensureHoverBox() {
+    if (_hoverBox) return _hoverBox;
+    _hoverBox = global.document.createElement('div');
+    _hoverBox.id = 'mtapi-debug-hover-box';
+    _hoverBox.style.cssText = 'position:fixed;pointer-events:none;z-index:9999997;border:2px solid #f44;background:rgba(244,68,68,0.08);display:none;border-radius:2px';
+    global.document.body.appendChild(_hoverBox);
+    return _hoverBox;
+  }
+  function _isOverlayElement(el) {
+    if (!el) return false;
+    var cur = el;
+    while (cur) {
+      if (cur.id === 'mtapi-debug-dom-tree' || cur.id === 'mtapi-debug-dom-info') return false;
+      if (cur.classList && (cur.classList.contains('mtapi-debug-overlay') || cur.classList.contains('mtapi-debug-fab'))) return true;
+      if (cur.id === 'mtapi-debug-dom-floating-header' || cur.id === 'mtapi-debug-dom-splitter') return true;
+      cur = cur.parentElement;
+    }
+    return false;
+  }
+  function _domHoverHandler(ev) {
+    if (!_domInspectActive) return;
+    var el = ev.target;
+    if (el === _lastHovered) return;
+    if (_isOverlayElement(el)) { if (_hoverBox) _hoverBox.style.display = 'none'; return; }
+    _lastHovered = el;
+    try {
+      var box = _ensureHoverBox();
+      var r = el.getBoundingClientRect();
+      box.style.display = 'block';
+      box.style.left = r.left + 'px';
+      box.style.top = r.top + 'px';
+      box.style.width = r.width + 'px';
+      box.style.height = r.height + 'px';
+    } catch(e) {}
+  }
+  function _domHoverHide() {
+    if (_hoverBox) _hoverBox.style.display = 'none';
+    _lastHovered = null;
+  }
   global._domInspect = function(){
     _domInspectActive = !_domInspectActive;
     var ind = global.document && global.document.getElementById('mtapi-debug-dom-inspect-ind');
-    if (_domInspectActive) { global.document.addEventListener('click', _domClickHandler, true); if (ind) ind.textContent = '\u25C9 ON (tap page)'; }
-    else { global.document.removeEventListener('click', _domClickHandler, true); if (ind) ind.textContent = '\u25CB off'; }
+    if (_domInspectActive) {
+      global._domInspectActive = true;
+      var selBtn = global.document.getElementById('mtapi-debug-inspect-btn');
+      if (selBtn) { selBtn.style.background = '#f0f'; selBtn.style.color = '#000'; selBtn.style.borderColor = '#f0f'; }
+      var aiBtn = global.document.getElementById('mtapi-debug-ai-snap-btn');
+      if (aiBtn) aiBtn.disabled = !global._lastInspected;
+      var ov = global.document.getElementById('mtapi-debug-overlay');
+      if (ov) {
+        ov.style.pointerEvents = 'none';
+        // Re-enable pointer-events on interactive children of overlay
+        var autoSel = '.mtapi-debug-topbar, .mtapi-debug-tabs, .mtapi-debug-topbar button, .mtapi-debug-tabs button, .mtapi-debug-content, .mtapi-debug-content > [data-tab-content].active, #mtapi-debug-dom-floating, #mtapi-debug-dom-tree, #mtapi-debug-dom-info';
+        try {
+          var autos = ov.querySelectorAll(autoSel);
+          for (var ai = 0; ai < autos.length; ai++) autos[ai].style.pointerEvents = 'auto';
+        } catch(e) {}
+      }
+      var fl = global.document.getElementById('mtapi-debug-dom-floating');
+      if (fl) fl.style.pointerEvents = 'auto';
+      global.document.addEventListener('click', _domClickHandler, true);
+      global.document.addEventListener('mousemove', _domHoverHandler, true);
+      global.document.addEventListener('keydown', _domEscHandler, true);
+      if (ind) ind.textContent = '\u25C9 ON (hover, click to select, Esc to exit)';
+    } else {
+      global.document.removeEventListener('click', _domClickHandler, true);
+      global.document.removeEventListener('mousemove', _domHoverHandler, true);
+      global.document.removeEventListener('keydown', _domEscHandler, true);
+      if (typeof _domHoverHide === 'function') _domHoverHide();
+      var selBtn = global.document.getElementById('mtapi-debug-inspect-btn');
+      if (selBtn) { selBtn.style.background = ''; selBtn.style.color = ''; selBtn.style.borderColor = ''; }
+      var aiBtn = global.document.getElementById('mtapi-debug-ai-snap-btn');
+      if (aiBtn) aiBtn.disabled = true;
+      var ov = global.document.getElementById('mtapi-debug-overlay');
+      if (ov) ov.style.pointerEvents = '';
+      if (ind) ind.textContent = '\u25CB off';
+    }
   };
+  function _domEscHandler(ev) { if (ev.key === 'Escape' || ev.keyCode === 27) { global._domInspectStop(); } }
 
   // ─── system info ──────────────────────────────────────────
   function refreshSystemInfo(){
@@ -571,6 +1149,17 @@
     html += '</tbody></table>';
     el.innerHTML = html;
   }
+  global._fetchAppSource = function(){
+    var el = global.document.getElementById('mtapi-debug-app-source'); if (!el) return;
+    el.textContent = '(loading...)';
+    var token = ''; try { var m = global.location.search.match(/[?&]token=([^&]+)/); if (m) token = m[1]; } catch(e) {}
+    var url = '/app.js' + (token ? '?token=' + encodeURIComponent(token) : '');
+    var f = global.fetch; if (!f) { el.textContent = '(no fetch)'; return; }
+    f(url).then(function(r){ return r.text(); }).then(function(text){
+      el.innerHTML = '<pre style="margin:0;white-space:pre-wrap;color:#aaa;font-size:10px">' + esc(text.slice(0, 50000)) + (text.length > 50000 ? '\n... (' + (text.length - 50000) + ' more)' : '') + '</pre>';
+    }).catch(function(e){ el.textContent = '(error: ' + e.message + ')'; });
+  };
+
   global._fetchDevToolsJSON = function(){
     var el = global.document && global.document.getElementById('mtapi-debug-devtools-json'); if (!el) return;
     el.innerHTML = '(loading...)';
@@ -587,8 +1176,8 @@
 
   // ─── chrome (FAB + overlay + tabs + side panel) ───────────
   var _activeTab = 'logs';
-  var _tabs = ['logs', 'errors', 'logcat', 'devtools', 'system', 'network', 'dom'];
-  var _tabLabels = {logs:'Logs', errors:'Errors', logcat:'Logcat', devtools:'DevTools', system:'System', network:'Network', dom:'DOM'};
+  var _tabs = ['logs', 'errors', 'logcat', 'devtools', 'system', 'network'];
+  var _tabLabels = {logs:'Logs', errors:'Errors', logcat:'Logcat', devtools:'DevTools', system:'System', network:'Network'};
 
   global._setTab = function(name){
     if (_tabs.indexOf(name) === -1) return;
@@ -608,20 +1197,19 @@
   global._debugClose = function(){ var ov = global.document && global.document.getElementById('mtapi-debug-overlay'); if (ov) ov.setAttribute('hidden', ''); global._sidePanelClose(); };
 
   var CSS = [
-    '.mtapi-debug-fab-inline{width:28px;height:28px;border-radius:50%;border:1px solid var(--border,#444);background:var(--bg3,#2a2a2a);color:var(--accent,#f0f);font-size:16px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;padding:0;line-height:1;font-family:inherit;margin:0;box-shadow:none}',
+    '.mtapi-debug-fab-inline{width:28px;height:28px;border-radius:50%;border:1px solid var(--border,var(--bg4));background:var(--bg3,var(--bg3));color:var(--accent,var(--accent));font-size:16px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;padding:0;line-height:1;font-family:inherit;margin:0;box-shadow:none}',
     '.mtapi-debug-fab-inline:hover{background:var(--bg4,#3a3a3a)}',
     '.mtapi-debug-back{font-weight:bold;letter-spacing:1px}',
     /* Force scroll everywhere */
-    '.mtapi-debug-pre, #mtapi-debug-jslog, #mtapi-debug-logcat, #mtapi-debug-errors, #mtapi-debug-eval-out, #mtapi-debug-devtools-json, #mtapi-debug-network, #mtapi-debug-dom-tree, #mtapi-debug-dom-info, #mtapi-debug-system-info, #mtapi-debug-perf{overflow-y:scroll !important;overflow-x:scroll !important}',
-    '.mtapi-debug-pre::-webkit-scrollbar, #mtapi-debug-jslog::-webkit-scrollbar, #mtapi-debug-logcat::-webkit-scrollbar, #mtapi-debug-errors::-webkit-scrollbar, #mtapi-debug-eval-out::-webkit-scrollbar, #mtapi-debug-devtools-json::-webkit-scrollbar, #mtapi-debug-network::-webkit-scrollbar, #mtapi-debug-dom-tree::-webkit-scrollbar, #mtapi-debug-dom-info::-webkit-scrollbar, #mtapi-debug-system-info::-webkit-scrollbar, #mtapi-debug-perf::-webkit-scrollbar{width:12px;height:12px}',
-    '.mtapi-debug-pre::-webkit-scrollbar-thumb, #mtapi-debug-jslog::-webkit-scrollbar-thumb, #mtapi-debug-logcat::-webkit-scrollbar-thumb, #mtapi-debug-errors::-webkit-scrollbar-thumb, #mtapi-debug-eval-out::-webkit-scrollbar-thumb, #mtapi-debug-devtools-json::-webkit-scrollbar-thumb, #mtapi-debug-network::-webkit-scrollbar-thumb, #mtapi-debug-dom-tree::-webkit-scrollbar-thumb, #mtapi-debug-dom-info::-webkit-scrollbar-thumb, #mtapi-debug-system-info::-webkit-scrollbar-thumb, #mtapi-debug-perf::-webkit-scrollbar-thumb{background:#666;border-radius:6px}',
-    '.mtapi-debug-pre::-webkit-scrollbar-thumb:hover, #mtapi-debug-jslog::-webkit-scrollbar-thumb:hover, #mtapi-debug-logcat::-webkit-scrollbar-thumb:hover{background:#888}',
-    '.logcat-line{display:block;white-space:pre-wrap;word-break:break-all;padding:1px 4px;border-radius:2px}',
+    '.mtapi-debug-pre, #mtapi-debug-jslog, #mtapi-debug-logcat, #mtapi-debug-errors, #mtapi-debug-devtools-json, #mtapi-debug-network, #mtapi-debug-dom-tree, #mtapi-debug-dom-info, #mtapi-debug-system-info, #mtapi-debug-perf{overflow-y:scroll !important;overflow-x:scroll !important;min-height:0}',
+    '#mtapi-debug-eval-out{overflow-y:scroll !important;overflow-x:auto !important;white-space:pre !important;font-family:monospace;min-height:0;max-height:none !important}',
+    '#mtapi-debug-eval-out pre, #mtapi-debug-eval-out table{min-width:max-content}',
+                '.logcat-line{display:block;white-space:pre-wrap;word-break:break-all;padding:1px 4px;border-radius:2px}',
     '.logcat-line.lvl-v{color:#818cf8}',
     '.logcat-lvl{display:flex;gap:2px;margin-right:4px;align-items:center}',
     '.logcat-lvl label{cursor:pointer}',
     '.logcat-lvl input{display:none}',
-    '.logcat-lvl span{display:inline-block;width:20px;height:20px;line-height:18px;text-align:center;border-radius:3px;font-family:monospace;font-size:10px;font-weight:600;border:1px solid #444;background:#1a1a1a;color:#555;user-select:none}',
+    '.logcat-lvl span{display:inline-block;width:20px;height:20px;line-height:18px;text-align:center;border-radius:3px;font-family:monospace;font-size:10px;font-weight:600;border:1px solid var(--bg4);background:var(--bg);color:#555;user-select:none}',
     '.logcat-lvl input:checked + span.lvl-v{background:#6366f1;color:#fff;border-color:#6366f1}',
     '.logcat-lvl input:checked + span.lvl-d{background:#22c55e;color:#fff;border-color:#22c55e}',
     '.logcat-lvl input:checked + span.lvl-i{background:#06b6d4;color:#fff;border-color:#06b6d4}',
@@ -638,79 +1226,61 @@
     '.logcat-line.lvl-e .logcat-hl{background:#fca5a5}',
     '.logcat-line.lvl-f .logcat-hl{background:#fff}',
     'mark.tbl-hl{background:#ffeb3b;color:#000;padding:0 1px;border-radius:2px}',
-    'button.copy{background:#3a3a3a;color:#ddd;border:1px solid #555;border-radius:3px;padding:2px 8px;font-family:monospace;font-size:11px;cursor:pointer}',
+    'button.copy{background:#3a3a3a;color:var(--fg);border:1px solid #555;border-radius:3px;padding:2px 8px;font-family:monospace;font-size:11px;cursor:pointer}',
     'button.copy:hover{background:#4a4a4a}',
     'button.clear{background:#4a2020;color:#f88;border:1px solid #733;border-radius:3px;padding:2px 8px;font-family:monospace;font-size:11px;cursor:pointer}',
     'button.clear:hover{background:#6a2020}',
-    '.proc-search,.tbl-search{flex:1;min-width:80px;padding:3px 6px;background:#000;color:#ddd;border:1px solid #444;border-radius:3px;font-family:monospace;font-size:11px}',
-    '.proc-search:focus,.tbl-search:focus{outline:1px solid #4fc3f7;border-color:#4fc3f7}',
+    '.proc-search,.tbl-search{flex:1;min-width:80px;padding:3px 6px;background:#000;color:var(--fg);border:1px solid var(--bg4);border-radius:3px;font-family:monospace;font-size:11px}',
+    '.proc-search:focus,.tbl-search:focus{outline:1px solid var(--accent);border-color:var(--accent)}',
     '.tbl-toolbar{display:flex;gap:4px;align-items:center;margin:4px 0}',
-    '.mtapi-debug-fab{position:fixed;top:8px;right:8px;z-index:999999;width:32px;height:32px;border-radius:50%;border:1px solid #444;background:#2a2a2a;color:#f0f;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 6px rgba(0,0,0,0.4);padding:0;line-height:1;font-family:monospace}',
+    '.mtapi-debug-fab{position:fixed;top:8px;right:8px;z-index:999999;width:32px;height:32px;border-radius:50%;border:1px solid var(--bg4);background:var(--bg3);color:var(--accent);font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 6px rgba(0,0,0,0.4);padding:0;line-height:1;font-family:monospace}',
     '.mtapi-debug-fab:hover{background:#3a3a3a}',
-    '.mtapi-debug-overlay{position:fixed;top:0;left:0;right:0;bottom:0;z-index:9999998;background:#1a1a1a;color:#ddd;font-family:monospace;font-size:12px;display:flex;flex-direction:column}',
+    '.mtapi-debug-overlay{position:fixed;top:0;left:0;right:0;bottom:0;z-index:9999998;background:var(--bg);color:var(--fg);font-family:monospace;font-size:12px;display:flex;flex-direction:column}',
     '.mtapi-debug-overlay[hidden]{display:none}',
-    '.mtapi-debug-topbar{display:flex;align-items:center;padding:4px 8px;background:#222;border-bottom:1px solid #444;gap:8px;flex-shrink:0}',
-    '.mtapi-debug-topbar button{background:transparent;color:#ddd;border:1px solid #444;border-radius:3px;padding:2px 8px;font-family:monospace;font-size:12px;cursor:pointer}',
-    '.mtapi-debug-topbar button:hover{background:#333}',
-    '.mtapi-debug-topbar-row1{padding:6px 8px;border-bottom:1px solid #333}',
-    '.mtapi-debug-topbar-row2{padding:4px 8px;border-bottom:1px solid #444;overflow-x:auto;flex-shrink:0}',
+    '.mtapi-debug-topbar{display:flex;align-items:center;padding:4px 8px;background:var(--bg3);border-bottom:1px solid var(--bg4);gap:8px;flex-shrink:0}',
+    '.mtapi-debug-topbar button{background:transparent;color:var(--fg);border:1px solid var(--bg4);border-radius:3px;padding:2px 8px;font-family:monospace;font-size:12px;cursor:pointer}',
+    '.mtapi-debug-topbar button:hover{background:var(--bg4)}',
+    '.mtapi-debug-topbar-row1{padding:6px 8px;border-bottom:1px solid var(--bg4)}',
+    '.mtapi-debug-topbar-row2{padding:4px 8px;border-bottom:1px solid var(--bg4);overflow-x:auto;flex-shrink:0}',
     '.mtapi-debug-tabs{display:flex;gap:2px;flex:1;overflow-x:auto;min-width:0}',
-    '.mtapi-debug-tabs button.active{background:#444;border-color:#666}',
+    '.mtapi-debug-tabs button.active{background:var(--bg4);border-color:#666}',
     '.mtapi-debug-content{flex:1;overflow:auto;padding:8px;position:relative;display:flex;flex-direction:column;min-height:0}',
     '.mtapi-debug-content > [data-tab-content]{display:none}',
     '.mtapi-debug-content > [data-tab-content].active{display:flex;flex-direction:column;flex:1;min-height:0;gap:8px}',
-    '.mtapi-debug-sidepanel{position:absolute;top:0;right:0;bottom:0;width:200px;background:#222;border-left:1px solid #444;padding:8px;transform:translateX(100%);transition:transform 0.2s;box-shadow:-2px 0 6px rgba(0,0,0,0.4)}',
+    '.mtapi-debug-sidepanel{position:absolute;top:0;right:0;bottom:0;width:200px;background:var(--bg3);border-left:1px solid var(--bg4);padding:8px;transform:translateX(100%);transition:transform 0.2s;box-shadow:-2px 0 6px rgba(0,0,0,0.4)}',
     '.mtapi-debug-sidepanel.open{transform:translateX(0)}',
-    '.mtapi-debug-sidepanel h3{margin:0 0 8px 0;font-size:12px;color:#888;font-weight:normal}',
+    '.mtapi-debug-sidepanel h3{margin:0 0 8px 0;font-size:12px;color:var(--fg3);font-weight:normal}',
     '.mtapi-debug-sidepanel ul{list-style:none;padding:0;margin:8px 0 0 0}',
     '.mtapi-debug-sidepanel li{padding:6px 8px;cursor:pointer;border-radius:3px;font-size:12px}',
-    '.mtapi-debug-sidepanel li:hover{background:#333}',
-    '.mtapi-debug-sidepanel li.active{background:#444}',
-    '.mtapi-debug-section{border:1px solid #333;border-radius:3px;margin:0;background:#0d0d0d;display:flex;flex-direction:column;overflow:hidden}',
+    '.mtapi-debug-sidepanel li:hover{background:var(--bg4)}',
+    '.mtapi-debug-sidepanel li.active{background:var(--bg4)}',
+    '.mtapi-debug-section{border:1px solid var(--bg4);border-radius:3px;margin:0;background:var(--bg2);display:flex;flex-direction:column;overflow:hidden}',
     '.mtapi-debug-section[open]{flex:1 1 auto;min-height:200px;resize:vertical}',
     '.mtapi-debug-section:not([open]){flex:0 0 auto;min-height:0;resize:none}',
     '.mtapi-debug-section > summary{flex-shrink:0}',
     '.mtapi-debug-section > .mtapi-debug-pre,.mtapi-debug-section > div[id$="-network"],.mtapi-debug-section > .mtapi-debug-dom-split{flex:1 1 auto;min-height:0}',
     '.mtapi-debug-section > .mtapi-debug-toolbar{flex-shrink:0}',
     '.mtapi-debug-dom-split{flex:1 1 auto;min-height:200px}',
-    '.mtapi-debug-section > summary{padding:4px 8px;background:#222;cursor:pointer;border-bottom:1px solid #333;font-size:11px}',
+    '.mtapi-debug-section > summary{padding:4px 8px;background:var(--bg3);cursor:pointer;border-bottom:1px solid var(--bg4);font-size:11px}',
     '.mtapi-debug-pre{flex:1 1 auto;min-height:80px;max-height:none;overflow:auto;background:#000;color:#0f0;padding:4px;margin:0;font-size:11px;white-space:normal}',
-    '#mtapi-debug-jslog{flex:1 1 0;min-height:60px;max-height:none;overflow-y:scroll !important;overflow-x:scroll !important;resize:vertical;background:#000;padding:4px;border:1px solid #333}',
-    '#mtapi-debug-jslog::-webkit-scrollbar{width:10px;height:10px}',
-    '#mtapi-debug-jslog::-webkit-scrollbar-track{background:#111}',
-    '#mtapi-debug-jslog::-webkit-scrollbar-thumb{background:#555;border-radius:5px}',
-    'pre.mtapi-debug-pre,.mtapi-debug-pre > pre{white-space:pre-wrap}',
+    '#mtapi-debug-jslog{flex:1 1 0;min-height:60px;max-height:none;overflow-y:scroll !important;overflow-x:scroll !important;resize:vertical;background:#000;padding:4px;border:1px solid var(--bg4)}',
+                'pre.mtapi-debug-pre,.mtapi-debug-pre > pre{white-space:pre-wrap}',
     '.mtapi-debug-pre > table{min-width:max-content}',
-    '.mtapi-debug-pre::-webkit-scrollbar{width:10px;height:10px}',
-    '.mtapi-debug-pre::-webkit-scrollbar-track{background:#111}',
-    '.mtapi-debug-pre::-webkit-scrollbar-thumb{background:#555;border-radius:5px}',
-    '.mtapi-debug-pre::-webkit-scrollbar-thumb:hover{background:#777}',
-    '.mtapi-debug-pre::-webkit-scrollbar{width:8px;height:8px}',
-    '.mtapi-debug-pre::-webkit-scrollbar-track{background:#111}',
-    '.mtapi-debug-pre::-webkit-scrollbar-thumb{background:#444;border-radius:4px}',
-    '.mtapi-debug-pre::-webkit-scrollbar-thumb:hover{background:#666}',
-    '#mtapi-debug-network{min-height:200px;max-height:600px;overflow:auto;resize:vertical;background:#0d0d0d;padding:4px;border:1px solid #333}',
-    '#mtapi-debug-network::-webkit-scrollbar{width:10px;height:10px}',
-    '#mtapi-debug-network::-webkit-scrollbar-track{background:#111}',
-    '#mtapi-debug-network::-webkit-scrollbar-thumb{background:#444;border-radius:5px}',
-    '#mtapi-debug-network::-webkit-scrollbar-thumb:hover{background:#666}',
-    '#mtapi-debug-network thead th{position:sticky;top:0;background:#222;z-index:1}',
+                                    '#mtapi-debug-network{min-height:200px;max-height:600px;overflow:auto;resize:vertical;background:var(--bg2);padding:4px;border:1px solid var(--bg4)}',
+                    '#mtapi-debug-network thead th{position:sticky;top:0;background:var(--bg3);z-index:1}',
     '#mtapi-debug-network table{min-width:100%}',
     '.net-body-cell{padding:0!important}',
-    '.net-body-json{max-height:400px;min-height:80px;overflow:auto;resize:vertical;background:#0d0d0d;padding:4px;border:1px solid #333;font-size:10px;margin:2px 0}',
-    '.net-body-json::-webkit-scrollbar{width:8px;height:8px}',
-    '.net-body-json::-webkit-scrollbar-track{background:#111}',
-    '.net-body-json::-webkit-scrollbar-thumb{background:#444;border-radius:4px}',
-    '.net-body-json table{width:100%;border-collapse:collapse;margin:2px 0}',
-    '.net-body-json th,.net-body-json td{border:1px solid #333;padding:2px 4px;font-size:10px;vertical-align:top}',
-    '.net-body-json th{background:#222;color:#888;font-weight:normal;text-align:left}',
-    '.net-body-json details.sub{border:1px solid #444;border-radius:3px;padding:2px;margin:2px 0}',
-    '.net-body-json details.sub > summary{padding:2px;cursor:pointer;color:#4fc3f7;font-size:10px}',
-    '.net-body-pre{max-height:300px;overflow:auto;background:#000;color:#aaa;padding:2px;margin:0;font-size:9px;white-space:pre-wrap;resize:vertical}',
+    '.net-body-json{max-height:400px;min-height:80px;overflow:auto;resize:vertical;background:var(--bg2);padding:4px;border:1px solid var(--bg4);font-size:10px;margin:2px 0}',
+                '.net-body-json table{width:100%;border-collapse:collapse;margin:2px 0}',
+    '.net-body-json th,.net-body-json td{border:1px solid var(--bg4);padding:2px 4px;font-size:10px;vertical-align:top}',
+    '.net-body-json th{background:var(--bg3);color:var(--fg3);font-weight:normal;text-align:left}',
+    '.net-body-json details.sub{border:1px solid var(--bg4);border-radius:3px;padding:2px;margin:2px 0}',
+    '.net-body-json details.sub > summary{padding:2px;cursor:pointer;color:var(--accent);font-size:10px}',
+    '.net-body-pre{max-height:300px;overflow:auto;background:#000;color:var(--fg2);padding:2px;margin:0;font-size:9px;white-space:pre-wrap;resize:vertical}',
     'div.mtapi-debug-pre{overflow:auto;resize:vertical;white-space:normal}',
     '.mtapi-debug-table{width:100%;border-collapse:collapse;font-family:monospace;font-size:11px;background:#000}',
-    '.mtapi-debug-table th{position:sticky;top:0;background:#222;color:#888;text-align:left;padding:2px 4px;font-weight:normal;z-index:1;border-bottom:1px solid #444}',
-    '.mtapi-debug-table td{padding:1px 4px;border-bottom:1px solid #1a1a1a;vertical-align:top}',
+    '.mtapi-debug-table th{position:sticky;top:0;background:var(--bg3);color:var(--fg3);text-align:left;padding:2px 4px;font-weight:normal;z-index:1;border-bottom:1px solid var(--bg4)}',
+    '.mtapi-debug-table td{padding:1px 4px;border-bottom:1px solid var(--bg);vertical-align:top}',
     '.mtapi-debug-table tr:hover td{background:#151515}',
     '.mtapi-debug-table .lvl-ind{width:16px;text-align:center;font-weight:600}',
     '.mtapi-debug-table .lvl-ind.lvl-v{color:#818cf8}',
@@ -723,15 +1293,34 @@
     '.mtapi-debug-sidepanel h3{display:flex;justify-content:space-between;align-items:center;margin:0 0 8px 0}',
     '.mtapi-debug-sidepanel .sp-close{background:transparent;color:#f88;border:none;font-size:20px;cursor:pointer;padding:0 4px;line-height:1}',
     '.mtapi-debug-sidepanel .sp-close:hover{color:#f44}',
-    'button.icon-btn-sm{background:#2a2a2a;color:#ddd;border:1px solid #444;border-radius:3px;padding:2px 6px;font-family:monospace;font-size:13px;cursor:pointer;line-height:1;min-width:26px;height:24px}',
+    'button.icon-btn-sm{background:var(--bg3);color:var(--fg);border:1px solid var(--bg4);border-radius:3px;padding:2px 6px;font-family:monospace;font-size:13px;cursor:pointer;line-height:1;min-width:26px;height:24px}',
     'button.icon-btn-sm:hover{background:#3a3a3a}',
+    'button.icon-btn-sm:disabled{opacity:0.6;cursor:not-allowed;background:#444 !important;color:#888 !important;border-color:#555 !important}',
     'button.icon-btn-sm.danger{color:#f88}',
-    'button.icon-btn-sm.accent{color:#4fc3f7}',
+    'button.icon-btn-sm.accent{color:var(--accent)}',
     '.mtapi-debug-toolbar{display:flex;gap:4px;align-items:center;margin:4px 0;flex-wrap:wrap}',
     '.mtapi-debug-toolbar input{flex:1;min-width:80px}',
-    '.mtapi-debug-dom-split{display:flex;gap:8px;min-height:400px}',
-    '.mtapi-debug-dom-tree-wrap{flex:1;overflow:auto;background:#000;padding:4px;border:1px solid #333}',
-    '.mtapi-debug-dom-info-wrap{width:280px;overflow:auto;background:#0d0d0d;padding:4px;border:1px solid #333;font-size:11px}'
+    '.mtapi-debug-dom-split{display:flex;gap:8px;min-height:200px;flex:1 1 0;overflow:hidden}',
+    '.mtapi-debug-dom-tree-wrap{flex:1;overflow:auto;background:#000;padding:4px;border:1px solid #333;resize:both}',
+    '.mtapi-debug-dom-info-wrap{width:280px;overflow:auto;background:#0d0d0d;padding:4px;border:1px solid #333;font-size:11px;resize:horizontal}',
+    '.mtapi-debug-dom-tree-wrap{flex:1;overflow:auto;background:#000;padding:4px;border:1px solid var(--bg4)}',
+    '.mtapi-debug-resize-edge:hover{background:var(--accent,#4fc3f7) !important;opacity:0.5}',
+    '#mtapi-debug-dom-info::-webkit-scrollbar{width:10px;height:10px;background:var(--bg3,#222)}',
+    '#mtapi-debug-dom-info::-webkit-scrollbar-thumb{background:var(--fg3,#888);border-radius:5px}',
+    '#mtapi-debug-dom-tree::after, #mtapi-debug-dom-info::after{content:"";position:absolute;right:2px;bottom:2px;width:10px;height:10px;background:linear-gradient(135deg,transparent 50%,var(--accent,#4fc3f7) 50%);pointer-events:none;opacity:0.6}',
+    '#mtapi-debug-dom-tree::-webkit-scrollbar{width:10px;height:10px;background:var(--bg3,#222)}',
+    '#mtapi-debug-dom-tree::-webkit-scrollbar-thumb{background:var(--fg3,#888);border-radius:5px}',
+    '.mtapi-debug-dom-info-wrap{width:280px;overflow:auto;background:var(--bg2);padding:4px;border:1px solid var(--bg4);font-size:11px}',
+    /* ── SCROLLBARS (force) ── */
+    '.mtapi-debug-pre, #mtapi-debug-jslog, #mtapi-debug-logcat, #mtapi-debug-errors, #mtapi-debug-eval-out, #mtapi-debug-devtools-json, #mtapi-debug-system-info, #mtapi-debug-perf{max-height:60vh !important;overflow-y:scroll !important;overflow-x:auto !important;scrollbar-width:thin;scrollbar-color:var(--fg3) var(--bg3)}',
+    '.mtapi-debug-pre::-webkit-scrollbar, #mtapi-debug-jslog::-webkit-scrollbar, #mtapi-debug-logcat::-webkit-scrollbar, #mtapi-debug-errors::-webkit-scrollbar, #mtapi-debug-eval-out::-webkit-scrollbar, #mtapi-debug-devtools-json::-webkit-scrollbar, #mtapi-debug-system-info::-webkit-scrollbar, #mtapi-debug-perf::-webkit-scrollbar{width:14px;height:14px;background:var(--bg)}',
+    '.mtapi-debug-pre::-webkit-scrollbar-thumb, #mtapi-debug-jslog::-webkit-scrollbar-thumb, #mtapi-debug-logcat::-webkit-scrollbar-thumb, #mtapi-debug-errors::-webkit-scrollbar-thumb, #mtapi-debug-eval-out::-webkit-scrollbar-thumb, #mtapi-debug-devtools-json::-webkit-scrollbar-thumb, #mtapi-debug-system-info::-webkit-scrollbar-thumb, #mtapi-debug-perf::-webkit-scrollbar-thumb{background:var(--fg3);border-radius:7px;border:2px solid var(--bg)}',
+    '.mtapi-debug-pre::-webkit-scrollbar-thumb:hover, #mtapi-debug-jslog::-webkit-scrollbar-thumb:hover, #mtapi-debug-logcat::-webkit-scrollbar-thumb:hover{background:#bbb}',
+    '.mtapi-debug-pre::-webkit-scrollbar-track, #mtapi-debug-jslog::-webkit-scrollbar-track, #mtapi-debug-logcat::-webkit-scrollbar-track{background:var(--bg)}',
+    /* network / dom / sidepanel тоже */
+    '#mtapi-debug-network, #mtapi-debug-dom-tree, #mtapi-debug-dom-info{max-height:60vh !important;overflow-y:scroll !important;overflow-x:auto !important;scrollbar-width:thin;scrollbar-color:var(--fg3) var(--bg3)}',
+    '#mtapi-debug-network::-webkit-scrollbar, #mtapi-debug-dom-tree::-webkit-scrollbar, #mtapi-debug-dom-info::-webkit-scrollbar{width:14px;height:14px;background:var(--bg)}',
+    '#mtapi-debug-network::-webkit-scrollbar-thumb, #mtapi-debug-dom-tree::-webkit-scrollbar-thumb, #mtapi-debug-dom-info::-webkit-scrollbar-thumb{background:var(--fg3);border-radius:7px;border:2px solid var(--bg)}',
   ].join('\n');
 
   function buildTabContents(){
@@ -745,7 +1334,7 @@
     html += '<div data-tab-content="logs" class="' + (_activeTab==='logs'?'active':'') + '">';
     // Console Eval FIRST
     html += '<details class="mtapi-debug-section" open><summary>Console Eval</summary>';
-    html += '<div style="margin:4px 0;display:flex;gap:4px;align-items:center"><input class="mtapi-dbg-eval-input" placeholder="JS..." style="flex:1;padding:4px;background:#000;color:#ddd;border:1px solid #444;font-family:monospace"><button class="icon-btn-sm accent" aria-label="Run" title="Run (evaluate)" onclick="window._evalConsole()">\u25B6</button><button class="icon-btn-sm" aria-label="DOM" title="Open DOM tree" onclick="window._setTab(\'dom\')">\uD83C\uDF33</button><button class="icon-btn-sm danger" aria-label="Clear" title="Clear" onclick="window._evalClear&&window._evalClear()">🗑</button></div>';
+    html += '<div style="margin:4px 0;display:flex;gap:4px;align-items:center"><input class="mtapi-dbg-eval-input" placeholder="JS..." style="flex:1;padding:4px;background:#000;color:#ddd;border:1px solid #444;font-family:monospace"><button class="icon-btn-sm accent" aria-label="Run" title="Run (evaluate)" onclick="window._evalConsole()">\u25B6</button><button class="icon-btn-sm" aria-label="DOM" title="Floating DOM tree" onclick="window._domShowFloating&&window._domShowFloating()">\uD83C\uDF33</button><button class="icon-btn-sm" aria-label="Help" title="Help (list helpers + examples)" onclick="window._evalHelp&&window._evalHelp()">?</button><button class="icon-btn-sm danger" aria-label="Clear" title="Clear" onclick="window._evalClear&&window._evalClear()">🗑</button></div>';
     html += '<div id="mtapi-debug-eval-out" class="mtapi-debug-pre" style="color:#ddd">\u2014</div></details>';
     // JS Logs SECOND
     html += '<details class="mtapi-debug-section" open data-refresh="jslog"><summary>JS Logs <span id="mtapi-debug-jslog-count">('+global._jslogBuf.length+')</span></summary>';
@@ -788,13 +1377,15 @@
     html += '<details class="mtapi-debug-section" open data-refresh="devtools"><summary>WebView DevTools</summary><div style="padding:8px;line-height:1.6">';
     html += '<p><b>On PC (via adb):</b></p><code>adb shell pidof dev.mtapi</code><br><code>adb forward tcp:9222 localabstract:webview_devtools_remote_&lt;PID&gt;</code><br><code>chrome://inspect/#devices</code>';
     html += '<p><b>On device (JSON):</b></p><button class="copy" onclick="window._fetchDevToolsJSON()">\u21bb GET /devtools/json</button>';
+    html += '<p><b>App source (app.js):</b></p><button class="copy" onclick="window._fetchAppSource&&window._fetchAppSource()">\uD83D\uDCC4 Load app.js</button>';
+    html += '<div id="mtapi-debug-app-source" class="mtapi-debug-pre" style="color:#aaa;max-height:300px;overflow:auto;margin-top:4px">(click button)</div>';
     html += '<div id="mtapi-debug-devtools-json" class="mtapi-debug-pre" style="color:#aaa;margin-top:4px">(click button)</div>';
     html += '</div></details></div>';
 
     // System tab
     html += '<div data-tab-content="system" class="' + (_activeTab==='system'?'active':'') + '">';
-    html += '<details class="mtapi-debug-section" open data-refresh="perf"><summary>Performance</summary><div style="margin:4px 0"><button class="copy" onclick="window._perfReset()">\uD83D\uDD04 Reset</button></div><pre id="mtapi-debug-perf" class="mtapi-debug-pre" style="color:#ddd">'+esc(renderPerf())+'</pre></details>';
-    html += '<details class="mtapi-debug-section" data-refresh="system"><summary>System info</summary><div id="mtapi-debug-system-info" class="mtapi-debug-pre" style="color:#aaa">(loading...)</div></details>';
+    html += '<details class="mtapi-debug-section" open data-refresh="perf" style="flex:0 0 auto"><summary>Performance</summary><div style="margin:4px 0"><button class="copy" onclick="window._perfReset()">\uD83D\uDD04 Reset</button></div><div id="mtapi-debug-perf" class="mtapi-debug-pre" style="color:#ddd;min-height:60px;max-height:200px">'+(renderPerf())+'</div></details>';
+    html += '<details class="mtapi-debug-section" open data-refresh="system" style="flex:1 1 0"><summary>System info</summary><div style="padding:2px 8px;font-size:10px;color:#888;border-bottom:1px solid #222">Refresh: tap ⟳ above, or collapse/expand this section (auto-refresh on toggle). Data loads on tab open.</div><div id="mtapi-debug-system-info" class="mtapi-debug-pre" style="color:#aaa">(loading...)</div></details>';
     html += '</div>';
 
     // Network tab
@@ -818,11 +1409,7 @@
     html += '</div>';
     html += '<div id="mtapi-debug-errors" class="mtapi-debug-pre" style="color:#f66">'+(_renderErrorsWithQuery ? _renderErrorsWithQuery('') : esc(p3))+'</div></details>';
     html += '</div>';
-
-    // DOM tab
-    html += '<div data-tab-content="dom" class="' + (_activeTab==='dom'?'active':'') + '">';
-    html += '<div style="margin:0 0 4px 0;display:flex;gap:4px;align-items:center"><button class="copy" onclick="window._domRefresh()">\u21bb Refresh</button><button class="copy" onclick="window._domInspect()">\uD83D\uDD0D Inspect</button><span id="mtapi-debug-dom-inspect-ind" style="padding:4px 6px;color:#888">\u25CB off</span></div>';
-    html += '<div class="mtapi-debug-dom-split"><div id="mtapi-debug-dom-tree" class="mtapi-debug-dom-tree-wrap">(click Refresh)</div><div id="mtapi-debug-dom-info" class="mtapi-debug-dom-info-wrap">(click element in tree)</div></div>';
+    // DOM tab removed (floating only) — was duplicate id="mtapi-debug-dom-tree"
     html += '</div>';
 
     return html;
@@ -953,6 +1540,32 @@
       global._netRefresh();
       global._perfRefresh();
       refreshSystemInfo();
+      // EventBus (like OWI open-web-inspector-*)
+      if (!global._mtapiDebugEventsInstalled) {
+        global._mtapiDebugEventsInstalled = true;
+        global.document.addEventListener('mtapi-debug-inspect', function(e) {
+          if (e.detail && e.detail.enable === true) { if (!global._domInspectActive) global._domInspect(); }
+          else if (e.detail && e.detail.enable === false) { if (global._domInspectActive) global._domInspect(); }
+          else { global._domInspect(); }
+        });
+        global.document.addEventListener('mtapi-debug-select', function(e) {
+          if (e.detail && e.detail.selector) {
+            var el = global.document.querySelector(e.detail.selector);
+            if (el) { if (!global._domInspectActive) global._domInspect(); inspectElement(el); }
+          } else if (e.detail && e.detail.element) {
+            if (!global._domInspectActive) global._domInspect(); inspectElement(e.detail.element);
+          }
+        });
+      }
+      if (!global.MtapiDebug.selectElement) {
+        global.MtapiDebug.selectElement = function(sel) {
+          var el = global.document.querySelector(sel);
+          if (!el) return false;
+          if (!global._domInspectActive) global._domInspect();
+          inspectElement(el);
+          return true;
+        };
+      }
       global._setTab(_activeTab);
       try { global._jslogLiveStart(2000); } catch(e){}
       return ov;
