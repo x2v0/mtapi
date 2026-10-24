@@ -85,6 +85,8 @@ test('DOM inspector: _domRefresh builds tree with data-tag', () => {
   w.MtapiDebug.attach({ container: w.document.body });
   // v2.11.0: floating DOM is lazy — create it first
   w._domShowFloating();
+  // v2.12.0: default root = overlay. Force page for this test.
+  w._domRootMode = 'page';
   w._domRefresh();
   const tree = w.document.getElementById('mtapi-debug-dom-tree');
   assert.ok(tree, 'tree container exists');

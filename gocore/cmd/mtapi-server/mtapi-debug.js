@@ -161,60 +161,97 @@
       '  $("#main")                → <main id=main>',
       '  $$("details").length      → 5',
       '  $("h1").textContent       → "mtapi"',
+      '  $$("button").map(b => b.id)',
       '',
-      '--- Inspect ---',
+      '--- Inspect / Select ---',
       'inspect(el)                — highlight + show in DOM info panel',
       'domInspect()               — toggle select mode (click any element)',
       'domInspectStop()           — exit select mode',
       'domShowFloating()          — open floating DOM tree window',
       'Examples:',
       '  inspect($("#main"))',
-      '  domInspect()  // then tap element on page',
+      '  inspect(document.body)',
+      '  domInspect()  // then tap element',
+      '  domInspectStop()',
       '',
       '--- AI Snap (copy prompt for DeepSeek/ChatGPT) ---',
-      '_aiSnapWithRequest("make it red")   — prompt with custom task',
-      '_captureElement()                   — copy outerHTML of selected',
+      '_aiSnapWithRequest("task") — markdown of selected + custom task',
+      '_aiSnap()                  — markdown without task',
+      '_captureElement()          — copy outerHTML of selected',
       'Examples:',
       '  _aiSnapWithRequest("convert to flexbox")',
+      '  _aiSnapWithRequest("make it red")',
       '  _aiSnapWithRequest("dark mode variant")',
+      '  _captureElement()',
+      'Copies: selector, tag, id, classes, HTML (3KB),',
+      'computed CSS (24 props), parent, children, task.',
       '',
       '--- JS Logs ---',
       'log(...) / warn(...) / error(...)   — push to JS Logs',
       'Examples:',
       '  log("test", 123, {a: 1})',
+      '  warn("careful")',
       '  error("oops")',
       '',
       '--- MtapiDebug API ---',
       'MtapiDebug.open()          — open debug overlay',
       'MtapiDebug.close()         — close overlay',
-      'MtapiDebug.setTab("logs")  — switch tab',
+      'MtapiDebug.setTab("logs")  — switch tab (logs/errors/logcat/devtools/system/network)',
       'MtapiDebug.buffer()        — JS logs array',
       'MtapiDebug.errors()        — persistent errors array',
       'MtapiDebug.perf(label, ms) — record perf metric',
       'MtapiDebug.time("label")   — start timer',
       'MtapiDebug.timeEnd("label")— end timer + record',
-      'MtapiDebug.selectElement("selector")  — select + inspect',
+      'MtapiDebug.selectElement("sel")  — select + inspect',
       'Examples:',
+      '  MtapiDebug.open()',
+      '  MtapiDebug.setTab("network")',
+      '  MtapiDebug.buffer().length',
       '  MtapiDebug.perf("my-test", 42)',
+      '  MtapiDebug.time("x"); /* work */ MtapiDebug.timeEnd("x")',
       '  MtapiDebug.selectElement("#main h1")',
       '',
-      '--- Network ---',
-      'fetch("url")               — logged to Network tab',
+      '--- Network (logged to Network tab) ---',
+      'fetch("url")               — request, logged automatically',
       'Examples:',
       '  fetch("/battery").then(r => r.json()).then(j => log(j))',
+      '  fetch("/sensors").then(r => r.json()).then(j => log(j))',
       '',
       '--- Clear ---',
       'clearEval()                — clear output',
       '',
-      '--- Native bridge ---',
+      '--- Native bridge (Android) ---',
       'Android.getLogcat(n)       — logcat (n lines)',
       'Android.processList()      — running processes',
+      'Android.getDeviceInfo()    — device info (if available)',
+      'Examples:',
+      '  Android.getLogcat(20)',
+      '  Android.processList()',
       '',
-      '--- Events ---',
+      '--- Events (custom DOM) ---',
       'mtapi-debug-inspect        — toggle select mode',
       'mtapi-debug-select         — select element',
       'Examples:',
+      '  document.dispatchEvent(new CustomEvent("mtapi-debug-inspect"))',
       '  document.dispatchEvent(new CustomEvent("mtapi-debug-select", {detail:{selector:"#main"}}))',
+      '  document.dispatchEvent(new CustomEvent("mtapi-debug-select", {detail:{element:document.body}}))',
+      '',
+      '--- Help ---',
+      'help()                     — this help',
+      '',
+      '--- Quick recipes ---',
+      'Debug element + AI:',
+      '  inspect($("#main h1")); _aiSnapWithRequest("make it bigger")',
+      'Find by class:',
+      '  $$(".group").map(d => d.dataset.group)',
+      'Element at point:',
+      '  document.elementFromPoint(100, 200)',
+      'Perf:',
+      '  MtapiDebug.time("render"); /* ... */ MtapiDebug.timeEnd("render")',
+      'Network:',
+      '  fetch("/battery").then(r => r.json()).then(j => log(j))',
+      'Select Logcat:',
+      '  domInspect()  // tap Logcat → info shows BUTTON.mtapi-debug-tabs',
       '',
       '=== End of help ===',
     ].join('\n');
@@ -972,14 +1009,27 @@
     _copyAiSnap(_buildAISnapshot(el, req));
   };
 
+  global._domRootMode = 'overlay';
+  global._domToggleRoot = function() {
+    global._domRootMode = (global._domRootMode === 'overlay') ? 'page' : 'overlay';
+    var btn = global.document.getElementById('mtapi-debug-root-toggle');
+    if (btn) {
+      btn.textContent = (global._domRootMode === 'overlay') ? '\u25A3' : '\uD83C\uDF10';
+      btn.title = (global._domRootMode === 'overlay') ? 'Root: overlay (tap for page)' : 'Root: page (tap for overlay)';
+    }
+    if (global._domRefresh) global._domRefresh();
+    if (global._mtapiToast) global._mtapiToast('DOM root: ' + global._domRootMode);
+  };
+
   global._domRefresh = function(){
     var container = global.document && global.document.getElementById('mtapi-debug-dom-tree'); if (!container) return;
     container.innerHTML = '';
-    var root = global.document.documentElement; if (!root) return;
+    var root = (global._domRootMode === 'overlay') ? (global.document.getElementById('mtapi-debug-overlay') || global.document.documentElement) : global.document.documentElement; if (!root) return;
     var doc = global.document;
     var rootDet = doc.createElement('details'); rootDet.open = true;
     var rootSum = doc.createElement('summary');
-    rootSum.textContent = 'html'; rootSum.setAttribute('data-tag', 'html');
+    var _rootLabel = (global._domRootMode === 'overlay') ? 'overlay' : 'html';
+    rootSum.textContent = _rootLabel; rootSum.setAttribute('data-tag', _rootLabel);
     rootSum.style.cssText = 'cursor:pointer;padding:1px 2px;user-select:none';
     (function(elem, s){ s.addEventListener('click', function(ev){ if (ev.target === s) { inspectElement(elem); ev.preventDefault(); ev.stopPropagation(); } }); })(root, rootSum);
     rootDet.appendChild(rootSum);
@@ -1193,8 +1243,8 @@
   };
   global._sidePanelToggle = function(){ var sp = global.document && global.document.getElementById('mtapi-debug-sidepanel'); if (sp) sp.classList.toggle('open'); };
   global._sidePanelClose = function(){ var sp = global.document && global.document.getElementById('mtapi-debug-sidepanel'); if (sp) sp.classList.remove('open'); };
-  global._debugOpen = function(){ var ov = global.document && global.document.getElementById('mtapi-debug-overlay'); if (!ov) return; ov.removeAttribute('hidden'); global._setTab(_activeTab); };
-  global._debugClose = function(){ var ov = global.document && global.document.getElementById('mtapi-debug-overlay'); if (ov) ov.setAttribute('hidden', ''); global._sidePanelClose(); };
+  global._debugOpen = function(){ var ov = global.document && global.document.getElementById('mtapi-debug-overlay'); if (!ov) return; ov.removeAttribute('hidden'); global._setTab(_activeTab); global._domRootMode = 'overlay'; var _b = global.document.getElementById('mtapi-debug-root-toggle'); if (_b) _b.textContent = '\u25A3'; if (global._domRefresh) { try { global._domRefresh(); } catch(e){} } };
+  global._debugClose = function(){ var ov = global.document && global.document.getElementById('mtapi-debug-overlay'); if (ov) ov.setAttribute('hidden', ''); global._sidePanelClose(); global._domRootMode = 'page'; var _b = global.document.getElementById('mtapi-debug-root-toggle'); if (_b) _b.textContent = '\uD83C\uDF10'; if (global._domRefresh) { try { global._domRefresh(); } catch(e){} } };
 
   var CSS = [
     '.mtapi-debug-fab-inline{width:28px;height:28px;border-radius:50%;border:1px solid var(--border,var(--bg4));background:var(--bg3,var(--bg3));color:var(--accent,var(--accent));font-size:16px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;padding:0;line-height:1;font-family:inherit;margin:0;box-shadow:none}',
@@ -1567,7 +1617,7 @@
         };
       }
       global._setTab(_activeTab);
-      try { global._jslogLiveStart(2000); } catch(e){}
+      try { global._jslogLiveStart(2000); setTimeout(function(){ if (global._evalHelp) global._evalHelp(); }, 100); } catch(e){}
       return ov;
     },
     log: function(lvl){ push(lvl, Array.prototype.slice.call(arguments, 1)); },
