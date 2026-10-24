@@ -129,12 +129,37 @@
   };
 
   // ─── logcat ───────────────────────────────────────────────
-  function renderLogcat(){
-    if (!global.AndroidLogcat || !global.AndroidLogcat.getLogcat) return '(logcat not available — AndroidLogcat not injected)';
-    try { var log = global.AndroidLogcat.getLogcat(100); return String(log).split('\n').slice().reverse().join('\n'); }
-    catch(e) { return '(logcat error: ' + e.message + ')'; }
+  function _getLogcatFromBridge() {
+    if (global.AndroidLogcat && global.AndroidLogcat.getLogcat) {
+      try { return String(global.AndroidLogcat.getLogcat(100)); } catch(e) {}
+    }
+    if (global.Android && global.Android.getLogcat) {
+      try { return String(global.Android.getLogcat(100)); } catch(e) {}
+    }
+    return null;
   }
-  global._logcatRefresh = function(){ var pre = global.document.getElementById('mtapi-debug-logcat'); if (pre) pre.textContent = renderLogcat(); };
+  function renderLogcat(){
+    var log = _getLogcatFromBridge();
+    if (log == null) return '(loading via /debug...)';
+    return log.split('\n').slice().reverse().join('\n');
+  }
+  global._logcatRefresh = function(){
+    var pre = global.document.getElementById('mtapi-debug-logcat'); if (!pre) return;
+    pre.textContent = '(loading...)';
+    var log = _getLogcatFromBridge();
+    if (log != null) {
+      pre.textContent = log.split('\n').slice().reverse().join('\n') || '(empty)';
+      return;
+    }
+    var token = ''; try { var m = global.location.search.match(/[?&]token=([^&]+)/); if (m) token = m[1]; } catch(e) {}
+    var url = '/debug' + (token ? '?token=' + encodeURIComponent(token) : '');
+    var f = global.fetch; if (!f) { pre.textContent = '(no fetch)'; return; }
+    f(url).then(function(r){ return r.json(); }).then(function(j){
+      var data = (j && j.data) ? j.data : j;
+      var lc = (data.logcat || '');
+      pre.textContent = String(lc).split('\n').slice().reverse().join('\n') || '(empty from /debug)';
+    }).catch(function(e){ pre.textContent = '(logcat unavailable: ' + e.message + ')'; });
+  };
 
   // ─── network table ────────────────────────────────────────
   function renderNetwork(){

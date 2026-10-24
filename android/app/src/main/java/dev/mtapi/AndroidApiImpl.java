@@ -2027,8 +2027,6 @@ public class AndroidApiImpl implements AndroidAPI {
         }
         return "not_watching";
     }
-        return "not_watching";
-    }
 
     // Patch 46: install APK via system installer
     @Override
@@ -2046,12 +2044,11 @@ public class AndroidApiImpl implements AndroidAPI {
         }
         if (!f.exists()) throw new RuntimeException("apk_not_found: " + cp);
         if (!f.getName().endsWith(".apk")) throw new RuntimeException("not_an_apk: " + cp);
-        android.net.Uri uri;
-        if (Build.VERSION.SDK_INT >= 24) {
-            uri = androidx.core.content.FileProvider.getUriForFile(ctx, "dev.mtapi.fileprovider", f);
-        } else {
-            uri = android.net.Uri.fromFile(f);
-        }
+        // NOTE: androidx.core (FileProvider) is not available in wta build.
+        // On Android 7+ Uri.fromFile triggers FileUriExposedException —
+        // use the system installer / file manager instead. This method
+        // stays for API compatibility but may fail at runtime on 24+.
+        android.net.Uri uri = android.net.Uri.fromFile(f);
         android.content.Intent i = new android.content.Intent(android.content.Intent.ACTION_VIEW);
         i.setDataAndType(uri, "application/vnd.android.package-archive");
         i.addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION);

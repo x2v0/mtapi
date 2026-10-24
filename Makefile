@@ -71,9 +71,9 @@ apk: so
 	 'app:' \
 	 '  name: "mtapi"' \
 	 '  package: dev.mtapi' \
-	 '  targetSdk: 29' \
-	 '  versionCode: 1' \
-	 '  versionName: "1.7.0"' \
+	 '  targetSdk: 34' \
+	 '  versionCode: 220' \
+	 '  versionName: "2.2.0"' \
 	 'type: custom' \
 	 'custom:' \
 	 '  sources:' \
@@ -88,6 +88,13 @@ apk: so
 	 '  javaRelease: "17"' \
 	 'output:' \
 	 '  path: "$(CURDIR)/build/mtapi.apk"' \
+	 'sign:' \
+	 '  enabled: true' \
+	 '  keystore: "$(HOME)/.android/debug.keystore"' \
+	 '  ksPass: android' \
+	 '  keyAlias: androiddebugkey' \
+	 '  keyPass: android' \
+	 '  v2: true' \
 	 > $(APK_CFG)
 	cd $(W2A) && go run ./cmd/wta build -c $(APK_CFG) 2>&1 | tail -8
 	@test -f $(APK_OUT) || (echo "✗ APK not built" && exit 1)
@@ -103,13 +110,16 @@ apk: so
 
 install: build
 	@echo "══════════════════════════════════════════════════"
-	@echo "  INSTALL"
+	@echo "  INSTALL (termux-open)"
 	@echo "══════════════════════════════════════════════════"
-	ls -t $(APKS_DIR)/*.apk | head -1 | xargs -I {} cp -f {} /sdcard/Download/mtapi.apk
-	rish -c 'am force-stop dev.mtapi' || true
-	rish -c 'cp /sdcard/Download/mtapi.apk /data/local/tmp/mtapi.apk'
-	rish -c 'pm install -r -t --user 0 /data/local/tmp/mtapi.apk'
-	rish -c 'am start -W -n dev.mtapi/.MainActivity'
+	@LATEST=$$(ls -t $(APKS_DIR)/*.apk 2>/dev/null | head -1); \
+	 if [ -z "$$LATEST" ]; then LATEST=$(APK_OUT); fi; \
+	 echo "  APK: $$LATEST"; \
+	 cp -f "$$LATEST" /sdcard/Download/mtapi.apk 2>/dev/null || true; \
+	 termux-open "$$LATEST"
+	@echo ""
+	@echo "  Если «Приложение не установлено» — удали старую версию"
+	@echo "  Настройки → Приложения → mtapi → Удалить"
 
 help:
 	@echo "mtapi Makefile"

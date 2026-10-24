@@ -70,7 +70,7 @@ public class MainActivity extends Activity {
 
         webView = new WebView(this);
         // MTAPI_328: WebView debugging (ПОСЛЕ new WebView)
-        if (BuildConfig.DEBUG) {
+        if ((getApplicationInfo().flags & android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0) {
             try {
                 android.webkit.WebView.setWebContentsDebuggingEnabled(true);
                 android.util.Log.i("mtapi", "WebView debugging enabled (debug build)");
@@ -95,6 +95,23 @@ public class MainActivity extends Activity {
             @android.webkit.JavascriptInterface
             public String processList() {
                 return MainActivity.this.processList();
+            }
+
+            @android.webkit.JavascriptInterface
+            public String getLogcat(int lines) {
+                if (lines <= 0) lines = 100;
+                try {
+                    java.lang.Process p = Runtime.getRuntime().exec(new String[]{"logcat", "-d", "-t", String.valueOf(lines)});
+                    java.io.BufferedReader r = new java.io.BufferedReader(new java.io.InputStreamReader(p.getInputStream()));
+                    StringBuilder sb = new StringBuilder();
+                    String line;
+                    while ((line = r.readLine()) != null) sb.append(line).append('\n');
+                    r.close();
+                    p.waitFor();
+                    return sb.toString();
+                } catch (Throwable t) {
+                    return "(logcat error: " + t + ")";
+                }
             }
 }, "Android");
         WebSettings ws = webView.getSettings();

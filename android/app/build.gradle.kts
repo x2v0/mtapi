@@ -10,8 +10,8 @@ android {
         applicationId = "dev.mtapi"
         minSdk = 26
         targetSdk = 34
-        versionCode = 1
-        versionName = "0.1"
+        versionCode = 220
+        versionName = "2.2.0"
     }
 
     buildFeatures { buildConfig = true }
@@ -28,5 +28,5 @@ android {
 
 dependencies {
     implementation("androidx.core:core:1.12.0")
-    implementation(files("libs/mobile.aar"))
+    // mobile.aar removed — libmtapi-server.so ships via jniLibs/arm64-v8a/
 }
