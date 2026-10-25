@@ -143,6 +143,23 @@
     }
     return '<pre style="margin:0;background:transparent;color:#ddd">' + esc(String(r)) + '</pre>';
   }
+  global._evalCopy = function() {
+    var el = global.document && global.document.getElementById('mtapi-debug-eval-out');
+    if (!el) return;
+    var text = el.textContent || '';
+    if (global.navigator && global.navigator.clipboard && global.navigator.clipboard.writeText) {
+      global.navigator.clipboard.writeText(text).then(function() {
+        if (global._mtapiToast) global._mtapiToast('Copied eval output (' + text.length + ' chars)');
+      }).catch(function() {
+        if (typeof _copyFallback === 'function') _copyFallback(text);
+        if (global._mtapiToast) global._mtapiToast('Copied (fallback)');
+      });
+    } else if (typeof _copyFallback === 'function') {
+      _copyFallback(text);
+      if (global._mtapiToast) global._mtapiToast('Copied (fallback)');
+    }
+  };
+
   global._evalClear = function(){
     var out = global.document && global.document.getElementById('mtapi-debug-eval-out');
     if (out) out.innerHTML = '\u2014';
@@ -152,108 +169,34 @@
 
   global._evalHelp = function() {
     var help = [
-      '=== Console Eval — help ===',
+      '=== Console — quick start (?) ===',
       '',
-      '--- DOM query ---',
-      '$("selector")              — document.querySelector',
-      '$$("selector")             — array of elements',
-      'Examples:',
-      '  $("#main")                → <main id=main>',
-      '  $$("details").length      → 5',
-      '  $("h1").textContent       → "mtapi"',
-      '  $$("button").map(b => b.id)',
+      'Copy any line, run (Ctrl+Enter).',
       '',
-      '--- Inspect / Select ---',
-      'inspect(el)                — highlight + show in DOM info panel',
-      'domInspect()               — toggle select mode (click any element)',
-      'domInspectStop()           — exit select mode',
-      'domShowFloating()          — open floating DOM tree window',
-      'Examples:',
-      '  inspect($("#main"))',
-      '  inspect(document.body)',
-      '  domInspect()  // then tap element',
-      '  domInspectStop()',
+      '--- Fetch endpoint ---',
+      'fetch("/battery").then(r => r.json()).then(j => log(j))',
+      'fetch("/sensors").then(r => r.json()).then(j => log(j))',
+      'fetch("/system").then(r => r.json()).then(j => log(j))',
       '',
-      '--- AI Snap (copy prompt for DeepSeek/ChatGPT) ---',
-      '_aiSnapWithRequest("task") — markdown of selected + custom task',
-      '_aiSnap()                  — markdown without task',
-      '_captureElement()          — copy outerHTML of selected',
-      'Examples:',
-      '  _aiSnapWithRequest("convert to flexbox")',
-      '  _aiSnapWithRequest("make it red")',
-      '  _aiSnapWithRequest("dark mode variant")',
-      '  _captureElement()',
-      'Copies: selector, tag, id, classes, HTML (3KB),',
-      'computed CSS (24 props), parent, children, task.',
+      '--- DOM ---',
+      '$("#main")',
+      '$$("details").length',
       '',
-      '--- JS Logs ---',
-      'log(...) / warn(...) / error(...)   — push to JS Logs',
-      'Examples:',
-      '  log("test", 123, {a: 1})',
-      '  warn("careful")',
-      '  error("oops")',
+      '--- Inspect (highlight + info) ---',
+      'inspect($("#main"))',
       '',
-      '--- MtapiDebug API ---',
-      'MtapiDebug.open()          — open debug overlay',
-      'MtapiDebug.close()         — close overlay',
-      'MtapiDebug.setTab("logs")  — switch tab (logs/errors/logcat/devtools/system/network)',
-      'MtapiDebug.buffer()        — JS logs array',
-      'MtapiDebug.errors()        — persistent errors array',
-      'MtapiDebug.perf(label, ms) — record perf metric',
-      'MtapiDebug.time("label")   — start timer',
-      'MtapiDebug.timeEnd("label")— end timer + record',
-      'MtapiDebug.selectElement("sel")  — select + inspect',
-      'Examples:',
-      '  MtapiDebug.open()',
-      '  MtapiDebug.setTab("network")',
-      '  MtapiDebug.buffer().length',
-      '  MtapiDebug.perf("my-test", 42)',
-      '  MtapiDebug.time("x"); /* work */ MtapiDebug.timeEnd("x")',
-      '  MtapiDebug.selectElement("#main h1")',
+      '--- Logs ---',
+      'log("test", 123, {a: 1})',
       '',
-      '--- Network (logged to Network tab) ---',
-      'fetch("url")               — request, logged automatically',
-      'Examples:',
-      '  fetch("/battery").then(r => r.json()).then(j => log(j))',
-      '  fetch("/sensors").then(r => r.json()).then(j => log(j))',
+      '--- Debug tabs ---',
+      'MtapiDebug.setTab("logs")',
+      'MtapiDebug.setTab("network")',
       '',
-      '--- Clear ---',
-      'clearEval()                — clear output',
+      '--- More help ---',
+      '??   cheatsheet (all commands)',
+      '???  full (examples + navigation)',
       '',
-      '--- Native bridge (Android) ---',
-      'Android.getLogcat(n)       — logcat (n lines)',
-      'Android.processList()      — running processes',
-      'Android.getDeviceInfo()    — device info (if available)',
-      'Examples:',
-      '  Android.getLogcat(20)',
-      '  Android.processList()',
-      '',
-      '--- Events (custom DOM) ---',
-      'mtapi-debug-inspect        — toggle select mode',
-      'mtapi-debug-select         — select element',
-      'Examples:',
-      '  document.dispatchEvent(new CustomEvent("mtapi-debug-inspect"))',
-      '  document.dispatchEvent(new CustomEvent("mtapi-debug-select", {detail:{selector:"#main"}}))',
-      '  document.dispatchEvent(new CustomEvent("mtapi-debug-select", {detail:{element:document.body}}))',
-      '',
-      '--- Help ---',
-      'help()                     — this help',
-      '',
-      '--- Quick recipes ---',
-      'Debug element + AI:',
-      '  inspect($("#main h1")); _aiSnapWithRequest("make it bigger")',
-      'Find by class:',
-      '  $$(".group").map(d => d.dataset.group)',
-      'Element at point:',
-      '  document.elementFromPoint(100, 200)',
-      'Perf:',
-      '  MtapiDebug.time("render"); /* ... */ MtapiDebug.timeEnd("render")',
-      'Network:',
-      '  fetch("/battery").then(r => r.json()).then(j => log(j))',
-      'Select Logcat:',
-      '  domInspect()  // tap Logcat → info shows BUTTON.mtapi-debug-tabs',
-      '',
-      '=== End of help ===',
+      '=== End ===',
     ].join('\n');
     var out = global.document.getElementById('mtapi-debug-eval-out');
     if (out) out.innerHTML = '<pre style="margin:0;white-space:pre-wrap;color:#aaa;font-size:10px">' + esc(help) + '</pre>';
@@ -267,11 +210,170 @@
   global.domInspect = function(){ if (typeof global._domInspect === 'function') global._domInspect(); };
   global.domInspectStop = function(){ if (typeof global._domInspectStop === 'function') global._domInspectStop(); };
 
-  global._evalConsole = function(){
-    var inp = global.document.querySelector('.mtapi-dbg-eval-input'); if(!inp) return;
+  global._evalToggleMd = function() {
+    var md = global.document.querySelector('.mtapi-dbg-eval-input-md');
+    var inp = global.document.querySelector('.mtapi-dbg-eval-input');
+    var btn = global.document.getElementById('mtapi-debug-eval-md-btn');
+    if (!md) return;
+    var show = md.style.display === 'none';
+    md.style.display = show ? 'block' : 'none';
+    if (inp) inp.style.display = show ? 'none' : 'block';
+    if (btn) btn.style.background = show ? 'var(--accent,#4fc3f7)' : '';
+    if (show) { try { md.value = inp ? inp.value : ''; md.focus(); } catch(e){} }
+    else { try { if (inp) inp.value = md.value; } catch(e){} }
+  };
+
+  global._evalNavExamples = function() {
+    var ex = [
+      '=== mtapi — full (???) — copy & run ===',
+      '',
+      'All examples are working. Copy any line, Ctrl+Enter.',
+      '',
+      '--- API endpoints: Basic (16) ---',
+      'fetch("/ping").then(r => r.json()).then(j => log(j))',
+      'fetch("/battery").then(r => r.json()).then(j => log(j))',
+      'fetch("/wifi").then(r => r.json()).then(j => log(j))',
+      'fetch("/device").then(r => r.json()).then(j => log(j))',
+      'fetch("/location").then(r => r.json()).then(j => log(j))',
+      'fetch("/clipboard").then(r => r.json()).then(j => log(j))',
+      'fetch("/clipboard?op=set&text=hello").then(r => r.json()).then(j => log(j))',
+      'fetch("/toast?text=hello").then(r => r.json()).then(j => log(j))',
+      'fetch("/notify?title=Hi&body=There").then(r => r.json()).then(j => log(j))',
+      'fetch("/vibrate?ms=200").then(r => r.json()).then(j => log(j))',
+      'fetch("/torch?on=1").then(r => r.json()).then(j => log(j))',
+      'fetch("/torch?on=0").then(r => r.json()).then(j => log(j))',
+      'fetch("/torch/brightness?level=50").then(r => r.json()).then(j => log(j))',
+      'fetch("/torch/brightness?level=0").then(r => r.json()).then(j => log(j))',
+      'fetch("/tts?text=hello").then(r => r.json()).then(j => log(j))',
+      'fetch("/share?title=Hi&text=There").then(r => r.json()).then(j => log(j))',
+      '',
+      '--- API: Contacts / SMS (3) ---',
+      'fetch("/contacts?limit=0").then(r => r.json()).then(j => log(j))',
+      'fetch("/calllog?limit=0").then(r => r.json()).then(j => log(j))',
+      'fetch("/sms?limit=0").then(r => r.json()).then(j => log(j))',
+      '',
+      '--- API: System (6) ---',
+      'fetch("/system").then(r => r.json()).then(j => log(j))',
+      'fetch("/cpu/detail").then(r => r.json()).then(j => log(j))',
+      'fetch("/thermal").then(r => r.json()).then(j => log(j))',
+      'fetch("/memory").then(r => r.json()).then(j => log(j))',
+      'fetch("/storage").then(r => r.json()).then(j => log(j))',
+      'fetch("/kernel").then(r => r.json()).then(j => log(j))',
+      '',
+      '--- API: Network (8) ---',
+      'fetch("/network").then(r => r.json()).then(j => log(j))',
+      'fetch("/wifi/detailed").then(r => r.json()).then(j => log(j))',
+      'fetch("/bluetooth").then(r => r.json()).then(j => log(j))',
+      'fetch("/telephony").then(r => r.json()).then(j => log(j))',
+      'fetch("/wifi/scan").then(r => r.json()).then(j => log(j))',
+      'fetch("/net/ping?host=8.8.8.8&count=3").then(r => r.json()).then(j => log(j))',
+      'fetch("/net/dns?host=example.com").then(r => r.json()).then(j => log(j))',
+      'fetch("/net/fetch?url=https%3A%2F%2Fapi.ipify.org%3Fformat%3Djson").then(r => r.json()).then(j => log(j))',
+      '',
+      '--- API: Display / Audio (7) ---',
+      'fetch("/display").then(r => r.json()).then(j => log(j))',
+      'fetch("/display/brightness").then(r => r.json()).then(j => log(j))',
+      'fetch("/display/color").then(r => r.json()).then(j => log(j))',
+      'fetch("/audio").then(r => r.json()).then(j => log(j))',
+      'fetch("/microphone").then(r => r.json()).then(j => log(j))',
+      'fetch("/audio/volume?stream=2").then(r => r.json()).then(j => log(j))',
+      'fetch("/audio/ringer").then(r => r.json()).then(j => log(j))',
+      '',
+      '--- API: Sensors (4) ---',
+      'fetch("/sensors").then(r => r.json()).then(j => log(j))',
+      'fetch("/sensors/read?name=accelerometer&ms=200").then(r => r.json()).then(j => log(j))',
+      'fetch("/sensors/stream?name=accelerometer&hz=10").then(r => r.json()).then(j => log(j))',
+      'fetch("/sensors/stream/stop?name=accelerometer").then(r => r.json()).then(j => log(j))',
+      '',
+      '--- API: Hardware (4) ---',
+      'fetch("/features").then(r => r.json()).then(j => log(j))',
+      'fetch("/camera/list").then(r => r.json()).then(j => log(j))',
+      'fetch("/camera/snapshot").then(r => r.json()).then(j => log(j))',
+      'fetch("/microphone/record?seconds=3").then(r => r.json()).then(j => log(j))',
+      '',
+      '--- API: Apps (2) ---',
+      'fetch("/app/list").then(r => r.json()).then(j => log(j))',
+      'fetch("/app/launch?pkg=com.android.settings").then(r => r.json()).then(j => log(j))',
+      '',
+      '--- API: Detailed (5) ---',
+      'fetch("/battery/detailed").then(r => r.json()).then(j => log(j))',
+      'fetch("/location/detailed").then(r => r.json()).then(j => log(j))',
+      'fetch("/locale").then(r => r.json()).then(j => log(j))',
+      'fetch("/calendar?days=7").then(r => r.json()).then(j => log(j))',
+      'fetch("/alarm/next").then(r => r.json()).then(j => log(j))',
+      '',
+      '--- API: Files / Audio play (5) ---',
+      'fetch("/files/save?name=test.txt&data=hello").then(r => r.json()).then(j => log(j))',
+      'fetch("/audio/play?uri=/system/media/audio/notifications/Hello.ogg").then(r => r.json()).then(j => log(j))',
+      'fetch("/audio/play/stop").then(r => r.json()).then(j => log(j))',
+      'fetch("/tts/voices").then(r => r.json()).then(j => log(j))',
+      'fetch("/tts/stop").then(r => r.json()).then(j => log(j))',
+      '',
+      '--- API: Watch (logcat) (4) ---',
+      'fetch("/clipboard/watch?hz=2").then(r => r.json()).then(j => log(j))',
+      'fetch("/clipboard/watch/stop").then(r => r.json()).then(j => log(j))',
+      'fetch("/location/watch?hz=1").then(r => r.json()).then(j => log(j))',
+      'fetch("/location/watch/stop").then(r => r.json()).then(j => log(j))',
+      '',
+      '--- Debug tabs ---',
+      'MtapiDebug.open()',
+      'MtapiDebug.setTab("logs")',
+      'MtapiDebug.setTab("console")',
+      'MtapiDebug.setTab("errors")',
+      'MtapiDebug.setTab("logcat")',
+      'MtapiDebug.setTab("devtools")',
+      'MtapiDebug.setTab("system")',
+      'MtapiDebug.setTab("network")',
+      'MtapiDebug.close()',
+      '',
+      '--- DOM floating ---',
+      'domShowFloating()',
+      'domInspect()',
+      'domInspectStop()',
+      '_domRefresh()',
+      '_domToggleRoot()',
+      '',
+      '--- Browser ---',
+      '_browserOpen()',
+      '_browserOpen("https://html.duckduckgo.com/html/")',
+      '_browserNavigate("https://example.com")',
+      '_browserClose()',
+      '',
+      '--- Native (APK) ---',
+      'Android.getLogcat(20)',
+      'Android.processList()',
+      'Android.getDeviceInfo()',
+      '',
+      '--- AI Snap (advanced) ---',
+      'inspect($("#main"))',
+      '_aiSnap()',
+      '_aiSnapWithRequest("make it red")',
+      '_aiSnapWithRequest("convert to flexbox")',
+      '_captureElement()',
+      '',
+      '--- Events ---',
+      'document.dispatchEvent(new CustomEvent("mtapi-debug-inspect"))',
+      'document.dispatchEvent(new CustomEvent("mtapi-debug-select", {detail:{selector:"#main"}}))',
+      'document.dispatchEvent(new CustomEvent("mtapi-debug-select", {detail:{element:document.body}}))',
+      '',
+      '--- Help levels ---',
+      '?    quick (5-7 commands)',
+      '??   cheatsheet (all commands)',
+      '???  full (this — examples + navigation)',
+      '',
+      '=== End (copy & run) ===',
+    ].join('\n');
+    var out = global.document.getElementById('mtapi-debug-eval-out');
+    if (out) out.innerHTML = '<pre style="margin:0;white-space:pre-wrap;color:#aaa;font-size:10px">' + esc(ex) + '</pre>';
+  };
+
+  global._evalConsole = async function(){
+    var inp = global.document.querySelector('.mtapi-dbg-eval-input');
+    if (!inp) return;
     var cmd = (inp.value||'').trim(); if(!cmd) return;
+    if (cmd === '???' || cmd === 'examples()' || cmd === 'nav()') { if (global._evalNavExamples) global._evalNavExamples(); if (inp) inp.value = ''; return; }
     var out;
-    try{ var _evalFn = global['eval']; var r = _evalFn(cmd); out = _renderEvalOutput(r); }
+    try{ var _evalFn = global['eval']; var _wrapped = /(^|[^a-zA-Z0-9_$.])await(\s|$)/.test(cmd) ? '(async () => { return (' + cmd + '); })()' : cmd; var r = _evalFn(_wrapped); if (r && typeof r.then === 'function') { r = await r; } out = _renderEvalOutput(r); }
     catch(e){ out='<pre style="margin:0;color:#f66;background:transparent">Error: '+esc(e.message)+'</pre>'; push('error',[cmd+' \u2192 '+e.message]); }
     var pre = global.document.getElementById('mtapi-debug-eval-out'); if(pre) pre.innerHTML=out;
   };
@@ -623,6 +725,7 @@
   }
   function inspectElement(el){
     if (!el) return;
+    if (!global._domInspectActive) return;  // guard: no highlight if inspect OFF
     global._lastInspected = el;
     var aiBtn = global.document.getElementById('mtapi-debug-ai-snap-btn');
     if (aiBtn) { try { aiBtn.disabled = !(global._domInspectActive || global._domInspectActive === true); } catch(e){} }
@@ -663,7 +766,51 @@
     parts.push('<b>OuterHTML (truncated):</b>');
     parts.push('<pre style="max-height:150px;overflow:auto;background:#000;color:#aaa;padding:2px;margin:0;font-size:9px;white-space:pre-wrap">' + esc(outer.length > 2000 ? outer.slice(0, 2000) + '\n...' : outer) + '</pre>');
     info.innerHTML = parts.join('<br>');
-  }
+  
+    // ── NEW: highlight in DOM tree + print selector in Console ──
+    try {
+      var tree = global.document.getElementById('mtapi-debug-dom-tree');
+      if (tree) {
+        var elTag = (el.tagName || '').toLowerCase();
+        var all = tree.querySelectorAll('[data-tag="' + elTag + '"]');
+        var match = null;
+        for (var ti = 0; ti < all.length; ti++) {
+          var txt = (all[ti].textContent || '');
+          if (el.id && txt.indexOf('#' + el.id) >= 0) { match = all[ti]; break; }
+          if (el.className && typeof el.className === 'string') {
+            var cls = el.className.split(/\s+/)[0];
+            if (cls && txt.indexOf('.' + cls) >= 0) { match = all[ti]; break; }
+          }
+        }
+        if (!match && all.length) match = all[0];
+        if (match) {
+          try { match.scrollIntoView({block: 'center', behavior: 'smooth'}); } catch(e) {}
+          var prevBg = match.style.background;
+          var prevColor = match.style.color;
+          match.style.background = '#f0f';
+          match.style.color = '#000';
+          match.style.transition = 'background 0.3s';
+          setTimeout(function() {
+            try { match.style.background = prevBg; match.style.color = prevColor; } catch(e) {}
+          }, 2000);
+        }
+      }
+    } catch(e) { try { console.warn('[select tree]', e); } catch(x){} }
+    try {
+      var out = global.document.getElementById('mtapi-debug-eval-out');
+      if (out) {
+        var sel = '?';
+        try { sel = (typeof getCssSelector === 'function') ? getCssSelector(el) : (el.tagName || '?').toLowerCase(); } catch(e) { sel = (el.tagName || '?').toLowerCase(); }
+        var banner = '<div style="padding:6px 8px;margin:0 0 6px;background:#1a1a1a;border-left:3px solid #f0f;font-family:monospace;font-size:11px;color:#ddd">'
+          + '<div style="color:#f0f;font-weight:bold;margin-bottom:2px">\u25A3 Selected</div>'
+          + '<div><b>selector:</b> <code style="background:#222;padding:1px 3px;color:#4fc3f7">' + esc(sel) + '</code></div>'
+          + '<div style="margin-top:4px"><b>copy to re-select:</b></div>'
+          + '<div><code style="display:block;background:#000;color:#0f0;padding:3px 6px;margin-top:2px;user-select:all">MtapiDebug.selectElement("' + esc(sel) + '")</code></div>'
+          + '</div>';
+        out.innerHTML = banner + out.innerHTML;
+      }
+    } catch(e) { try { console.warn('[select console]', e); } catch(x){} }
+}
   function buildDomTree(root, depth) {
     if (!root || depth > 25) return null;
     var doc = global.document;
@@ -680,7 +827,7 @@
       var clsPart = (el.className && typeof el.className === 'string') ? '.' + el.className.split(/\s+/).filter(Boolean).slice(0, 2).join('.') : '';
       sum.textContent = tag + idPart + clsPart;
       sum.setAttribute('data-tag', tag);
-      (function(elem, s){ s.addEventListener('click', function(ev){ if (ev.target === s) { inspectElement(elem); ev.preventDefault(); ev.stopPropagation(); } }); })(el, sum);
+      (function(elem, s){ s.addEventListener('click', function(ev){ if (ev.target === s) { if (global._domInspectActive) { try { inspectElement(elem); } catch(e){} ev.preventDefault(); ev.stopPropagation(); } } }); })(el, sum);
       det.appendChild(sum);
       if (el.children && el.children.length > 0) { var childUl = buildDomTree(el, depth + 1); if (childUl) det.appendChild(childUl); }
       li.appendChild(det); ul.appendChild(li);
@@ -1031,7 +1178,7 @@
     var _rootLabel = (global._domRootMode === 'overlay') ? 'overlay' : 'html';
     rootSum.textContent = _rootLabel; rootSum.setAttribute('data-tag', _rootLabel);
     rootSum.style.cssText = 'cursor:pointer;padding:1px 2px;user-select:none';
-    (function(elem, s){ s.addEventListener('click', function(ev){ if (ev.target === s) { inspectElement(elem); ev.preventDefault(); ev.stopPropagation(); } }); })(root, rootSum);
+    (function(elem, s){ s.addEventListener('click', function(ev){ if (ev.target === s) { if (global._domInspectActive) { try { inspectElement(elem); } catch(e){} ev.preventDefault(); ev.stopPropagation(); } } }); })(root, rootSum);
     rootDet.appendChild(rootSum);
     var tree = buildDomTree(root, 0); if (tree) rootDet.appendChild(tree);
     container.appendChild(rootDet);
@@ -1054,51 +1201,33 @@
     var ind = global.document.getElementById('mtapi-debug-dom-inspect-ind');
     if (ind) ind.textContent = '\u25CB off';
   };
-  function _domClickHandler(ev){
+function _domClickHandler(ev){
     if (!_domInspectActive) return;
     var t = ev.target;
     if (!t) return;
-    // Never block <summary> in DOM tree — let <details> toggle naturally
-    if (t.tagName === 'SUMMARY' && t.closest && t.closest('#mtapi-debug-dom-tree, #mtapi-debug-dom-floating')) return;
-
-    var x = ev.clientX, y = ev.clientY;
-    var fl = global.document.getElementById('mtapi-debug-dom-floating');
-    var ov = global.document.getElementById('mtapi-debug-overlay');
+    // NEVER block <summary> inside DOM tree (or floating) — <details> toggle must work.
+    // Also never block any click that would toggle a <details>.
     var tree = global.document.getElementById('mtapi-debug-dom-tree');
-    var info = global.document.getElementById('mtapi-debug-dom-info');
-
-    // Determine actual point: what's under cursor when overlay/floating are transparent
-    var flRect = fl ? fl.getBoundingClientRect() : null;
-    var inFloating = flRect && x >= flRect.left && x <= flRect.right && y >= flRect.top && y <= flRect.bottom;
-
-    if (inFloating) {
-      // Click inside floating: pick the element inside (tree, info, or chrome)
-      var underFl = t;
-      if (t.closest && t.closest('button, input, select, textarea, #mtapi-debug-dom-floating-header, #mtapi-debug-dom-splitter')) return;
-      ev.preventDefault(); ev.stopPropagation();
-      try { inspectElement(underFl); } catch(e) { try { global.console.error('[inspect]', e); } catch(x){} }
+    var fl = global.document.getElementById('mtapi-debug-dom-floating');
+    if (t.tagName === 'SUMMARY' && ((tree && tree.contains(t)) || (fl && fl.contains(t)))) {
+      // Allow the native <details> toggle. Do NOT preventDefault / stopPropagation.
+      // Optionally: highlight (but not block).
       return;
     }
-
-    // Click outside floating: pick overlay element OR page (via elementFromPoint)
-    // First: is target an overlay UI element? (tabs, topbar, buttons, etc.)
-    var isOverlayEl = ov && ov.contains(t);
-    if (isOverlayEl && !(t.closest && t.closest('.mtapi-debug-fab'))) {
-      // Select the overlay element directly (do not pierce)
-      ev.preventDefault(); ev.stopPropagation();
-      try { inspectElement(t); } catch(e) { try { global.console.error('[inspect]', e); } catch(x){} }
-      return;
+    // Block interactive controls (buttons/inputs) — they have their own handlers.
+    if (t.closest && t.closest('button, input, select, textarea, .mtapi-debug-fab, #mtapi-debug-dom-floating-header, #mtapi-debug-dom-splitter')) return;
+    // Block overlay UI content (except tree/info/floating)
+    var ov = global.document.getElementById('mtapi-debug-overlay');
+    if (ov && ov.contains(t)) {
+      var info = global.document.getElementById('mtapi-debug-dom-info');
+      if (tree && tree.contains(t)) { /* allowed */ }
+      else if (info && info.contains(t)) { /* allowed */ }
+      else if (fl && fl.contains(t)) { /* allowed */ }
+      else { return; }
     }
-    // Page element: pierce overlay (but not floating — keep floating as-is)
-    var pe1 = ov ? ov.style.pointerEvents : '';
-    if (ov) ov.style.pointerEvents = 'none';
-    var under = global.document.elementFromPoint(x, y);
-    if (ov) ov.style.pointerEvents = pe1;
-    if (!under) return;
-    // Skip fab and floating chrome
-    if (under.closest && under.closest('.mtapi-debug-fab')) return;
-    ev.preventDefault(); ev.stopPropagation();
-    try { inspectElement(under); } catch(e) { try { global.console.error('[inspect]', e); } catch(x){} }
+    ev.preventDefault();
+    ev.stopPropagation();
+    try { inspectElement(t); } catch(e) { try { global.console.error('[inspect]', e); } catch(x){} }
   }
   var _lastHovered = null;
   var _hoverBox = null;
@@ -1167,6 +1296,8 @@
       global.document.addEventListener('keydown', _domEscHandler, true);
       if (ind) ind.textContent = '\u25C9 ON (hover, click to select, Esc to exit)';
     } else {
+      _domInspectActive = false;
+      global._domInspectActive = false;
       global.document.removeEventListener('click', _domClickHandler, true);
       global.document.removeEventListener('mousemove', _domHoverHandler, true);
       global.document.removeEventListener('keydown', _domEscHandler, true);
@@ -1254,7 +1385,7 @@
   global._browserOpen = function(url) {
     var existing = global.document.getElementById('mtapi-browser-overlay');
     if (existing) { existing.remove(); }
-    var u = url || 'https://duckduckgo.com/html/';
+    var u = url || '/help';
     var ov = global.document.createElement('div');
     ov.id = 'mtapi-browser-overlay';
     ov.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;z-index:9999999;background:var(--bg,#1a1a1a);color:var(--fg,#ddd);display:flex;flex-direction:column;font-family:monospace;font-size:12px';
@@ -1308,10 +1439,24 @@
     }
     function _browserLoad(url) {
       if (!url) return;
+      // Auto-add token for localhost (same-origin)
+      if ((url.indexOf('/') === 0 || url.indexOf('127.0.0.1:7788') >= 0) && url.indexOf('token=') < 0) {
+        var tok = (typeof global.TOKEN !== 'undefined') ? global.TOKEN : '';
+        if (!tok) { try { var _m = global.location.search.match(/[?&]token=([^&]+)/); if (_m) tok = _m[1]; } catch(e) {} }
+        if (!tok) { try { tok = global.localStorage.getItem('mtapi-token') || ''; } catch(e) {} }
+        if (tok) url += (url.indexOf('?') >= 0 ? '&' : '?') + 'token=' + encodeURIComponent(tok);
+      }
       var _spin = global.document.getElementById('mtapi-browser-spinner');
       if (_spin) _spin.style.display = 'inline-block';
       function _spinDone() { if (_spin) _spin.style.display = 'none'; }
       if (!/^(https?:\/\/|\/)/.test(url)) url = 'https://' + url;
+      // Add to _browserHistory (for ←/→ buttons, not iframe.history)
+      if (_browserHistory[_browserHistoryIdx] !== url) {
+        _browserHistory = _browserHistory.slice(0, _browserHistoryIdx + 1);
+        _browserHistory.push(url);
+        _browserHistoryIdx = _browserHistory.length - 1;
+      }
+      if (global._browserUpdateButtons) global._browserUpdateButtons();
       // Local (same-origin) → iframe.src directly
       if (url.indexOf('/') === 0) {
         iframe.removeAttribute('srcdoc');
@@ -1434,7 +1579,7 @@
     '.mtapi-debug-tabs button.active{background:var(--bg4);border-color:#666}',
     '.mtapi-debug-content{flex:1;overflow:auto;padding:8px;position:relative;display:flex;flex-direction:column;min-height:0}',
     '.mtapi-debug-content > [data-tab-content]{display:none}',
-    '.mtapi-debug-content > [data-tab-content].active{display:flex;flex-direction:column;flex:1;min-height:0;gap:8px}',
+    '.mtapi-debug-content > [data-tab-content].active{display:flex;flex-direction:column;flex:1 1 0 !important;min-height:0;height:100% !important;gap:8px}',
     '.mtapi-debug-sidepanel{position:absolute;top:0;right:0;bottom:0;width:200px;background:var(--bg3);border-left:1px solid var(--bg4);padding:8px;transform:translateX(100%);transition:transform 0.2s;box-shadow:-2px 0 6px rgba(0,0,0,0.4)}',
     '.mtapi-debug-sidepanel.open{transform:translateX(0)}',
     '.mtapi-debug-sidepanel h3{margin:0 0 8px 0;font-size:12px;color:var(--fg3);font-weight:normal}',
@@ -1447,6 +1592,10 @@
     '.mtapi-debug-flat-hdr{padding:4px 8px;background:var(--bg3);border-bottom:1px solid var(--bg4);font-size:11px;color:var(--fg3);flex-shrink:0}',
     '.mtapi-debug-flat > .mtapi-debug-pre,.mtapi-debug-flat > div[id$="-jslog"],.mtapi-debug-flat > div[id$="-errors"],.mtapi-debug-flat > div[id$="-logcat"],.mtapi-debug-flat > div[id$="-eval-out"]{flex:1 1 0;min-height:0;overflow:auto}',
     '.mtapi-debug-section[open]{flex:1 1 auto;min-height:200px;resize:vertical}',
+    '.mtapi-debug-section[data-flat="1"]{flex:1 1 0 !important;min-height:0 !important;max-height:none !important;resize:none !important;overflow:hidden !important;display:flex !important;flex-direction:column !important;height:100% !important}',
+    '.mtapi-debug-section[data-flat="1"] > summary{display:none !important}',
+    '.mtapi-debug-section[data-flat="1"] > .mtapi-debug-toolbar{flex-shrink:0 !important}',
+    '.mtapi-debug-section[data-flat="1"] > .mtapi-debug-pre,.mtapi-debug-section[data-flat="1"] > div[id]{flex:1 1 0 !important;min-height:0 !important;max-height:none !important;overflow:auto !important;height:auto !important}',
     '.mtapi-debug-section:not([open]){flex:0 0 auto;min-height:0;resize:none}',
     '.mtapi-debug-section > summary{flex-shrink:0}',
     '.mtapi-debug-section > .mtapi-debug-pre,.mtapi-debug-section > div[id$="-network"],.mtapi-debug-section > .mtapi-debug-dom-split{flex:1 1 auto;min-height:0}',
@@ -1524,7 +1673,7 @@
 
     // ── Logs ──
     html += '<div data-tab-content="logs" class="' + (_activeTab==='logs'?'active':'') + '">';
-    html += '<details class="mtapi-debug-section" open data-refresh="jslog"><summary>JS Logs <span id="mtapi-debug-jslog-count">('+global._jslogBuf.length+')</span></summary>';
+    html += '<details class="mtapi-debug-section" open data-flat="1" data-refresh="jslog"><summary>JS Logs <span id="mtapi-debug-jslog-count">('+global._jslogBuf.length+')</span></summary>';
     html += '<div class="mtapi-debug-toolbar">';
     html += '<div class="logcat-lvl" id="mtapi-debug-jslog-lvl" title="filter by level">';
     html += '<label><input type="checkbox" data-lvl="v" checked onchange="window._jslogFilter&&window._jslogFilter()"><span class="lvl-v">V</span></label>';
@@ -1543,15 +1692,15 @@
 
     // ── Console ──
     html += '<div data-tab-content="console" class="' + (_activeTab==='console'?'active':'') + '">';
-    html += '<details class="mtapi-debug-section" open><summary>Console Eval</summary>';
-    html += '<div style="margin:4px 0;display:flex;gap:4px;align-items:center"><input class="mtapi-dbg-eval-input" placeholder="JS..." style="flex:1;padding:4px;background:#000;color:#ddd;border:1px solid #444;font-family:monospace"><button onclick="window._evalConsole()">\u25B6</button><button class="icon-btn-sm" aria-label="Help" title="Help" onclick="window._evalHelp&&window._evalHelp()">?</button><button class="icon-btn-sm" aria-label="DOM" title="Floating DOM tree" onclick="window._domShowFloating&&window._domShowFloating()">\uD83C\uDF33</button></div>';
+    html += '<details class="mtapi-debug-section" open data-flat="1"><summary>Console Eval</summary>';
+    html += '<div style="margin:4px 0;display:flex;gap:4px;align-items:center;flex-wrap:wrap"><textarea class="mtapi-dbg-eval-input" placeholder="JS (multiline, Ctrl+Enter to run)..." rows="3" style="flex:1 1 100%;padding:6px;background:#000;color:#ddd;border:1px solid #444;font-family:monospace;resize:vertical;min-height:60px;max-height:40vh"></textarea><button onclick="window._evalConsole()">\u25B6</button><button class="icon-btn-sm" aria-label="Copy" title="Copy output" onclick="window._evalCopy&&window._evalCopy()">\uD83D\uDCCB</button><button class="icon-btn-sm danger" aria-label="Clear" title="Clear output" onclick="window._evalClear&&window._evalClear()">\uD83D\uDDD1</button><button class="icon-btn-sm" aria-label="Help" title="Help" onclick="window._evalHelp&&window._evalHelp()">?</button><button class="icon-btn-sm" aria-label="DOM" title="Floating DOM tree" onclick="window._domShowFloating&&window._domShowFloating()">\uD83C\uDF33</button></div>';
     html += '<div id="mtapi-debug-eval-out" class="mtapi-debug-pre" style="color:#ddd">\u2014</div>';
     html += '</details>';
     html += '</div>';
 
     // ── Errors ──
     html += '<div data-tab-content="errors" class="' + (_activeTab==='errors'?'active':'') + '">';
-    html += '<details class="mtapi-debug-section" open data-refresh="errors"><summary>Errors (persistent)</summary>';
+    html += '<details class="mtapi-debug-section" open data-flat="1" data-refresh="errors"><summary>Errors (persistent)</summary>';
     html += '<div class="mtapi-debug-toolbar">';
     html += _iconSearch('mtapi-debug-errors-search', "window._refreshErrorsQuery&&window._refreshErrorsQuery()");
     html += _iconBtn('\uD83D\uDCCB', 'Copy', "window._copyErrors&&window._copyErrors()");
@@ -1563,7 +1712,7 @@
 
     // ── Logcat ──
     html += '<div data-tab-content="logcat" class="' + (_activeTab==='logcat'?'active':'') + '">';
-    html += '<details class="mtapi-debug-section" open data-refresh="logcat"><summary>Logcat</summary>';
+    html += '<details class="mtapi-debug-section" open data-flat="1" data-refresh="logcat"><summary>Logcat</summary>';
     html += '<div class="mtapi-debug-toolbar">';
     html += '<div class="logcat-lvl" title="filter by level">';
     html += '<label><input type="checkbox" data-lvl="v" checked onchange="window._logcatFilter&&window._logcatFilter()"><span class="lvl-v">V</span></label>';
@@ -1599,7 +1748,7 @@
 
     // ── Network ──
     html += '<div data-tab-content="network" class="' + (_activeTab==='network'?'active':'') + '">';
-    html += '<details class="mtapi-debug-section" open data-refresh="network"><summary>Requests <span id="mtapi-debug-net-count">('+global._netBuf.length+')</span></summary>';
+    html += '<details class="mtapi-debug-section" open data-flat="1" data-refresh="network"><summary>Requests <span id="mtapi-debug-net-count">('+global._netBuf.length+')</span></summary>';
     html += '<div class="mtapi-debug-toolbar">';
     html += '<label style="font-size:10px"><input type="checkbox" id="mtapi-debug-netverbose" '+((global._netVerbose===true)?'checked':'')+' onchange="window._netVerbose=this.checked"> verbose</label>';
     html += _iconBtn('\uD83D\uDCCB', 'Copy', "window._copyNetwork&&window._copyNetwork()");
@@ -1765,6 +1914,32 @@
         };
       }
       var _bb = global.document.getElementById("browser-btn"); if (_bb) _bb.onclick = function(){ global._browserOpen && global._browserOpen(); };
+      if (!global._mtapiEvalMdBound) {
+        global._mtapiEvalMdBound = true;
+        global.document.addEventListener('keydown', function(e) {
+          if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+            var el = e.target;
+            if (el && el.classList && el.classList.contains('mtapi-dbg-eval-input') && global._evalConsole) {
+              e.preventDefault(); global._evalConsole();
+            }
+          }
+        }, true);
+      }
+      // Auto-add token to same-origin fetches (Console Eval convenience)
+      if (!global._mtapiFetchPatched && global.fetch) {
+        global._mtapiFetchPatched = true;
+        var _origFetch = global.fetch;
+        global.fetch = function(url, opts) {
+          try {
+            if (typeof url === 'string' && url.charAt(0) === '/' && url.indexOf('token=') < 0) {
+              var _tok = (typeof global.TOKEN !== 'undefined') ? global.TOKEN : '';
+              if (!_tok) { try { var _m = global.location.search.match(/[?&]token=([^&]+)/); if (_m) _tok = _m[1]; } catch(e) {} }
+              if (_tok) url += (url.indexOf('?') >= 0 ? '&' : '?') + 'token=' + encodeURIComponent(_tok);
+            }
+          } catch(e) {}
+          return _origFetch.call(global, url, opts);
+        };
+      }
       global._setTab(_activeTab);
       try { global._jslogLiveStart(2000); setTimeout(function(){ if (global._evalHelp) global._evalHelp(); }, 100); } catch(e){}
       return ov;
