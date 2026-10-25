@@ -119,7 +119,29 @@ public class MainActivity extends Activity {
                 }
                 return "(logcat unavailable — Android 11+ restricts logcat for untrusted apps without root. Use adb logcat.)";
             }
-}, "Android");
+
+            @android.webkit.JavascriptInterface
+            public String httpGet(String url) {
+                try {
+                    java.net.URL u = new java.net.URL(url);
+                    java.net.HttpURLConnection c = (java.net.HttpURLConnection) u.openConnection();
+                    c.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 11) AppleWebKit/537.36 Chrome/120.0 Mobile Safari/537.36");
+                    c.setConnectTimeout(10000);
+                    c.setReadTimeout(10000);
+                    c.setInstanceFollowRedirects(true);
+                    int rc = c.getResponseCode();
+                    java.io.InputStream is = (rc >= 400) ? c.getErrorStream() : c.getInputStream();
+                    java.io.ByteArrayOutputStream bo = new java.io.ByteArrayOutputStream();
+                    byte[] buf = new byte[8192];
+                    int n;
+                    while ((n = is.read(buf)) > 0) bo.write(buf, 0, n);
+                    is.close();
+                    return bo.toString("UTF-8");
+                } catch (Throwable t) {
+                    return "(error: " + t + ")";
+                }
+            }
+        }, "Android");
         WebSettings ws = webView.getSettings();
         ws.setJavaScriptEnabled(true);
         ws.setDomStorageEnabled(true);

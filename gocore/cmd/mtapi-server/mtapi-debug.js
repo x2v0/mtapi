@@ -1226,8 +1226,8 @@
 
   // ─── chrome (FAB + overlay + tabs + side panel) ───────────
   var _activeTab = 'logs';
-  var _tabs = ['logs', 'errors', 'logcat', 'devtools', 'system', 'network'];
-  var _tabLabels = {logs:'Logs', errors:'Errors', logcat:'Logcat', devtools:'DevTools', system:'System', network:'Network'};
+  var _tabs = ['logs', 'console', 'errors', 'logcat', 'devtools', 'system', 'network'];
+  var _tabLabels = {logs:'Logs', console:'Console', errors:'Errors', logcat:'Logcat', devtools:'DevTools', system:'System', network:'Network'};
 
   global._setTab = function(name){
     if (_tabs.indexOf(name) === -1) return;
@@ -1243,15 +1243,153 @@
   };
   global._sidePanelToggle = function(){ var sp = global.document && global.document.getElementById('mtapi-debug-sidepanel'); if (sp) sp.classList.toggle('open'); };
   global._sidePanelClose = function(){ var sp = global.document && global.document.getElementById('mtapi-debug-sidepanel'); if (sp) sp.classList.remove('open'); };
+  // ── Browser overlay (iframe + debug via same-origin proxy) ──
+  var _browserHistory = [];
+  var _browserHistoryIdx = -1;
+
+  // ── Browser overlay (fetch-first + iframe fallback) ──
+  var _browserHistory = [];
+  var _browserHistoryIdx = -1;
+
+  global._browserOpen = function(url) {
+    var existing = global.document.getElementById('mtapi-browser-overlay');
+    if (existing) { existing.remove(); }
+    var u = url || 'https://duckduckgo.com/html/';
+    var ov = global.document.createElement('div');
+    ov.id = 'mtapi-browser-overlay';
+    ov.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;z-index:9999999;background:var(--bg,#1a1a1a);color:var(--fg,#ddd);display:flex;flex-direction:column;font-family:monospace;font-size:12px';
+    ov.innerHTML = '<div id="mtapi-browser-header" style="display:flex;align-items:center;gap:4px;padding:6px 8px;background:var(--bg3,#222);border-bottom:1px solid var(--bg4,#444);flex-shrink:0">'
+      + '<button id="mtapi-browser-api" class="icon-btn-sm accent" title="Back to MTAPI" style="width:16px;height:16px;font-size:12px;padding:0;display:inline-flex;align-items:center;justify-content:center">\u2699\uFE0F</button><span id="mtapi-browser-spinner" style="display:none;width:14px;height:14px;border:2px solid var(--bg4,#444);border-top-color:var(--accent,#4fc3f7);border-radius:50%;animation:mtapi-spin 0.8s linear infinite;flex-shrink:0"></span>'
+      + '<button id="mtapi-browser-back" class="icon-btn-sm" title="Back" disabled>\u2190</button>'
+      + '<input id="mtapi-browser-url" type="text" placeholder="URL..." value="' + esc(u) + '" style="flex:1;padding:4px 8px;background:var(--bg,#1a1a1a);color:var(--fg,#ddd);border:1px solid var(--bg4,#444);border-radius:3px;font-family:monospace;font-size:12px;min-width:0">'
+      + '<button id="mtapi-browser-forward" class="icon-btn-sm" title="Forward" disabled>\u2192</button>'
+      + '<button id="mtapi-browser-reload" class="icon-btn-sm accent" title="Reload">\u21BB</button>'
+      + '<button id="mtapi-browser-debug" class="icon-btn-sm danger" title="Debug (inspect iframe content)">\uD83D\uDC1E</button>'
+      + '</div>'
+      + '<iframe id="mtapi-browser-iframe" sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals allow-top-navigation-by-user-activation" style="flex:1 1 0;border:0;background:#fff;min-height:0"></iframe>';
+    if (!global.document.getElementById('mtapi-spin-style')) { var st = global.document.createElement('style'); st.id = 'mtapi-spin-style'; st.textContent = '@keyframes mtapi-spin { to { transform: rotate(360deg); } }'; global.document.head.appendChild(st); }
+    global.document.body.appendChild(ov);
+
+    var iframe = global.document.getElementById('mtapi-browser-iframe');
+    var urlIn = global.document.getElementById('mtapi-browser-url');
+    if (!global._mtapiBrowserNavListener) {
+      global._mtapiBrowserNavListener = true;
+      global.addEventListener('message', function(e) {
+        if (e.data && e.data.type === 'mtapi-nav' && e.data.url) {
+          if (global._browserNavigate) global._browserNavigate(e.data.url);
+        }
+      });
+    }
+    var bBack = global.document.getElementById('mtapi-browser-back');
+    var bFwd = global.document.getElementById('mtapi-browser-forward');
+    var bReload = global.document.getElementById('mtapi-browser-reload');
+    var bApi = global.document.getElementById('mtapi-browser-api');
+    var bDebug = global.document.getElementById('mtapi-browser-debug');
+
+    _browserHistory = [u];
+    _browserHistoryIdx = 0;
+    _browserUpdateButtons();
+
+    function _nav(to) {
+      if (!to) return;
+      if (!/^(https?:\/\/|\/)/.test(to)) to = 'https://' + to;
+      if (_browserHistory[_browserHistoryIdx] !== to) {
+        _browserHistory = _browserHistory.slice(0, _browserHistoryIdx + 1);
+        _browserHistory.push(to);
+        _browserHistoryIdx = _browserHistory.length - 1;
+      }
+      urlIn.value = to;
+      _browserUpdateButtons();
+      _browserLoad(to);
+    }
+    function _browserUpdateButtons() {
+      if (bBack) bBack.disabled = _browserHistoryIdx <= 0;
+      if (bFwd) bFwd.disabled = _browserHistoryIdx >= _browserHistory.length - 1;
+    }
+    function _browserLoad(url) {
+      if (!url) return;
+      var _spin = global.document.getElementById('mtapi-browser-spinner');
+      if (_spin) _spin.style.display = 'inline-block';
+      function _spinDone() { if (_spin) _spin.style.display = 'none'; }
+      if (!/^(https?:\/\/|\/)/.test(url)) url = 'https://' + url;
+      // Local (same-origin) → iframe.src directly
+      if (url.indexOf('/') === 0) {
+        iframe.removeAttribute('srcdoc');
+        iframe.src = url;
+        return;
+      }
+      // Priority 1: Android.httpGet (Java DNS, no CORS, no X-Frame-Options)
+      if (global.Android && global.Android.httpGet) {
+        try {
+          var html = String(global.Android.httpGet(url));
+          if (html && html.indexOf('(error:') !== 0 && html.length > 100) {
+            // Inject <base> + nav interceptor
+            var base = '<base href="' + url + '">';
+            if (html.indexOf('<head>') >= 0) html = html.replace('<head>', '<head>' + base);
+            else if (html.indexOf('<HEAD>') >= 0) html = html.replace('<HEAD>', '<HEAD>' + base);
+            else html = base + html;
+            var nav = '<scr' + 'ipt>(function(){document.addEventListener("click",function(e){var a=e.target&&e.target.closest?e.target.closest("a"):null;if(a){var h=a.href;if(h&&h.indexOf("javascript:")!==0){e.preventDefault();try{parent.postMessage({type:"mtapi-nav",url:h},"*");}catch(x){}}}},true);})();</scr' + 'ipt>';
+            if (html.indexOf('</body>') >= 0) html = html.replace('</body>', nav + '</body>');
+            else html = html + nav;
+            iframe.removeAttribute('src');
+            iframe.srcdoc = html;
+            _spinDone();
+            return;
+          }
+        } catch(e) {}
+      }
+      // Fallback: /proxy-url (Go) → may fail (DNS in JNI)
+      fetch('/proxy-url?url=' + encodeURIComponent(url))
+        .then(function(r) { if (!r.ok) throw new Error('proxy ' + r.status); return r.text(); })
+        .then(function(html) {
+          iframe.removeAttribute('src');
+          iframe.srcdoc = html;
+          _spinDone();
+        })
+        .catch(function(err) {
+          iframe.removeAttribute('srcdoc');
+          iframe.src = url;
+          _spinDone();
+        });
+    }
+
+    global._browserNavigate = _nav;
+    global._browserLoad = _browserLoad;
+    global._browserBack = function() {
+      if (_browserHistoryIdx > 0) { _browserHistoryIdx--; urlIn.value = _browserHistory[_browserHistoryIdx]; _browserUpdateButtons(); _browserLoad(_browserHistory[_browserHistoryIdx]); }
+    };
+    global._browserForward = function() {
+      if (_browserHistoryIdx < _browserHistory.length - 1) { _browserHistoryIdx++; urlIn.value = _browserHistory[_browserHistoryIdx]; _browserUpdateButtons(); _browserLoad(_browserHistory[_browserHistoryIdx]); }
+    };
+    global._browserReload = function() { _browserLoad(_browserHistory[_browserHistoryIdx]); };
+    global._browserClose = function() { var o = global.document.getElementById('mtapi-browser-overlay'); if (o) o.remove(); };
+
+    if (bBack) bBack.onclick = global._browserBack;
+    if (bFwd) bFwd.onclick = global._browserForward;
+    if (bReload) bReload.onclick = global._browserReload;
+    if (bApi) bApi.onclick = global._browserClose;
+    if (urlIn) urlIn.onkeydown = function(e) { if (e.key === 'Enter') _nav(urlIn.value); };
+    if (bDebug) bDebug.onclick = function() {
+      if (global._debugOpen) { try { global._debugOpen(); } catch(e){} }
+      if (global._mtapiToast) global._mtapiToast('Debug: use \uD83C\uDF10 tree (root=overlay) or right-click iframe → Inspect');
+    };
+
+    // nav messages from srcdoc iframe
+
+    if (iframe) iframe.onload = function() { var sp = global.document.getElementById('mtapi-browser-spinner'); if (sp) sp.style.display = 'none'; };
+    _browserLoad(u);
+  };
+
+
   global._debugOpen = function(){ var ov = global.document && global.document.getElementById('mtapi-debug-overlay'); if (!ov) return; ov.removeAttribute('hidden'); global._setTab(_activeTab); global._domRootMode = 'overlay'; var _b = global.document.getElementById('mtapi-debug-root-toggle'); if (_b) _b.textContent = '\u25A3'; if (global._domRefresh) { try { global._domRefresh(); } catch(e){} } };
   global._debugClose = function(){ var ov = global.document && global.document.getElementById('mtapi-debug-overlay'); if (ov) ov.setAttribute('hidden', ''); global._sidePanelClose(); global._domRootMode = 'page'; var _b = global.document.getElementById('mtapi-debug-root-toggle'); if (_b) _b.textContent = '\uD83C\uDF10'; if (global._domRefresh) { try { global._domRefresh(); } catch(e){} } };
 
   var CSS = [
-    '.mtapi-debug-fab-inline{width:28px;height:28px;border-radius:50%;border:1px solid var(--border,var(--bg4));background:var(--bg3,var(--bg3));color:var(--accent,var(--accent));font-size:16px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;padding:0;line-height:1;font-family:inherit;margin:0;box-shadow:none}',
+    '.mtapi-debug-fab-inline{width:16px;height:16px;border-radius:50%;border:1px solid var(--border,var(--bg4));background:var(--bg3,var(--bg3));color:var(--accent,var(--accent));font-size:10px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;padding:0;line-height:1;font-family:inherit;margin:0;box-shadow:none}',
     '.mtapi-debug-fab-inline:hover{background:var(--bg4,#3a3a3a)}',
     '.mtapi-debug-back{font-weight:bold;letter-spacing:1px}',
     /* Force scroll everywhere */
-    '.mtapi-debug-pre, #mtapi-debug-jslog, #mtapi-debug-logcat, #mtapi-debug-errors, #mtapi-debug-devtools-json, #mtapi-debug-network, #mtapi-debug-dom-tree, #mtapi-debug-dom-info, #mtapi-debug-system-info, #mtapi-debug-perf{overflow-y:scroll !important;overflow-x:scroll !important;min-height:0}',
+    '.mtapi-debug-pre, #mtapi-debug-jslog, #mtapi-debug-logcat, #mtapi-debug-errors, #mtapi-debug-devtools-json, #mtapi-debug-network, #mtapi-debug-dom-tree, #mtapi-debug-dom-info, #mtapi-debug-system-info, #mtapi-debug-perf{overflow-y:scroll !important;overflow-x:auto !important;min-height:0;max-height:none}',
     '#mtapi-debug-eval-out{overflow-y:scroll !important;overflow-x:auto !important;white-space:pre !important;font-family:monospace;min-height:0;max-height:none !important}',
     '#mtapi-debug-eval-out pre, #mtapi-debug-eval-out table{min-width:max-content}',
                 '.logcat-line{display:block;white-space:pre-wrap;word-break:break-all;padding:1px 4px;border-radius:2px}',
@@ -1283,7 +1421,7 @@
     '.proc-search,.tbl-search{flex:1;min-width:80px;padding:3px 6px;background:#000;color:var(--fg);border:1px solid var(--bg4);border-radius:3px;font-family:monospace;font-size:11px}',
     '.proc-search:focus,.tbl-search:focus{outline:1px solid var(--accent);border-color:var(--accent)}',
     '.tbl-toolbar{display:flex;gap:4px;align-items:center;margin:4px 0}',
-    '.mtapi-debug-fab{position:fixed;top:8px;right:8px;z-index:999999;width:32px;height:32px;border-radius:50%;border:1px solid var(--bg4);background:var(--bg3);color:var(--accent);font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 6px rgba(0,0,0,0.4);padding:0;line-height:1;font-family:monospace}',
+    '.mtapi-debug-fab{position:fixed;top:8px;right:8px;z-index:999999;width:16px;height:16px;border-radius:50%;border:1px solid var(--bg4);background:var(--bg3);color:var(--accent);font-size:10px;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 6px rgba(0,0,0,0.4);padding:0;line-height:1;font-family:monospace}',
     '.mtapi-debug-fab:hover{background:#3a3a3a}',
     '.mtapi-debug-overlay{position:fixed;top:0;left:0;right:0;bottom:0;z-index:9999998;background:var(--bg);color:var(--fg);font-family:monospace;font-size:12px;display:flex;flex-direction:column}',
     '.mtapi-debug-overlay[hidden]{display:none}',
@@ -1305,6 +1443,9 @@
     '.mtapi-debug-sidepanel li:hover{background:var(--bg4)}',
     '.mtapi-debug-sidepanel li.active{background:var(--bg4)}',
     '.mtapi-debug-section{border:1px solid var(--bg4);border-radius:3px;margin:0;background:var(--bg2);display:flex;flex-direction:column;overflow:hidden}',
+    '.mtapi-debug-flat{flex:1 1 0;min-height:0;display:flex;flex-direction:column;background:var(--bg2);border:1px solid var(--bg4);border-radius:3px;overflow:hidden}',
+    '.mtapi-debug-flat-hdr{padding:4px 8px;background:var(--bg3);border-bottom:1px solid var(--bg4);font-size:11px;color:var(--fg3);flex-shrink:0}',
+    '.mtapi-debug-flat > .mtapi-debug-pre,.mtapi-debug-flat > div[id$="-jslog"],.mtapi-debug-flat > div[id$="-errors"],.mtapi-debug-flat > div[id$="-logcat"],.mtapi-debug-flat > div[id$="-eval-out"]{flex:1 1 0;min-height:0;overflow:auto}',
     '.mtapi-debug-section[open]{flex:1 1 auto;min-height:200px;resize:vertical}',
     '.mtapi-debug-section:not([open]){flex:0 0 auto;min-height:0;resize:none}',
     '.mtapi-debug-section > summary{flex-shrink:0}',
@@ -1378,15 +1519,11 @@
     for(var i=global._jslogBuf.length-1;i>=0;i--){ var e=global._jslogBuf[i]; p1 += esc(fmtTime(e.t)+' ['+(e.lvl||'log')+'] '+e.m)+'\n'; }
     var p3 = '';
     try{ var er=JSON.parse(global.localStorage.getItem('mtapi-errors')||'[]'); p3=er.map(function(x){return fmtTime(x.t)+' ['+x.lvl+'] '+x.m;}).join('\n'); }catch(x){}
+
     var html = '';
 
-    // Logs tab
+    // ── Logs ──
     html += '<div data-tab-content="logs" class="' + (_activeTab==='logs'?'active':'') + '">';
-    // Console Eval FIRST
-    html += '<details class="mtapi-debug-section" open><summary>Console Eval</summary>';
-    html += '<div style="margin:4px 0;display:flex;gap:4px;align-items:center"><input class="mtapi-dbg-eval-input" placeholder="JS..." style="flex:1;padding:4px;background:#000;color:#ddd;border:1px solid #444;font-family:monospace"><button class="icon-btn-sm accent" aria-label="Run" title="Run (evaluate)" onclick="window._evalConsole()">\u25B6</button><button class="icon-btn-sm" aria-label="DOM" title="Floating DOM tree" onclick="window._domShowFloating&&window._domShowFloating()">\uD83C\uDF33</button><button class="icon-btn-sm" aria-label="Help" title="Help (list helpers + examples)" onclick="window._evalHelp&&window._evalHelp()">?</button><button class="icon-btn-sm danger" aria-label="Clear" title="Clear" onclick="window._evalClear&&window._evalClear()">🗑</button></div>';
-    html += '<div id="mtapi-debug-eval-out" class="mtapi-debug-pre" style="color:#ddd">\u2014</div></details>';
-    // JS Logs SECOND
     html += '<details class="mtapi-debug-section" open data-refresh="jslog"><summary>JS Logs <span id="mtapi-debug-jslog-count">('+global._jslogBuf.length+')</span></summary>';
     html += '<div class="mtapi-debug-toolbar">';
     html += '<div class="logcat-lvl" id="mtapi-debug-jslog-lvl" title="filter by level">';
@@ -1400,56 +1537,19 @@
     html += _iconBtn('\uD83D\uDCCB', 'Copy', "window._copyJslog&&window._copyJslog()");
     html += _iconBtn('\uD83D\uDDD1', 'Clear', "window._jslogBuf=[];window._jslogClear&&window._jslogClear()", 'danger');
     html += '</div>';
-    html += '<div id="mtapi-debug-jslog" class="mtapi-debug-pre">'+(_renderJslogWithQuery ? _renderJslogWithQuery('') : p1)+'</div></details>';
+    html += '<div id="mtapi-debug-jslog" class="mtapi-debug-pre">'+(_renderJslogWithQuery ? _renderJslogWithQuery('') : p1)+'</div>';
+    html += '</details>';
     html += '</div>';
 
-    // Logcat tab
-    html += '<div data-tab-content="logcat" class="' + (_activeTab==='logcat'?'active':'') + '">';
-    html += '<details class="mtapi-debug-section" open data-refresh="logcat"><summary>Logcat</summary>';
-    html += '<div class="tbl-toolbar">';
-    html += '<div class="logcat-lvl" title="filter by level">';
-    html += '<label><input type="checkbox" data-lvl="v" checked onchange="window._logcatFilter&&window._logcatFilter()"><span class="lvl-v">V</span></label>';
-    html += '<label><input type="checkbox" data-lvl="d" checked onchange="window._logcatFilter&&window._logcatFilter()"><span class="lvl-d">D</span></label>';
-    html += '<label><input type="checkbox" data-lvl="i" checked onchange="window._logcatFilter&&window._logcatFilter()"><span class="lvl-i">I</span></label>';
-    html += '<label><input type="checkbox" data-lvl="w" checked onchange="window._logcatFilter&&window._logcatFilter()"><span class="lvl-w">W</span></label>';
-    html += '<label><input type="checkbox" data-lvl="e" checked onchange="window._logcatFilter&&window._logcatFilter()"><span class="lvl-e">E</span></label>';
-    html += '<label><input type="checkbox" data-lvl="f" checked onchange="window._logcatFilter&&window._logcatFilter()"><span class="lvl-f">F</span></label>';
-    html += '</div>';
-    html += _iconSearch('mtapi-debug-logcat-search', "window._refreshLogcatQuery&&window._refreshLogcatQuery()");
-    html += _iconBtn('\uD83D\uDCCB', 'Copy', "window._copyLogcat&&window._copyLogcat()");
-    html += _iconBtn('\u21bb', 'Refresh', "window._logcatRefresh&&window._logcatRefresh()", 'accent');
-    html += '</div>';
-    html += '<div id="mtapi-debug-logcat" class="mtapi-debug-pre" style="color:#aaa;font-size:10px">'+(renderLogcat())+'</div></details>';
+    // ── Console ──
+    html += '<div data-tab-content="console" class="' + (_activeTab==='console'?'active':'') + '">';
+    html += '<details class="mtapi-debug-section" open><summary>Console Eval</summary>';
+    html += '<div style="margin:4px 0;display:flex;gap:4px;align-items:center"><input class="mtapi-dbg-eval-input" placeholder="JS..." style="flex:1;padding:4px;background:#000;color:#ddd;border:1px solid #444;font-family:monospace"><button onclick="window._evalConsole()">\u25B6</button><button class="icon-btn-sm" aria-label="Help" title="Help" onclick="window._evalHelp&&window._evalHelp()">?</button><button class="icon-btn-sm" aria-label="DOM" title="Floating DOM tree" onclick="window._domShowFloating&&window._domShowFloating()">\uD83C\uDF33</button></div>';
+    html += '<div id="mtapi-debug-eval-out" class="mtapi-debug-pre" style="color:#ddd">\u2014</div>';
+    html += '</details>';
     html += '</div>';
 
-    // DevTools tab
-    html += '<div data-tab-content="devtools" class="' + (_activeTab==='devtools'?'active':'') + '">';
-    html += '<details class="mtapi-debug-section" open data-refresh="devtools"><summary>WebView DevTools</summary><div style="padding:8px;line-height:1.6">';
-    html += '<p><b>On PC (via adb):</b></p><code>adb shell pidof dev.mtapi</code><br><code>adb forward tcp:9222 localabstract:webview_devtools_remote_&lt;PID&gt;</code><br><code>chrome://inspect/#devices</code>';
-    html += '<p><b>On device (JSON):</b></p><button class="copy" onclick="window._fetchDevToolsJSON()">\u21bb GET /devtools/json</button>';
-    html += '<p><b>App source (app.js):</b></p><button class="copy" onclick="window._fetchAppSource&&window._fetchAppSource()">\uD83D\uDCC4 Load app.js</button>';
-    html += '<div id="mtapi-debug-app-source" class="mtapi-debug-pre" style="color:#aaa;max-height:300px;overflow:auto;margin-top:4px">(click button)</div>';
-    html += '<div id="mtapi-debug-devtools-json" class="mtapi-debug-pre" style="color:#aaa;margin-top:4px">(click button)</div>';
-    html += '</div></details></div>';
-
-    // System tab
-    html += '<div data-tab-content="system" class="' + (_activeTab==='system'?'active':'') + '">';
-    html += '<details class="mtapi-debug-section" open data-refresh="perf" style="flex:0 0 auto"><summary>Performance</summary><div style="margin:4px 0"><button class="copy" onclick="window._perfReset()">\uD83D\uDD04 Reset</button></div><div id="mtapi-debug-perf" class="mtapi-debug-pre" style="color:#ddd;min-height:60px;max-height:200px">'+(renderPerf())+'</div></details>';
-    html += '<details class="mtapi-debug-section" open data-refresh="system" style="flex:1 1 0"><summary>System info</summary><div style="padding:2px 8px;font-size:10px;color:#888;border-bottom:1px solid #222">Refresh: tap ⟳ above, or collapse/expand this section (auto-refresh on toggle). Data loads on tab open.</div><div id="mtapi-debug-system-info" class="mtapi-debug-pre" style="color:#aaa">(loading...)</div></details>';
-    html += '</div>';
-
-    // Network tab
-    html += '<div data-tab-content="network" class="' + (_activeTab==='network'?'active':'') + '">';
-    html += '<details class="mtapi-debug-section" open data-refresh="network"><summary>Requests <span id="mtapi-debug-net-count">('+global._netBuf.length+')</span></summary>';
-    html += '<div class="mtapi-debug-toolbar">';
-    html += _iconSearch('mtapi-debug-network-search', "window._netRefresh&&window._netRefresh()");
-    html += _iconBtn('\uD83D\uDCCB', 'Copy', "window._copyNetwork&&window._copyNetwork()");
-    html += _iconBtn('\uD83D\uDDD1', 'Clear', "window._netClear&&window._netClear()", 'danger');
-    html += '</div>';
-    html += '<div id="mtapi-debug-network">'+renderNetwork()+'</div></details>';
-    html += '</div>';
-
-    // Errors tab
+    // ── Errors ──
     html += '<div data-tab-content="errors" class="' + (_activeTab==='errors'?'active':'') + '">';
     html += '<details class="mtapi-debug-section" open data-refresh="errors"><summary>Errors (persistent)</summary>';
     html += '<div class="mtapi-debug-toolbar">';
@@ -1457,9 +1557,56 @@
     html += _iconBtn('\uD83D\uDCCB', 'Copy', "window._copyErrors&&window._copyErrors()");
     html += _iconBtn('\uD83D\uDDD1', 'Clear', "window._errorsClear&&window._errorsClear()", 'danger');
     html += '</div>';
-    html += '<div id="mtapi-debug-errors" class="mtapi-debug-pre" style="color:#f66">'+(_renderErrorsWithQuery ? _renderErrorsWithQuery('') : esc(p3))+'</div></details>';
+    html += '<div id="mtapi-debug-errors" class="mtapi-debug-pre" style="color:#f66">'+(_renderErrorsWithQuery ? _renderErrorsWithQuery('') : esc(p3))+'</div>';
+    html += '</details>';
     html += '</div>';
-    // DOM tab removed (floating only) — was duplicate id="mtapi-debug-dom-tree"
+
+    // ── Logcat ──
+    html += '<div data-tab-content="logcat" class="' + (_activeTab==='logcat'?'active':'') + '">';
+    html += '<details class="mtapi-debug-section" open data-refresh="logcat"><summary>Logcat</summary>';
+    html += '<div class="mtapi-debug-toolbar">';
+    html += '<div class="logcat-lvl" title="filter by level">';
+    html += '<label><input type="checkbox" data-lvl="v" checked onchange="window._logcatFilter&&window._logcatFilter()"><span class="lvl-v">V</span></label>';
+    html += '<label><input type="checkbox" data-lvl="d" checked onchange="window._logcatFilter&&window._logcatFilter()"><span class="lvl-d">D</span></label>';
+    html += '<label><input type="checkbox" data-lvl="i" checked onchange="window._logcatFilter&&window._logcatFilter()"><span class="lvl-i">I</span></label>';
+    html += '<label><input type="checkbox" data-lvl="w" checked onchange="window._logcatFilter&&window._logcatFilter()"><span class="lvl-w">W</span></label>';
+    html += '<label><input type="checkbox" data-lvl="e" checked onchange="window._logcatFilter&&window._logcatFilter()"><span class="lvl-e">E</span></label>';
+    html += '</div>';
+    html += _iconSearch('mtapi-debug-logcat-search', "window._refreshLogcatQuery&&window._refreshLogcatQuery()");
+    html += _iconBtn('\uD83D\uDCCB', 'Copy', "window._copyLogcat&&window._copyLogcat()");
+    html += _iconBtn('\u21BB', 'Refresh', "window._logcatRefresh&&window._logcatRefresh()", 'accent');
+    html += '</div>';
+    html += '<div id="mtapi-debug-logcat" class="mtapi-debug-pre" style="color:#aaa;font-size:10px">'+renderLogcat()+'</div>';
+    html += '</details>';
+    html += '</div>';
+
+    // ── DevTools ──
+    html += '<div data-tab-content="devtools" class="' + (_activeTab==='devtools'?'active':'') + '">';
+    html += '<details class="mtapi-debug-section" open data-refresh="devtools"><summary>WebView DevTools</summary><div style="padding:8px;line-height:1.6">';
+    html += '<p><b>On PC (via adb):</b></p><code>adb shell pidof dev.mtapi</code><br><code>adb forward tcp:9222 localabstract:webview_devtools_remote_&lt;PID&gt;</code><br><code>chrome://inspect/#devices</code>';
+    html += '<p><b>On device (JSON):</b></p><button class="copy" onclick="window._fetchDevToolsJSON()">\u21BB GET /devtools/json</button>';
+    html += '<div id="mtapi-debug-devtools-json" class="mtapi-debug-pre" style="color:#aaa;margin-top:4px">(click button)</div>';
+    html += '<p><b>App source (app.js):</b></p><button class="copy" onclick="window._fetchAppSource&&window._fetchAppSource()">\uD83D\uDCC4 Load app.js</button>';
+    html += '<div id="mtapi-debug-app-source" class="mtapi-debug-pre" style="color:#aaa;max-height:300px;overflow:auto;margin-top:4px">(click button)</div>';
+    html += '</div></details>';
+    html += '</div>';
+
+    // ── System ──
+    html += '<div data-tab-content="system" class="' + (_activeTab==='system'?'active':'') + '">';
+    html += '<details class="mtapi-debug-section" open data-refresh="perf" style="flex:0 0 auto"><summary>Performance</summary><div style="margin:4px 0"><button class="copy" onclick="window._perfReset()">\uD83D\uDD04 Reset</button></div><div id="mtapi-debug-perf" class="mtapi-debug-pre" style="color:#ddd;min-height:60px;max-height:200px">'+renderPerf()+'</div></details>';
+    html += '<details class="mtapi-debug-section" open data-refresh="system" style="flex:1 1 0"><summary>System info</summary><div style="padding:2px 8px;font-size:10px;color:#888;border-bottom:1px solid #222">Refresh: tap \u27F3 above, or collapse/expand this section (auto-refresh on toggle). Data loads on tab open.</div><div id="mtapi-debug-system-info" class="mtapi-debug-pre" style="color:#aaa">(loading...)</div></details>';
+    html += '</div>';
+
+    // ── Network ──
+    html += '<div data-tab-content="network" class="' + (_activeTab==='network'?'active':'') + '">';
+    html += '<details class="mtapi-debug-section" open data-refresh="network"><summary>Requests <span id="mtapi-debug-net-count">('+global._netBuf.length+')</span></summary>';
+    html += '<div class="mtapi-debug-toolbar">';
+    html += '<label style="font-size:10px"><input type="checkbox" id="mtapi-debug-netverbose" '+((global._netVerbose===true)?'checked':'')+' onchange="window._netVerbose=this.checked"> verbose</label>';
+    html += _iconBtn('\uD83D\uDCCB', 'Copy', "window._copyNetwork&&window._copyNetwork()");
+    html += _iconBtn('\uD83D\uDDD1', 'Clear', "window._netClear&&window._netClear()", 'danger');
+    html += '</div>';
+    html += '<div id="mtapi-debug-network">'+renderNetwork()+'</div>';
+    html += '</details>';
     html += '</div>';
 
     return html;
@@ -1487,7 +1634,8 @@
     var backBtn = doc.createElement('button');
     backBtn.id = 'mtapi-debug-back';
     backBtn.className = 'mtapi-debug-back';
-    backBtn.textContent = 'MTAPI';
+    backBtn.textContent = '\u2699\uFE0F';
+    backBtn.style.cssText = 'width:16px;height:16px;font-size:12px;padding:0;display:inline-flex;align-items:center;justify-content:center';
     backBtn.title = 'Back to app';
     backBtn.setAttribute('onclick', 'window._debugClose()');
     row1.appendChild(backBtn);
@@ -1616,6 +1764,7 @@
           return true;
         };
       }
+      var _bb = global.document.getElementById("browser-btn"); if (_bb) _bb.onclick = function(){ global._browserOpen && global._browserOpen(); };
       global._setTab(_activeTab);
       try { global._jslogLiveStart(2000); setTimeout(function(){ if (global._evalHelp) global._evalHelp(); }, 100); } catch(e){}
       return ov;
