@@ -1,46 +1,48 @@
-<!DOCTYPE html>
-<html lang="ru">
+<!doctype html>
+<html lang="en">
 <head>
 <meta charset="utf-8">
-<title>mtapi — DEMO</title>
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1e1e1e">
+<link rel="manifest" href="./manifest.json">
+<link rel="icon" type="image/jpeg" href="./me.jpg">
+<title>mtapi</title>
 <link rel="stylesheet" href="./style.css">
 <style>
-  body::before {
-    content: "DEMO — mock Android data, no real API";
-    position: fixed; top: 0; left: 0; right: 0;
-    background: #f59e0b; color: #000;
-    text-align: center; padding: 4px;
-    font-family: monospace; font-size: 11px; font-weight: 600;
-    z-index: 999999; pointer-events: none;
-  }
-  body { padding-top: 20px; }
-  .demo-link { position: fixed; bottom: 8px; right: 8px; background: #0288d1; color: #fff;
-    padding: 6px 12px; border-radius: 4px; font-family: monospace; font-size: 11px;
-    text-decoration: none; z-index: 999998; }
+body::before{content:"DEMO — mock Android data, no real API";position:fixed;top:0;left:0;right:0;background:#f59e0b;color:#000;text-align:center;padding:4px;font-family:monospace;font-size:11px;font-weight:600;z-index:999999;pointer-events:none}
+body{padding-top:20px}
+.demo-back{position:fixed;bottom:8px;right:8px;background:#0288d1;color:#fff;padding:6px 12px;border-radius:4px;font-family:monospace;font-size:11px;text-decoration:none;z-index:999998}
 </style>
 </head>
 <body>
-
-<!-- Same body as gocore/cmd/mtapi-server/index.html -->
+<div class="wrap">
 <header>
-  <button class="icon-btn" id="theme" title="Theme" aria-label="toggle theme" style="width:16px;height:16px;font-size:12px;padding:0;display:inline-flex;align-items:center;justify-content:center;cursor:pointer">🌙</button>
-  <button id="browser-btn" class="icon-btn" title="Browser" style="width:16px;height:16px;font-size:12px;padding:0;display:inline-flex;align-items:center;justify-content:center;cursor:pointer">🌐</button>
-  <div class="head-right">
-    <button id="mtapi-debug-fab" class="mtapi-debug-fab-inline" title="Open debug" onclick="window._debugOpen()" style="width:16px;height:16px;font-size:12px;padding:0;display:inline-flex;align-items:center;justify-content:center;cursor:pointer">🐞</button>
-  </div>
-</header>
+      <button class="icon-btn" id="theme" title="Theme" aria-label="toggle theme" style="position:absolute;left:50%;transform:translateX(-50%);width:16px;height:16px;font-size:12px;padding:0;display:inline-flex;align-items:center;justify-content:center;cursor:pointer">&#127769;</button>
+      <button id="browser-btn" class="icon-btn" title="Browser" style="width:16px;height:16px;font-size:12px;padding:0;display:inline-flex;align-items:center;justify-content:center;cursor:pointer">🌐</button>
+      <div class="head-right">
+        </div>
+        </header>
 <div class="stats">
-  <div class="stat" id="st-batt">battery <b>—</b><span class="bar"><i style="width:0%"></i></span></div>
-  <div class="stat" id="st-ram">ram <b>—</b><span class="bar"><i style="width:0%"></i></span></div>
-</div>
-<input class="search" id="q" placeholder="filter endpoints… (battery, sensors, net)" title="🔍 Filter endpoints by path" aria-label="filter endpoints">
+      <div class="stat" id="st-batt" >battery &mdash;</div>
+      <div class="stat" id="st-ram" >ram &mdash;</div>
+    </div>
+<input class="search" id="q" placeholder="filter endpoints… (battery, sensors, net)" title="🔍 Filter endpoints by path (live, case-insensitive)" aria-label="filter endpoints">
 <main id="main"></main>
+</div>
 
-<a class="demo-link" href="../">← Docs</a>
-
+<script>var TOKEN="DEMO";</script>
 <script src="./mock-backend.js"></script>
 <script src="./app.js"></script>
 <script src="./mtapi-debug.js"></script>
+<script>
+if (window.MtapiDebug) {
+  try { MtapiDebug.attach(); } catch (e) { console.error('MtapiDebug.attach failed:', e); }
+}
+</script>
+
+  <div id="logcat-pre" style="display:none"></div>
+  <input id="logcat-live" type="checkbox" style="display:none">
+  <div id="devtools-frame" style="display:none"></div>
+<a class="demo-back" href="../">← Docs</a>
 </body>
 </html>
