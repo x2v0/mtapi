@@ -1,0 +1,48 @@
+baseURL: "https://x2v0.github.io/mtapi/"
+languageCode: "ru-ru"
+title: "mtapi — Android HTTP bridge"
+theme: "hugo-book"
+defaultContentLanguage: "ru"
+defaultContentLanguageInSubdir: false
+enableRobotsTXT: true
+enableGitInfo: true
+
+languages:
+  ru:
+    languageName: "Русский"
+    contentDir: "content/ru"
+    weight: 1
+  en:
+    languageName: "English"
+    contentDir: "content/en"
+    weight: 2
+
+params:
+  BookTheme: "light"
+  BookRepo: "https://github.com/x2v0/mtapi"
+  BookEditPath: "edit/master/content"
+  BookSection: "*"
+  BookToC: true
+  BookSearch: true
+
+menu:
+  before:
+    - name: "Demo"
+      url: "/mtapi/demo/"
+      weight: 1
+    - name: "GitHub"
+      url: "https://github.com/x2v0/mtapi"
+      weight: 2
+    - name: "Releases"
+      url: "https://github.com/x2v0/mtapi/releases"
+      weight: 3
+
+markup:
+  goldmark:
+    renderer:
+      unsafe: true
+  highlight:
+    style: "github"
+
+minify:
+  minifyOutput: true
