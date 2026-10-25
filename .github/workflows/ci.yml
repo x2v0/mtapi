@@ -10,6 +10,7 @@ jobs:
   go:
     name: Go (build / vet / test / gofmt)
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
 
@@ -43,6 +44,7 @@ jobs:
   js-tests:
     name: JS tests
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
 
