@@ -30,7 +30,7 @@ section() {
 run_all_tests() {
   # Full output to log + capture node exit code.
   # Do NOT tail-trim: CI needs all failures visible.
-  node --test --test-reporter=spec mtapi-*.test.js
+  node --test --test-force-exit --test-timeout=10000 --test-reporter=spec mtapi-*.test.js
   return $?
 }
 
