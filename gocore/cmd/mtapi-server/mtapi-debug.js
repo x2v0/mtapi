@@ -174,9 +174,9 @@
       'Copy any line, run (Ctrl+Enter).',
       '',
       '--- Fetch endpoint ---',
-      'fetch("/battery").then(r => r.json()).then(j => log(j))',
-      'fetch("/sensors").then(r => r.json()).then(j => log(j))',
-      'fetch("/system").then(r => r.json()).then(j => log(j))',
+      'await fetch("/battery").then(r => r.json())',
+      'await fetch("/sensors").then(r => r.json())',
+      'await fetch("/system").then(r => r.json())',
       '',
       '--- DOM ---',
       '$("#main")',
@@ -230,90 +230,90 @@
       'All examples are working. Copy any line, Ctrl+Enter.',
       '',
       '--- API endpoints: Basic (16) ---',
-      'fetch("/ping").then(r => r.json()).then(j => log(j))',
-      'fetch("/battery").then(r => r.json()).then(j => log(j))',
-      'fetch("/wifi").then(r => r.json()).then(j => log(j))',
-      'fetch("/device").then(r => r.json()).then(j => log(j))',
-      'fetch("/location").then(r => r.json()).then(j => log(j))',
-      'fetch("/clipboard").then(r => r.json()).then(j => log(j))',
-      'fetch("/clipboard?op=set&text=hello").then(r => r.json()).then(j => log(j))',
-      'fetch("/toast?text=hello").then(r => r.json()).then(j => log(j))',
-      'fetch("/notify?title=Hi&body=There").then(r => r.json()).then(j => log(j))',
-      'fetch("/vibrate?ms=200").then(r => r.json()).then(j => log(j))',
-      'fetch("/torch?on=1").then(r => r.json()).then(j => log(j))',
-      'fetch("/torch?on=0").then(r => r.json()).then(j => log(j))',
-      'fetch("/torch/brightness?level=50").then(r => r.json()).then(j => log(j))',
-      'fetch("/torch/brightness?level=0").then(r => r.json()).then(j => log(j))',
-      'fetch("/tts?text=hello").then(r => r.json()).then(j => log(j))',
-      'fetch("/share?title=Hi&text=There").then(r => r.json()).then(j => log(j))',
+      'await fetch("/ping").then(r => r.json())',
+      'await fetch("/battery").then(r => r.json())',
+      'await fetch("/wifi").then(r => r.json())',
+      'await fetch("/device").then(r => r.json())',
+      'await fetch("/location").then(r => r.json())',
+      'await fetch("/clipboard").then(r => r.json())',
+      'await fetch("/clipboard?op=set&text=hello").then(r => r.json())',
+      'await fetch("/toast?text=hello").then(r => r.json())',
+      'await fetch("/notify?title=Hi&body=There").then(r => r.json())',
+      'await fetch("/vibrate?ms=200").then(r => r.json())',
+      'await fetch("/torch?on=1").then(r => r.json())',
+      'await fetch("/torch?on=0").then(r => r.json())',
+      'await fetch("/torch/brightness?level=50").then(r => r.json())',
+      'await fetch("/torch/brightness?level=0").then(r => r.json())',
+      'await fetch("/tts?text=hello").then(r => r.json())',
+      'await fetch("/share?title=Hi&text=There").then(r => r.json())',
       '',
       '--- API: Contacts / SMS (3) ---',
-      'fetch("/contacts?limit=0").then(r => r.json()).then(j => log(j))',
-      'fetch("/calllog?limit=0").then(r => r.json()).then(j => log(j))',
-      'fetch("/sms?limit=0").then(r => r.json()).then(j => log(j))',
+      'await fetch("/contacts?limit=0").then(r => r.json())',
+      'await fetch("/calllog?limit=0").then(r => r.json())',
+      'await fetch("/sms?limit=0").then(r => r.json())',
       '',
       '--- API: System (6) ---',
-      'fetch("/system").then(r => r.json()).then(j => log(j))',
-      'fetch("/cpu/detail").then(r => r.json()).then(j => log(j))',
-      'fetch("/thermal").then(r => r.json()).then(j => log(j))',
-      'fetch("/memory").then(r => r.json()).then(j => log(j))',
-      'fetch("/storage").then(r => r.json()).then(j => log(j))',
-      'fetch("/kernel").then(r => r.json()).then(j => log(j))',
+      'await fetch("/system").then(r => r.json())',
+      'await fetch("/cpu/detail").then(r => r.json())',
+      'await fetch("/thermal").then(r => r.json())',
+      'await fetch("/memory").then(r => r.json())',
+      'await fetch("/storage").then(r => r.json())',
+      'await fetch("/kernel").then(r => r.json())',
       '',
       '--- API: Network (8) ---',
-      'fetch("/network").then(r => r.json()).then(j => log(j))',
-      'fetch("/wifi/detailed").then(r => r.json()).then(j => log(j))',
-      'fetch("/bluetooth").then(r => r.json()).then(j => log(j))',
-      'fetch("/telephony").then(r => r.json()).then(j => log(j))',
-      'fetch("/wifi/scan").then(r => r.json()).then(j => log(j))',
-      'fetch("/net/ping?host=8.8.8.8&count=3").then(r => r.json()).then(j => log(j))',
-      'fetch("/net/dns?host=example.com").then(r => r.json()).then(j => log(j))',
-      'fetch("/net/fetch?url=https%3A%2F%2Fapi.ipify.org%3Fformat%3Djson").then(r => r.json()).then(j => log(j))',
+      'await fetch("/network").then(r => r.json())',
+      'await fetch("/wifi/detailed").then(r => r.json())',
+      'await fetch("/bluetooth").then(r => r.json())',
+      'await fetch("/telephony").then(r => r.json())',
+      'await fetch("/wifi/scan").then(r => r.json())',
+      'await fetch("/net/ping?host=8.8.8.8&count=3").then(r => r.json())',
+      'await fetch("/net/dns?host=example.com").then(r => r.json())',
+      'await fetch("/net/fetch?url=https%3A%2F%2Fapi.ipify.org%3Fformat%3Djson").then(r => r.json())',
       '',
       '--- API: Display / Audio (7) ---',
-      'fetch("/display").then(r => r.json()).then(j => log(j))',
-      'fetch("/display/brightness").then(r => r.json()).then(j => log(j))',
-      'fetch("/display/color").then(r => r.json()).then(j => log(j))',
-      'fetch("/audio").then(r => r.json()).then(j => log(j))',
-      'fetch("/microphone").then(r => r.json()).then(j => log(j))',
-      'fetch("/audio/volume?stream=2").then(r => r.json()).then(j => log(j))',
-      'fetch("/audio/ringer").then(r => r.json()).then(j => log(j))',
+      'await fetch("/display").then(r => r.json())',
+      'await fetch("/display/brightness").then(r => r.json())',
+      'await fetch("/display/color").then(r => r.json())',
+      'await fetch("/audio").then(r => r.json())',
+      'await fetch("/microphone").then(r => r.json())',
+      'await fetch("/audio/volume?stream=2").then(r => r.json())',
+      'await fetch("/audio/ringer").then(r => r.json())',
       '',
       '--- API: Sensors (4) ---',
-      'fetch("/sensors").then(r => r.json()).then(j => log(j))',
-      'fetch("/sensors/read?name=accelerometer&ms=200").then(r => r.json()).then(j => log(j))',
-      'fetch("/sensors/stream?name=accelerometer&hz=10").then(r => r.json()).then(j => log(j))',
-      'fetch("/sensors/stream/stop?name=accelerometer").then(r => r.json()).then(j => log(j))',
+      'await fetch("/sensors").then(r => r.json())',
+      'await fetch("/sensors/read?name=accelerometer&ms=200").then(r => r.json())',
+      'await fetch("/sensors/stream?name=accelerometer&hz=10").then(r => r.json())',
+      'await fetch("/sensors/stream/stop?name=accelerometer").then(r => r.json())',
       '',
       '--- API: Hardware (4) ---',
-      'fetch("/features").then(r => r.json()).then(j => log(j))',
-      'fetch("/camera/list").then(r => r.json()).then(j => log(j))',
-      'fetch("/camera/snapshot").then(r => r.json()).then(j => log(j))',
-      'fetch("/microphone/record?seconds=3").then(r => r.json()).then(j => log(j))',
+      'await fetch("/features").then(r => r.json())',
+      'await fetch("/camera/list").then(r => r.json())',
+      'await fetch("/camera/snapshot").then(r => r.json())',
+      'await fetch("/microphone/record?seconds=3").then(r => r.json())',
       '',
       '--- API: Apps (2) ---',
-      'fetch("/app/list").then(r => r.json()).then(j => log(j))',
-      'fetch("/app/launch?pkg=com.android.settings").then(r => r.json()).then(j => log(j))',
+      'await fetch("/app/list").then(r => r.json())',
+      'await fetch("/app/launch?pkg=com.android.settings").then(r => r.json())',
       '',
       '--- API: Detailed (5) ---',
-      'fetch("/battery/detailed").then(r => r.json()).then(j => log(j))',
-      'fetch("/location/detailed").then(r => r.json()).then(j => log(j))',
-      'fetch("/locale").then(r => r.json()).then(j => log(j))',
-      'fetch("/calendar?days=7").then(r => r.json()).then(j => log(j))',
-      'fetch("/alarm/next").then(r => r.json()).then(j => log(j))',
+      'await fetch("/battery/detailed").then(r => r.json())',
+      'await fetch("/location/detailed").then(r => r.json())',
+      'await fetch("/locale").then(r => r.json())',
+      'await fetch("/calendar?days=7").then(r => r.json())',
+      'await fetch("/alarm/next").then(r => r.json())',
       '',
       '--- API: Files / Audio play (5) ---',
-      'fetch("/files/save?name=test.txt&data=hello").then(r => r.json()).then(j => log(j))',
-      'fetch("/audio/play?uri=/system/media/audio/notifications/Hello.ogg").then(r => r.json()).then(j => log(j))',
-      'fetch("/audio/play/stop").then(r => r.json()).then(j => log(j))',
-      'fetch("/tts/voices").then(r => r.json()).then(j => log(j))',
-      'fetch("/tts/stop").then(r => r.json()).then(j => log(j))',
+      'await fetch("/files/save?name=test.txt&data=hello").then(r => r.json())',
+      'await fetch("/audio/play?uri=/system/media/audio/notifications/Hello.ogg").then(r => r.json())',
+      'await fetch("/audio/play/stop").then(r => r.json())',
+      'await fetch("/tts/voices").then(r => r.json())',
+      'await fetch("/tts/stop").then(r => r.json())',
       '',
       '--- API: Watch (logcat) (4) ---',
-      'fetch("/clipboard/watch?hz=2").then(r => r.json()).then(j => log(j))',
-      'fetch("/clipboard/watch/stop").then(r => r.json()).then(j => log(j))',
-      'fetch("/location/watch?hz=1").then(r => r.json()).then(j => log(j))',
-      'fetch("/location/watch/stop").then(r => r.json()).then(j => log(j))',
+      'await fetch("/clipboard/watch?hz=2").then(r => r.json())',
+      'await fetch("/clipboard/watch/stop").then(r => r.json())',
+      'await fetch("/location/watch?hz=1").then(r => r.json())',
+      'await fetch("/location/watch/stop").then(r => r.json())',
       '',
       '--- Debug tabs ---',
       'MtapiDebug.open()',
@@ -367,10 +367,57 @@
     if (out) out.innerHTML = '<pre style="margin:0;white-space:pre-wrap;color:#aaa;font-size:10px">' + esc(ex) + '</pre>';
   };
 
+  global.log = function(){ push('log', Array.prototype.slice.call(arguments)); };
+  global.warn = function(){ push('warn', Array.prototype.slice.call(arguments)); };
+  global.error = function(){ push('error', Array.prototype.slice.call(arguments)); };
+
+  global._evalCheatsheet = function() {
+    var cs = [
+      '=== Console — cheatsheet (??) ===',
+      '',
+      'await fetch("/battery").then(r => r.json())',
+      'await fetch("/sensors").then(r => r.json())',
+      'await fetch("/system").then(r => r.json())',
+      'await fetch("/wifi").then(r => r.json())',
+      'MtapiDebug.setTab("logs")',
+      'MtapiDebug.setTab("network")',
+      '',
+      '?    quick',
+      '??   cheatsheet (this)',
+      '???  full'
+    ].join('\n');
+    var out = global.document.getElementById('mtapi-debug-eval-out');
+    if (out) out.innerHTML = '<pre style="margin:0;white-space:pre-wrap;color:#aaa;font-size:10px">' + esc(cs) + '</pre>';
+    return cs;
+  };
+
+  global._evalCode = async function(code) {
+    var inp = global.document.querySelector('.mtapi-dbg-eval-input');
+    if (!inp) return null;
+    inp.value = String(code);
+    if (global._evalConsole) await global._evalConsole();
+    var pre = global.document.getElementById('mtapi-debug-eval-out');
+    return pre ? (pre.textContent || '') : null;
+  };
+
   global._evalConsole = async function(){
     var inp = global.document.querySelector('.mtapi-dbg-eval-input');
     if (!inp) return;
     var cmd = (inp.value||'').trim(); if(!cmd) return;
+
+    // ── Help levels ──
+    if (cmd === '?' || cmd === 'help' || cmd === 'help()') {
+      if (global._evalHelp) global._evalHelp();
+      inp.value = ''; return;
+    }
+    if (cmd === '??') {
+      if (global._evalCheatsheet) global._evalCheatsheet();
+      inp.value = ''; return;
+    }
+    if (cmd === '???' || cmd === 'examples()' || cmd === 'nav()') {
+      if (global._evalNavExamples) global._evalNavExamples();
+      inp.value = ''; return;
+    }
     if (cmd === '???' || cmd === 'examples()' || cmd === 'nav()') { if (global._evalNavExamples) global._evalNavExamples(); if (inp) inp.value = ''; return; }
     var out;
     try{ var _evalFn = global['eval']; var _wrapped = /(^|[^a-zA-Z0-9_$.])await(\s|$)/.test(cmd) ? '(async () => { return (' + cmd + '); })()' : cmd; var r = _evalFn(_wrapped); if (r && typeof r.then === 'function') { r = await r; } out = _renderEvalOutput(r); }
@@ -1371,6 +1418,11 @@ function _domClickHandler(ev){
     if (name === 'logcat') global._logcatRefresh();
     if (name === 'system') { global._perfRefresh(); refreshSystemInfo(); }
     if (name === 'logs') global._netRefresh();
+    // Scroll active tab to center of tab bar
+    try {
+      var _tb = doc.querySelector('.mtapi-debug-tabs [data-tab="' + name + '"]');
+      if (_tb && _tb.scrollIntoView) _tb.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' });
+    } catch(e) {}
   };
   global._sidePanelToggle = function(){ var sp = global.document && global.document.getElementById('mtapi-debug-sidepanel'); if (sp) sp.classList.toggle('open'); };
   global._sidePanelClose = function(){ var sp = global.document && global.document.getElementById('mtapi-debug-sidepanel'); if (sp) sp.classList.remove('open'); };
@@ -1435,7 +1487,7 @@ function _domClickHandler(ev){
     }
     function _browserUpdateButtons() {
       if (bBack) bBack.disabled = _browserHistoryIdx <= 0;
-      if (bFwd) bFwd.disabled = _browserHistoryIdx >= _browserHistory.length - 1;
+      if (bFwd) bFwd.disabled = false; // always enabled; acts as Enter when no forward history
     }
     function _browserLoad(url) {
       if (!url) return;
@@ -1450,13 +1502,6 @@ function _domClickHandler(ev){
       if (_spin) _spin.style.display = 'inline-block';
       function _spinDone() { if (_spin) _spin.style.display = 'none'; }
       if (!/^(https?:\/\/|\/)/.test(url)) url = 'https://' + url;
-      // Add to _browserHistory (for ←/→ buttons, not iframe.history)
-      if (_browserHistory[_browserHistoryIdx] !== url) {
-        _browserHistory = _browserHistory.slice(0, _browserHistoryIdx + 1);
-        _browserHistory.push(url);
-        _browserHistoryIdx = _browserHistory.length - 1;
-      }
-      if (global._browserUpdateButtons) global._browserUpdateButtons();
       // Local (same-origin) → iframe.src directly
       if (url.indexOf('/') === 0) {
         iframe.removeAttribute('srcdoc');
@@ -1504,7 +1549,15 @@ function _domClickHandler(ev){
       if (_browserHistoryIdx > 0) { _browserHistoryIdx--; urlIn.value = _browserHistory[_browserHistoryIdx]; _browserUpdateButtons(); _browserLoad(_browserHistory[_browserHistoryIdx]); }
     };
     global._browserForward = function() {
-      if (_browserHistoryIdx < _browserHistory.length - 1) { _browserHistoryIdx++; urlIn.value = _browserHistory[_browserHistoryIdx]; _browserUpdateButtons(); _browserLoad(_browserHistory[_browserHistoryIdx]); }
+      if (_browserHistoryIdx < _browserHistory.length - 1) {
+        _browserHistoryIdx++;
+        urlIn.value = _browserHistory[_browserHistoryIdx];
+        _browserLoad(_browserHistory[_browserHistoryIdx]);
+        _browserUpdateButtons();
+      } else {
+        var _u = (urlIn.value || "").trim();
+        if (_u) _nav(_u);
+      }
     };
     global._browserReload = function() { _browserLoad(_browserHistory[_browserHistoryIdx]); };
     global._browserClose = function() { var o = global.document.getElementById('mtapi-browser-overlay'); if (o) o.remove(); };
@@ -1515,8 +1568,9 @@ function _domClickHandler(ev){
     if (bApi) bApi.onclick = global._browserClose;
     if (urlIn) urlIn.onkeydown = function(e) { if (e.key === 'Enter') _nav(urlIn.value); };
     if (bDebug) bDebug.onclick = function() {
-      if (global._debugOpen) { try { global._debugOpen(); } catch(e){} }
-      if (global._mtapiToast) global._mtapiToast('Debug: use \uD83C\uDF10 tree (root=overlay) or right-click iframe → Inspect');
+      try { if (global._browserClose) global._browserClose(); } catch(e){}
+      try { if (global._debugOpen) global._debugOpen(); } catch(e){}
+      if (global._mtapiToast) global._mtapiToast('Debug overlay: back to mtapi, or open browser');
     };
 
     // nav messages from srcdoc iframe
@@ -1693,7 +1747,7 @@ function _domClickHandler(ev){
     // ── Console ──
     html += '<div data-tab-content="console" class="' + (_activeTab==='console'?'active':'') + '">';
     html += '<details class="mtapi-debug-section" open data-flat="1"><summary>Console Eval</summary>';
-    html += '<div style="margin:4px 0;display:flex;gap:4px;align-items:center;flex-wrap:wrap"><textarea class="mtapi-dbg-eval-input" placeholder="JS (multiline, Ctrl+Enter to run)..." rows="3" style="flex:1 1 100%;padding:6px;background:#000;color:#ddd;border:1px solid #444;font-family:monospace;resize:vertical;min-height:60px;max-height:40vh"></textarea><button onclick="window._evalConsole()">\u25B6</button><button class="icon-btn-sm" aria-label="Copy" title="Copy output" onclick="window._evalCopy&&window._evalCopy()">\uD83D\uDCCB</button><button class="icon-btn-sm danger" aria-label="Clear" title="Clear output" onclick="window._evalClear&&window._evalClear()">\uD83D\uDDD1</button><button class="icon-btn-sm" aria-label="Help" title="Help" onclick="window._evalHelp&&window._evalHelp()">?</button><button class="icon-btn-sm" aria-label="DOM" title="Floating DOM tree" onclick="window._domShowFloating&&window._domShowFloating()">\uD83C\uDF33</button></div>';
+    html += '<div style="margin:4px 0;display:flex;gap:4px;align-items:center;flex-wrap:wrap"><textarea class="mtapi-dbg-eval-input" placeholder="JS (multiline, Ctrl+Enter to run)..." rows="3" style="flex:1 1 100%;padding:6px;background:#000;color:#ddd;border:1px solid #444;font-family:monospace;resize:vertical;min-height:60px;max-height:40vh"></textarea><button onclick="window._evalConsole()">\u25B6</button><button class="icon-btn-sm" aria-label="Copy" title="Copy output" onclick="window._evalCopy&&window._evalCopy()">\uD83D\uDCCB</button><button class="icon-btn-sm danger" aria-label="Clear" title="Clear output" onclick="window._evalClear&&window._evalClear()">\uD83D\uDDD1</button><div style="flex:1"></div><button class="icon-btn-sm" aria-label="DOM" title="Floating DOM tree" onclick="window._domShowFloating&&window._domShowFloating()">\uD83C\uDF33</button></div>';
     html += '<div id="mtapi-debug-eval-out" class="mtapi-debug-pre" style="color:#ddd">\u2014</div>';
     html += '</details>';
     html += '</div>';
@@ -1788,6 +1842,13 @@ function _domClickHandler(ev){
     backBtn.title = 'Back to app';
     backBtn.setAttribute('onclick', 'window._debugClose()');
     row1.appendChild(backBtn);
+    var browserBtn = doc.createElement('button');
+    browserBtn.id = 'mtapi-debug-browser-btn';
+    browserBtn.className = 'mtapi-debug-back';
+    browserBtn.textContent = '🌐';
+    browserBtn.title = 'Open browser';
+    browserBtn.setAttribute('onclick', 'window._debugClose(); setTimeout(function(){ window._browserOpen && window._browserOpen(); }, 100);');
+    if (backBtn && backBtn.parentNode) backBtn.parentNode.insertBefore(browserBtn, backBtn.nextSibling);
 
     var spacer = doc.createElement('div');
     spacer.style.cssText = 'flex:1';
@@ -1940,6 +2001,23 @@ function _domClickHandler(ev){
           return _origFetch.call(global, url, opts);
         };
       }
+      // Swipe-to-scroll for tab bar
+      if (!global._mtapiTabsSwipeBound) {
+        global._mtapiTabsSwipeBound = true;
+        global.document.addEventListener('touchstart', function(e){
+          var tb = e.target && e.target.closest && e.target.closest('.mtapi-debug-tabs');
+          if (!tb) return;
+          global._mtapiTabsSwipe = {active:true, startX:e.touches[0].clientX, startScroll:tb.scrollLeft, el:tb};
+        }, {passive:true});
+        global.document.addEventListener('touchmove', function(e){
+          var sw = global._mtapiTabsSwipe;
+          if (!sw || !sw.active) return;
+          sw.el.scrollLeft = sw.startScroll - (e.touches[0].clientX - sw.startX);
+        }, {passive:true});
+        global.document.addEventListener('touchend', function(){
+          if (global._mtapiTabsSwipe) global._mtapiTabsSwipe.active = false;
+        }, {passive:true});
+      }
       global._setTab(_activeTab);
       try { global._jslogLiveStart(2000); setTimeout(function(){ if (global._evalHelp) global._evalHelp(); }, 100); } catch(e){}
       return ov;
@@ -1953,6 +2031,7 @@ function _domClickHandler(ev){
     open: global._debugOpen,
     close: global._debugClose,
     setTab: global._setTab,
+    eval: function(code) { return global._evalCode(code); },
     version: '0.2.0'
   };
 

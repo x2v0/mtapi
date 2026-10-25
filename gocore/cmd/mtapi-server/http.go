@@ -727,6 +727,12 @@ func startHTTP(api AndroidAPI, token string) error {
 	mux.HandleFunc("/help/tests", s.helpTestsHandler)
 	mux.HandleFunc("/help/faq", s.helpFAQHandler)
 	mux.HandleFunc("/help/", s.helpIndexHandler)
+	mux.HandleFunc("/logs", s.logsPageHandler)
+	mux.HandleFunc("/errors", s.errorsPageHandler)
+	mux.HandleFunc("/logcat", s.logcatPageHandler)
+	mux.HandleFunc("/devtools", s.devtoolsPageHandler)
+	mux.HandleFunc("/sys", s.sysPageHandler)
+	mux.HandleFunc("/net", s.netPageHandler)
 	mux.HandleFunc("/console", s.consoleHandler)
 	mux.HandleFunc("/", s.handleIndex)
 	mux.HandleFunc("/manifest.json", func(w http.ResponseWriter, r *http.Request) {

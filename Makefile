@@ -72,8 +72,8 @@ apk: so
 	 '  name: "mtapi"' \
 	 '  package: dev.mtapi' \
 	 '  targetSdk: 34' \
-	 '  versionCode: 291' \
-	 '  versionName: "2.13.0"' \
+	 '  versionCode: 292' \
+	 '  versionName: "2.13.2"' \
 	 'type: custom' \
 	 'custom:' \
 	 '  sources:' \
