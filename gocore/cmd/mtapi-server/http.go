@@ -712,8 +712,8 @@ func startHTTP(api AndroidAPI, token string) error {
 		w.Header().Set("Cache-Control", "public, max-age=3600")
 		fmt.Fprint(w, styleCSS)
 	})
-		mux.HandleFunc("/proxy-url", s.proxyURLHandler)
-mux.HandleFunc("/proxy/", s.proxyHandler)
+	mux.HandleFunc("/proxy-url", s.proxyURLHandler)
+	mux.HandleFunc("/proxy/", s.proxyHandler)
 	mux.HandleFunc("/", s.handleIndex)
 	mux.HandleFunc("/manifest.json", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/manifest+json")
