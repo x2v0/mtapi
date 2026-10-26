@@ -21,6 +21,18 @@ bookToc: false
 <p>FAB 🐞 → overlay с 7 табами: <a href="/help/debug">Debug</a>.</p>
 <h2>Browser overlay</h2>
 <p>⚙️ в header → iframe + proxy: <a href="/help/browser">Browser</a>.</p>
+<h2>Console (web, 5 табов)</h2>
+<p><code>/console</code> — веб-консоль в браузере (открывается в URL input):</p>
+<ul>
+<li><b>Console</b> — JS eval с <code>await</code> (fetch любой endpoint)</li>
+<li><b>Logs</b> — JS логи</li>
+<li><b>Errors</b> — persistent errors</li>
+<li><b>Logcat</b> — Android logcat</li>
+<li><b>System</b> — CPU, RAM, storage</li>
+</ul>
+<p>Открыть: в browser введи <code>/console</code> (или полный <code>http://127.0.0.1:7788/console</code>).</p>
+<p class="hint">Совет: <code>/help</code> — документация (эта страница), <code>/console</code> — интерактивная консоль с 5 табами.</p>
+
 <h2>Дальше</h2>
 <ul>
 <li><a href="/help/api">API endpoints (60+)</a></li>

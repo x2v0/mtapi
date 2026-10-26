@@ -9,6 +9,7 @@ import (
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/extension"
 	"github.com/yuin/goldmark/parser"
+	"github.com/yuin/goldmark/renderer/html"
 )
 
 //go:embed help_docs/*.md
@@ -17,6 +18,7 @@ var helpDocsFS embed.FS
 var helpMD = goldmark.New(
 	goldmark.WithExtensions(extension.GFM),
 	goldmark.WithParserOptions(parser.WithAutoHeadingID()),
+	goldmark.WithRendererOptions(html.WithUnsafe()),
 )
 
 var helpDocCache = map[string][2]string{}
