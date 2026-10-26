@@ -420,13 +420,13 @@ body.help-mode.light::before {
 
 /* 2. Top banner */
 body.help-mode::after {
-  content: "HELP MODE — tap any control to see description (Esc to exit)";
+  content: "HELP MODE · tap=describe · 2×tap=act · 3×tap=exit · Esc=close";
   position: fixed; top: 0; left: 0; right: 0;
   background: #0288d1; color: #fff;
   font-family: ui-monospace, monospace;
-  font-size: 11px; font-weight: 600;
-  text-align: center; padding: 4px;
-  z-index: 100003; letter-spacing: 0.3px;
+  font-size: 10px; font-weight: 600;
+  text-align: center; padding: 3px;
+  z-index: 100003; letter-spacing: 0.2px;
   pointer-events: none;
 }
 
@@ -500,3 +500,88 @@ body.help-mode #help-btn {
   border-color: #0288d1 !important;
   box-shadow: 0 0 0 3px rgba(2,136,209,0.45) !important;
 }
+
+
+/* ── HELP MODE INTRO (modal на входе) ─────────────────────── */
+#mtapi-help-intro {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.55);
+  z-index: 100005;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  font-family: ui-monospace, monospace;
+}
+#mtapi-help-intro.show { display: flex; }
+#mtapi-help-intro .hi-card {
+  background: var(--bg3, #2a2a2a);
+  color: var(--fg, #eee);
+  border: 1px solid var(--accent, #0288d1);
+  border-radius: 10px;
+  padding: 18px 20px;
+  max-width: 360px;
+  width: calc(100% - 32px);
+  box-shadow: 0 12px 40px rgba(0,0,0,0.65);
+  font-size: 12px;
+  line-height: 1.55;
+}
+#mtapi-help-intro .hi-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--accent, #4fc3f7);
+  margin-bottom: 4px;
+}
+#mtapi-help-intro .hi-sub {
+  color: var(--fg3, #888);
+  font-size: 11px;
+  margin-bottom: 12px;
+}
+#mtapi-help-intro .hi-list {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 14px;
+}
+#mtapi-help-intro .hi-list li {
+  padding: 5px 0;
+  border-bottom: 1px solid var(--bg4, #444);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+#mtapi-help-intro .hi-list li:last-child { border-bottom: none; }
+#mtapi-help-intro .hi-list li b {
+  color: var(--accent, #4fc3f7);
+  font-weight: 700;
+  min-width: 70px;
+}
+#mtapi-help-intro .hi-list li span {
+  color: var(--fg2, #aaa);
+  font-size: 11px;
+  text-align: right;
+  flex: 1;
+}
+#mtapi-help-intro .hi-noshow {
+  display: block;
+  font-size: 11px;
+  color: var(--fg3, #888);
+  margin: 10px 0 12px;
+  cursor: pointer;
+  user-select: none;
+}
+#mtapi-help-intro .hi-noshow input { vertical-align: middle; margin-right: 6px; }
+#mtapi-help-intro .hi-ok {
+  width: 100%;
+  padding: 8px 14px;
+  background: var(--accent, #0288d1);
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  font-family: monospace;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  letter-spacing: 0.3px;
+}
+#mtapi-help-intro .hi-ok:hover { filter: brightness(1.1); }
+html[data-theme="light"] #mtapi-help-intro .hi-card,
+body.light #mtapi-help-intro .hi-card { background: #f5f5f5; color: #1a1a1a; }

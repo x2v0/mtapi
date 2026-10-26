@@ -1485,7 +1485,14 @@ function _domClickHandler(ev){
   // ─── HELP MODE (wiki-style, click = show tooltip, no action) ──
   var _helpMode = false;
   var _helpPinned = false;
-
+  var _helpModeBypass = false;
+  var _tapCount = 0;
+  var _lastTapTime = 0;
+  var _lastTapTarget = null;
+  var _lastTapX = 0, _lastTapY = 0;
+  var _touchStartX = 0, _touchStartY = 0, _touchStartTime = 0;
+  var _lastTouchWasSwipe = false;
+  var _helpPinned = false;
   global._helpTipShow = function(el, x, y) {
     var d = global.document; if (!d || !el) return;
     var text = el.getAttribute('data-tip') || el.getAttribute('title');
@@ -1514,11 +1521,68 @@ function _domClickHandler(ev){
     _helpPinned = false;
   };
 
+  // ─── HELP MODE INTRO (modal with gesture explanation) ──
+  var _helpIntroSeenKey = 'mtapi-help-intro-seen';
+
+  global._helpIntroShow = function() {
+    var d = global.document; if (!d) return;
+    var m = d.getElementById('mtapi-help-intro');
+    if (!m) {
+      m = d.createElement('div');
+      m.id = 'mtapi-help-intro';
+      m.innerHTML = ''
+        + '<div class="hi-card">'
+        + '  <div class="hi-title">Help Mode</div>'
+        + '  <div class="hi-sub">Изучение интерфейса без выполнения действий</div>'
+        + '  <ul class="hi-list">'
+        + '    <li><b>1 tap</b><span>— описание (wiki)</span></li>'
+        + '    <li><b>2 taps</b><span>— выполнить действие</span></li>'
+        + '    <li><b>3 taps</b><span>— выйти из Help Mode</span></li>'
+        + '    <li><b>swipe</b><span>— прокрутка (без tooltip)</span></li>'
+        + '    <li><b>Esc</b><span>— закрыть tooltip</span></li>'
+        + '  </ul>'
+        + '  <label class="hi-noshow"><input type="checkbox" id="mtapi-help-intro-dont"> не показывать снова</label>'
+        + '  <button class="hi-ok" id="mtapi-help-intro-ok">OK, понятно</button>'
+        + '</div>';
+      d.body.appendChild(m);
+      var ok = d.getElementById('mtapi-help-intro-ok');
+      if (ok) ok.onclick = function() {
+        var cb = d.getElementById('mtapi-help-intro-dont');
+        if (cb && cb.checked) { try { global.localStorage.setItem(_helpIntroSeenKey, '1'); } catch(e){} }
+        global._helpIntroHide();
+      };
+      // клик мимо card — тоже закрыть
+      m.addEventListener('click', function(e){ if (e.target === m) global._helpIntroHide(); });
+    }
+    m.classList.add('show');
+    // stop propagation — intro не должен триггерить help-mode click handler
+    m.addEventListener('click', function(e){ e.stopPropagation(); }, true);
+  };
+
+  global._helpIntroHide = function() {
+    var d = global.document; if (!d) return;
+    var m = d.getElementById('mtapi-help-intro');
+    if (m) m.classList.remove('show');
+  };
+
+  global._helpIntroSeen = function() {
+    try { return global.localStorage.getItem(_helpIntroSeenKey) === '1'; }
+    catch(e) { return false; }
+  };
+
   global._helpModeToggle = function() {
     var d = global.document; if (!d) return;
     _helpMode = !_helpMode;
     d.body.classList.toggle('help-mode', _helpMode);
-    if (!_helpMode) global._helpTipHide();
+    if (!_helpMode) {
+      global._helpTipHide();
+      global._helpIntroHide();
+    } else {
+      // первый раз — показать intro с объяснением
+      if (!global._helpIntroSeen()) {
+        setTimeout(function(){ global._helpIntroShow(); }, 60);
+      }
+    }
   };
 
   // capture-phase: in help-mode, tap → show tooltip, stop event
@@ -1526,21 +1590,81 @@ function _domClickHandler(ev){
     var d = global.document; if (!d || global._helpModeBound) return;
     global._helpModeBound = true;
 
+    var _hb = d.getElementById('help-btn');
+    if (_hb && !_hb.onclick) _hb.onclick = function(){ global._helpModeToggle && global._helpModeToggle(); };
+
+    // swipe detection — skip tooltip on scroll/long-press
+    d.addEventListener('touchstart', function(e) {
+      if (!_helpMode) return;
+      var t = e.touches[0]; if (!t) return;
+      _touchStartX = t.clientX; _touchStartY = t.clientY; _touchStartTime = Date.now();
+    }, { capture: true, passive: true });
+
+    d.addEventListener('touchend', function(e) {
+      if (!_helpMode) return;
+      var t = e.changedTouches[0]; if (!t) return;
+      var dx = Math.abs(t.clientX - _touchStartX);
+      var dy = Math.abs(t.clientY - _touchStartY);
+      var dt = Date.now() - _touchStartTime;
+      if (dx > 12 || dy > 12 || dt > 600) {
+        _lastTouchWasSwipe = true;
+        setTimeout(function(){ _lastTouchWasSwipe = false; }, 60);
+      }
+    }, { capture: true, passive: true });
+
     d.addEventListener('click', function(e) {
       if (!_helpMode) return;
+      if (_helpModeBypass) return;
+      if (_lastTouchWasSwipe) { _lastTouchWasSwipe = false; return; }
+
       var el = e.target;
       while (el && el !== d.body) {
-        if (el.hasAttribute && (el.hasAttribute('data-tip') || el.hasAttribute('title'))) {
-          e.preventDefault();
-          e.stopPropagation();
-          e.stopImmediatePropagation();
-          global._helpTipShow(el, e.clientX || 60, e.clientY || 60);
-          return;
-        }
+        if (el.hasAttribute && (el.hasAttribute('data-tip') || el.hasAttribute('title'))) break;
         el = el.parentNode;
       }
-      // клик мимо — закрыть, но не блокировать
-      global._helpTipHide();
+      if (el === d.body) el = null;
+
+      var now = Date.now();
+      var same = (_lastTapTarget === el);
+      var withinTime = (now - _lastTapTime) < 450;
+      var withinSpace = Math.abs((e.clientX || 0) - _lastTapX) < 24
+                     && Math.abs((e.clientY || 0) - _lastTapY) < 24;
+      _tapCount = (same && withinTime && withinSpace) ? (_tapCount + 1) : 1;
+      _lastTapTarget = el; _lastTapTime = now;
+      _lastTapX = e.clientX || 0; _lastTapY = e.clientY || 0;
+
+      // 3+ taps → EXIT help mode
+      if (_tapCount >= 3) {
+        e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();
+        global._helpTipHide();
+        global._helpModeToggle();  // turns off (was on)
+        _tapCount = 0;
+        return;
+      }
+
+      // 2 taps → run action (stay in help mode)
+      if (_tapCount === 2) {
+        e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();
+        global._helpTipHide();
+        if (!el) return;
+        _helpModeBypass = true;
+        setTimeout(function() {
+          try {
+            var evt = new MouseEvent('click', {
+              bubbles: true, cancelable: true, view: global,
+              clientX: e.clientX, clientY: e.clientY, button: 0
+            });
+            el.dispatchEvent(evt);
+          } catch (x) {}
+          _helpModeBypass = false;
+        }, 0);
+        return;
+      }
+
+      // single tap → tooltip (no action)
+      e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();
+      if (el) global._helpTipShow(el, e.clientX || 60, e.clientY || 60);
+      else global._helpTipHide();
     }, true);
 
     d.addEventListener('keydown', function(e) {
