@@ -1,7 +1,6 @@
 package main
 
 import (
-	"html/template"
 	"net/http"
 )
 
@@ -37,7 +36,9 @@ func helpRender(w http.ResponseWriter, title, active, body string) {
 	html += `<div class="nav"><a href="/help">🏠 Оглавление</a><a href="/help/quickstart">📖 Quickstart</a><a href="/help/js_console">🖥️ JS Console</a><a href="/help/api">🔌 API</a><a href="/help/debug">🐞 Debug</a><a href="/help/dom">🌳 DOM</a><a href="/help/browser">🌐 Browser</a><a href="/help/native">📱 Native</a><a href="/help/architecture">🏗️ Arch</a><a href="/help/build">🔨 Build</a><a href="/help/tests">✅ Tests</a><a href="/help/faq">❓ FAQ</a></div>`
 	html += body
 	html += `<p class="hint" style="margin-top:24px">mtapi · terminal API для Android · <a href="https://github.com/x2v0/mtapi">github</a></p>`
-	html += `<script>function copy(el){var t=el.textContent||el.innerText;if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(t).then(function(){toast('Copied: '+t.slice(0,50))})}else{var ta=document.createElement('textarea');ta.value=t;document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta);toast('Copied')}}function toast(m){var t=document.getElementById('toast');if(!t){t=document.createElement('div');t.id='toast';t.style.cssText='position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#0288d1;color:#fff;padding:8px 16px;border-radius:4px;font-family:monospace;font-size:12px;z-index:9999;transition:opacity 0.2s';document.body.appendChild(t)}t.textContent=m;t.style.opacity='1';clearTimeout(t._t);t._t=setTimeout(function(){t.style.opacity='0'},2000)}</script>`
+	html += `<script>function copy(el){var t=el.textContent||el.innerText;if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(t).then(function(){toast('Copied: '+t.slice(0,50))})}else{var ta=document.createElement('textarea');ta.value=t;document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta);toast('Copied')}}function toast(m){var t=document.getElementById('toast');if(!t){t=document.createElement('div');t.id='toast';t.style.cssText='position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#0288d1;color:#fff;padding:8px 16px;border-radius:4px;font-family:monospace;font-size:12px;z-index:9999;transition:opacity 0.2s';document.body.appendChild(t)}t.textContent=m;t.style.opacity='1';clearTimeout(t._t);t._t=setTimeout(function(){t.style.opacity='0'},2000)}
+document.addEventListener('click',function(e){if(e.target&&e.target.tagName==='CODE'){e.preventDefault();copy(e.target)}});
+</script>`
 	html += `</body></html>`
 	w.Write([]byte(html))
 }
@@ -155,90 +156,7 @@ func (s *apiServer) helpIndexHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // ── /help/js_console ──
-var jsConsoleCategories = []struct {
-	Name     string
-	Commands []struct{ Cmd, Desc string }
-}{
-	{"DOM query", []struct{ Cmd, Desc string }{
-		{`$("#main")`, "document.querySelector"},
-		{`$$("details")`, "array of elements"},
-		{`$$("details").length`, "count"},
-		{`$$("button").map(b => b.id)`, "map over nodes"},
-		{`$("h1").textContent`, "text"},
-	}},
-	{"Inspect / Select", []struct{ Cmd, Desc string }{
-		{`inspect($("#main"))`, "highlight + show in info panel"},
-		{`inspect(document.body)`, "inspect body"},
-		{`domInspect()`, "toggle select mode"},
-		{`domInspectStop()`, "exit select mode"},
-		{`domShowFloating()`, "open floating DOM tree"},
-		{`_domRefresh()`, "refresh tree"},
-		{`_domToggleRoot()`, "overlay <-> page"},
-	}},
-	{"JS Logs", []struct{ Cmd, Desc string }{
-		{`log("test", 123, {a: 1})`, "push to JS Logs (V)"},
-		{`warn("careful")`, "push (W)"},
-		{`error("oops")`, "push (E)"},
-		{`MtapiDebug.buffer().length`, "JS logs count"},
-		{`MtapiDebug.errors()`, "persistent errors array"},
-		{`clearEval()`, "clear output"},
-	}},
-	{"Debug tabs", []struct{ Cmd, Desc string }{
-		{`MtapiDebug.open()`, "open overlay"},
-		{`MtapiDebug.close()`, "close overlay"},
-		{`MtapiDebug.setTab("logs")`, "switch to Logs"},
-		{`MtapiDebug.setTab("console")`, "Console Eval"},
-		{`MtapiDebug.setTab("errors")`, "Errors"},
-		{`MtapiDebug.setTab("logcat")`, "Logcat"},
-		{`MtapiDebug.setTab("devtools")`, "DevTools"},
-		{`MtapiDebug.setTab("system")`, "System"},
-		{`MtapiDebug.setTab("network")`, "Network"},
-	}},
-	{"Perf", []struct{ Cmd, Desc string }{
-		{`MtapiDebug.perf("my-test", 42)`, "record perf metric"},
-		{`MtapiDebug.time("x")`, "start timer"},
-		{`MtapiDebug.timeEnd("x")`, "end timer + record"},
-		{`MtapiDebug.selectElement("#main h1")`, "select + inspect"},
-	}},
-	{"Network (logged)", []struct{ Cmd, Desc string }{
-		{`fetch("/ping").then(r => r.json()).then(j => log(j))`, "GET /ping"},
-		{`fetch("/battery").then(r => r.json()).then(j => log(j))`, "GET /battery"},
-		{`fetch("/system").then(r => r.json()).then(j => log(j))`, "GET /system"},
-		{`fetch("/sensors").then(r => r.json()).then(j => log(j))`, "GET /sensors"},
-	}},
-	{"Native (APK only)", []struct{ Cmd, Desc string }{
-		{`Android.getLogcat(20)`, "logcat (20 lines)"},
-		{`Android.processList()`, "running processes"},
-		{`Android.getDeviceInfo()`, "device info"},
-	}},
-	{"Browser overlay", []struct{ Cmd, Desc string }{
-		{`_browserOpen()`, "open (default /help)"},
-		{`_browserOpen("https://example.com")`, "open URL"},
-		{`_browserNavigate("https://example.com")`, "navigate"},
-		{`_browserClose()`, "close"},
-	}},
-	{"AI Snap (advanced)", []struct{ Cmd, Desc string }{
-		{`inspect($("#main"))`, "select first"},
-		{`_aiSnap()`, "markdown of selected"},
-		{`_aiSnapWithRequest("make it red")`, "markdown + task"},
-		{`_captureElement()`, "copy outerHTML"},
-	}},
-	{"Help levels", []struct{ Cmd, Desc string }{
-		{`?`, "quick (5-7)"},
-		{`??`, "cheatsheet (all)"},
-		{`???`, "full (examples + navigation)"},
-		{`help()`, "same as ?"},
-	}},
-}
-
 func (s *apiServer) helpJSConsoleHandler(w http.ResponseWriter, r *http.Request) {
-	body := `<h1>🖥️ JS Console</h1><p class="hint">Click any command to copy. Paste into Console Eval (FAB 🐞 → Console). Run with Ctrl+Enter.</p>`
-	for i, c := range jsConsoleCategories {
-		body += `<h2 id="cat-` + helpItoa(i) + `">` + c.Name + `</h2><table><thead><tr><th style="width:65%">Command</th><th>Description</th></tr></thead><tbody>`
-		for _, cmd := range c.Commands {
-			body += `<tr><td><code onclick="copy(this)">` + template.HTMLEscapeString(cmd.Cmd) + `</code></td><td class="desc">` + template.HTMLEscapeString(cmd.Desc) + `</td></tr>`
-		}
-		body += `</tbody></table>`
-	}
-	helpRender(w, "JS Console", "js_console", body)
+	title, body := renderHelpDoc("js_console")
+	helpRender(w, title, "js_console", body)
 }

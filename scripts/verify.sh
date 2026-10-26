@@ -58,6 +58,14 @@ check "$GOCORE/style.css"      '#mtapi-help-intro'      'intro modal CSS'
 check "$GOCORE/style.css"      '#browser-btn:disabled'  'browser disabled CSS'
 check "$GOCORE/style.css"      '[data-tip]'             'tooltip CSS'
 
+# help refactor (Stage 2): md embedded + goldmark
+check "$GOCORE/help_embed.go"          'go:embed help_docs/*.md'     'go:embed help_docs'
+check "$GOCORE/help_embed.go"          'renderHelpDoc'               'renderHelpDoc'
+check "$GOCORE/help_pages.go"          'renderHelpDoc("quickstart")' 'help_pages uses renderHelpDoc'
+check "$GOCORE/help_docs/api.md"       '/battery'                     'api.md has /battery'
+check "$GOCORE/help_docs/js_console.md" 'MtapiDebug'                  'js_console.md has MtapiDebug'
+check "gocore/go.mod"                   'yuin/goldmark'               'goldmark in go.mod'
+
 hdr "[6/6] .so"
 if [ -f "$SO" ]; then
   sz=$(stat -c%s "$SO" 2>/dev/null || stat -f%z "$SO")

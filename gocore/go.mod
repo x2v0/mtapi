@@ -2,7 +2,10 @@ module mtapi/gocore
 
 go 1.22
 
-require google.golang.org/grpc v1.60.0
+require (
+	github.com/yuin/goldmark v1.8.6
+	google.golang.org/grpc v1.60.0
+)
 
 require (
 	github.com/golang/protobuf v1.5.3 // indirect
