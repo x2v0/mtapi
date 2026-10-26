@@ -7,7 +7,7 @@
 <link rel="manifest" href="./manifest.json">
 <link rel="icon" type="image/jpeg" href="./me.jpg">
 <title>mtapi</title>
-<link rel="stylesheet" href="./style.css">
+<link rel="stylesheet" href="./style.css?v=20261026a">
 <style>
 body::before{content:"DEMO — mock Android data, no real API";position:fixed;top:0;left:0;right:0;background:#f59e0b;color:#000;text-align:center;padding:4px;font-family:monospace;font-size:11px;font-weight:600;z-index:999999;pointer-events:none}
 body{padding-top:20px}
@@ -33,8 +33,8 @@ body{padding-top:20px}
 
 <script>var TOKEN="DEMO";</script>
 <script src="./mock-backend.js"></script>
-<script src="./app.js"></script>
-<script src="./mtapi-debug.js"></script>
+<script src="./app.js?v=20261026a"></script>
+<script src="./mtapi-debug.js?v=20261026a"></script>
 <script>
 if (window.MtapiDebug) {
   try { MtapiDebug.attach(); } catch (e) { console.error('MtapiDebug.attach failed:', e); }

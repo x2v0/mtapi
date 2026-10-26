@@ -10,6 +10,9 @@ APK_OUT  := $(CURDIR)/build/mtapi.apk
 APKS_DIR := $(HOME)/dwn/apks
 W2A      := $(HOME)/w2a
 
+verify:
+	@bash scripts/verify.sh
+
 .PHONY: all test build install so apk clean help dump
 
 all: test build
