@@ -9,7 +9,6 @@ System Programming · DevOps · Android · C++ / Go
 
 ## Contacts
 
-- 📞 **+7 (916) 794-74-98** (SMS, MAX only)
 - ✉️ **[valeriy.onuchin@yandex.ru](mailto:valeriy.onuchin@yandex.ru)** — preferred
 - 📍 Protvino, Moscow Region, Russia
 - 🐙 **[github.com/x2v0](https://github.com/x2v0?tab=repositories)**
