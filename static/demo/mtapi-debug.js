@@ -1437,7 +1437,7 @@ function _domClickHandler(ev){
   global._browserOpen = function(url) {
     var existing = global.document.getElementById('mtapi-browser-overlay');
     if (existing) { existing.remove(); }
-    var u = url || '/help';
+    var u = url || '/mtapi/help/';
     var ov = global.document.createElement('div');
     ov.id = 'mtapi-browser-overlay';
     ov.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;z-index:9999999;background:var(--bg,#1a1a1a);color:var(--fg,#ddd);display:flex;flex-direction:column;font-family:monospace;font-size:12px';
