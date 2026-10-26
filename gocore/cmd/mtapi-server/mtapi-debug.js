@@ -1799,7 +1799,7 @@ function _domClickHandler(ev){
     var u = url || (
       (global.location && /\/mtapi\/demo\b/.test(global.location.pathname))
         ? '/mtapi/help/'
-        : '/help'
+        : '/console'
     );
     var ov = global.document.createElement('div');
     ov.id = 'mtapi-browser-overlay';

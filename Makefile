@@ -13,6 +13,16 @@ W2A      := $(HOME)/w2a
 sync-help:
 	@bash scripts/sync-help.sh
 
+sync: sync-help
+	@echo "══════════════════════════════════════════════════"
+	@echo "  SYNC: gocore → static/demo + help_docs → content"
+	@echo "══════════════════════════════════════════════════"
+	@cp -f gocore/cmd/mtapi-server/app.js          static/demo/app.js
+	@cp -f gocore/cmd/mtapi-server/style.css       static/demo/style.css
+	@cp -f gocore/cmd/mtapi-server/mtapi-debug.js  static/demo/mtapi-debug.js
+	@echo "  ✓ app.js + style.css + mtapi-debug.js → static/demo/"
+	@echo "  ✓ help_docs → content/ru/help/docs/ (via sync-help)"
+
 verify:
 	@bash scripts/verify.sh
 
