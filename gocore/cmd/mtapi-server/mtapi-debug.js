@@ -1491,6 +1491,9 @@ function _domClickHandler(ev){
   var _lastTapTarget = null;
   var _lastTapX = 0, _lastTapY = 0;
   var _touchStartX = 0, _touchStartY = 0, _touchStartTime = 0;
+  var _longPressTimer = null;
+  var _longPressTriggered = false;
+  var _touchStartTarget = null;
   var _lastTouchWasSwipe = false;
   var _helpPinned = false;
   global._helpTipShow = function(el, x, y) {
@@ -1536,8 +1539,8 @@ function _domClickHandler(ev){
         + '  <div class="hi-sub">Изучение интерфейса без выполнения действий</div>'
         + '  <ul class="hi-list">'
         + '    <li><b>1 tap</b><span>— описание (wiki)</span></li>'
-        + '    <li><b>2 taps</b><span>— выполнить действие</span></li>'
-        + '    <li><b>3 taps</b><span>— выйти из Help Mode</span></li>'
+        + '    <li><b>long press</b><span>— выполнить действие</span></li>'
+        + '    <li><b>2 taps</b><span>— выйти из Help Mode</span></li>'
         + '    <li><b>swipe</b><span>— прокрутка (без tooltip)</span></li>'
         + '    <li><b>Esc</b><span>— закрыть tooltip</span></li>'
         + '  </ul>'
@@ -1555,8 +1558,9 @@ function _domClickHandler(ev){
       m.addEventListener('click', function(e){ if (e.target === m) global._helpIntroHide(); });
     }
     m.classList.add('show');
-    // stop propagation — intro не должен триггерить help-mode click handler
-    m.addEventListener('click', function(e){ e.stopPropagation(); }, true);
+    // NB: no capture-phase stopPropagation here — document capture
+    // already whitelists #mtapi-help-intro (see _helpModeInit).
+    // capture+stopPropagation on modal would BLOCK inner buttons (OK, checkbox).
   };
 
   global._helpIntroHide = function() {
@@ -1574,6 +1578,12 @@ function _domClickHandler(ev){
     var d = global.document; if (!d) return;
     _helpMode = !_helpMode;
     d.body.classList.toggle('help-mode', _helpMode);
+    // browser-btn: disabled in help mode
+    var _wb = d.getElementById('browser-btn');
+    if (_wb) {
+      if (_helpMode) { _wb.setAttribute('disabled', ''); _wb.setAttribute('aria-disabled', 'true'); }
+      else { _wb.removeAttribute('disabled'); _wb.removeAttribute('aria-disabled'); }
+    }
     if (!_helpMode) {
       global._helpTipHide();
       global._helpIntroHide();
@@ -1593,71 +1603,128 @@ function _domClickHandler(ev){
     var _hb = d.getElementById('help-btn');
     if (_hb && !_hb.onclick) _hb.onclick = function(){ global._helpModeToggle && global._helpModeToggle(); };
 
-    // swipe detection — skip tooltip on scroll/long-press
+    // Suppress native long-press menu (copy / select all / web search)
+    if (!global._helpContextMenuBound) {
+      global._helpContextMenuBound = true;
+      d.addEventListener('contextmenu', function(e) {
+        if (!_helpMode) return;
+        var _t = e.target;
+        if (_t && _t.closest && (_t.closest('#mtapi-help-tip') || _t.closest('#mtapi-help-intro'))) return;
+        e.preventDefault();
+        e.stopPropagation();
+        return false;
+      }, { capture: true });
+      d.addEventListener('selectstart', function(e) {
+        if (!_helpMode) return;
+        var _t = e.target;
+        if (_t && _t.closest && (_t.closest('#mtapi-help-tip') || _t.closest('#mtapi-help-intro'))) return;
+        e.preventDefault();
+        return false;
+      }, { capture: true });
+    }
+
+    function _findTipTarget(t) {
+      while (t && t !== d.body) {
+        if (t.hasAttribute && (t.hasAttribute('data-tip') || t.hasAttribute('title'))) return t;
+        t = t.parentNode;
+      }
+      return null;
+    }
+
+    function _runAction(el, x, y) {
+      if (!el) return;
+      _helpModeBypass = true;
+      setTimeout(function() {
+        try {
+          var evt = new MouseEvent('click', {
+            bubbles: true, cancelable: true, view: global,
+            clientX: x || 0, clientY: y || 0, button: 0
+          });
+          el.dispatchEvent(evt);
+        } catch (x) {}
+        _helpModeBypass = false;
+      }, 0);
+    }
+
+    // ─── touchstart: start long-press timer ───
     d.addEventListener('touchstart', function(e) {
       if (!_helpMode) return;
       var t = e.touches[0]; if (!t) return;
       _touchStartX = t.clientX; _touchStartY = t.clientY; _touchStartTime = Date.now();
+      _lastTouchWasSwipe = false;
+      _longPressTriggered = false;
+      _touchStartTarget = _findTipTarget(e.target);
+
+      if (_touchStartTarget) {
+        _longPressTimer = setTimeout(function() {
+          _longPressTimer = null;
+          if (!_helpMode) return;
+          _longPressTriggered = true;
+          try { if (global.navigator && global.navigator.vibrate) global.navigator.vibrate(30); } catch(x){}
+          global._helpTipHide();
+          _runAction(_touchStartTarget, _touchStartX, _touchStartY);
+        }, 600);
+      }
     }, { capture: true, passive: true });
 
+    // ─── touchmove: cancel long-press on swipe ───
+    d.addEventListener('touchmove', function(e) {
+      if (!_helpMode) return;
+      if (!_longPressTimer) return;
+      var t = e.touches[0]; if (!t) return;
+      var dx = Math.abs(t.clientX - _touchStartX);
+      var dy = Math.abs(t.clientY - _touchStartY);
+      if (dx > 12 || dy > 12) {
+        clearTimeout(_longPressTimer); _longPressTimer = null;
+        _lastTouchWasSwipe = true;
+      }
+    }, { capture: true, passive: true });
+
+    // ─── touchend: cancel timer, mark swipe ───
     d.addEventListener('touchend', function(e) {
       if (!_helpMode) return;
+      if (_longPressTimer) { clearTimeout(_longPressTimer); _longPressTimer = null; }
       var t = e.changedTouches[0]; if (!t) return;
       var dx = Math.abs(t.clientX - _touchStartX);
       var dy = Math.abs(t.clientY - _touchStartY);
-      var dt = Date.now() - _touchStartTime;
-      if (dx > 12 || dy > 12 || dt > 600) {
+      if (dx > 12 || dy > 12) {
         _lastTouchWasSwipe = true;
-        setTimeout(function(){ _lastTouchWasSwipe = false; }, 60);
+        setTimeout(function(){ _lastTouchWasSwipe = false; }, 80);
       }
     }, { capture: true, passive: true });
 
+    // ─── click (capture): tap=describe, 2-tap=exit, long-press=action ───
     d.addEventListener('click', function(e) {
       if (!_helpMode) return;
       if (_helpModeBypass) return;
-      if (_lastTouchWasSwipe) { _lastTouchWasSwipe = false; return; }
+      if (_longPressTriggered) { _longPressTriggered = false; e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation(); return; }
+      if (_lastTouchWasSwipe)  { _lastTouchWasSwipe = false; return; }
 
-      var el = e.target;
-      while (el && el !== d.body) {
-        if (el.hasAttribute && (el.hasAttribute('data-tip') || el.hasAttribute('title'))) break;
-        el = el.parentNode;
+      // whitelist passthrough
+      var _t = e.target;
+      if (_t && _t.closest) {
+        if (_t.closest('#mtapi-help-intro')) return;
+        if (_t.closest('#mtapi-help-tip'))   return;
+        if (_t.closest('#help-btn'))          return;
       }
-      if (el === d.body) el = null;
+
+      var el = _findTipTarget(e.target);
 
       var now = Date.now();
       var same = (_lastTapTarget === el);
-      var withinTime = (now - _lastTapTime) < 450;
+      var withinTime = (now - _lastTapTime) < 500;
       var withinSpace = Math.abs((e.clientX || 0) - _lastTapX) < 24
                      && Math.abs((e.clientY || 0) - _lastTapY) < 24;
       _tapCount = (same && withinTime && withinSpace) ? (_tapCount + 1) : 1;
       _lastTapTarget = el; _lastTapTime = now;
       _lastTapX = e.clientX || 0; _lastTapY = e.clientY || 0;
 
-      // 3+ taps → EXIT help mode
-      if (_tapCount >= 3) {
+      // 2 taps → EXIT help mode
+      if (_tapCount >= 2) {
         e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();
         global._helpTipHide();
-        global._helpModeToggle();  // turns off (was on)
+        global._helpModeToggle();
         _tapCount = 0;
-        return;
-      }
-
-      // 2 taps → run action (stay in help mode)
-      if (_tapCount === 2) {
-        e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();
-        global._helpTipHide();
-        if (!el) return;
-        _helpModeBypass = true;
-        setTimeout(function() {
-          try {
-            var evt = new MouseEvent('click', {
-              bubbles: true, cancelable: true, view: global,
-              clientX: e.clientX, clientY: e.clientY, button: 0
-            });
-            el.dispatchEvent(evt);
-          } catch (x) {}
-          _helpModeBypass = false;
-        }, 0);
         return;
       }
 
