@@ -16,6 +16,9 @@ const EXCLUDE_DIRS = new Set([
   'node_modules', '.git', 'vendor', 'build', 'dist',
   '.gradle', '.cache', 'coverage', '.idea', '.vscode',
   'target', '__pycache__', '.pytest_cache',
+  // Hugo: themes/* (submodule, содержит Go-шаблоны в .js)
+  // и public/ (артефакт сборки, генерируется hugo)
+  'themes', 'public', 'resources',
 ]);
 
 // ─── discovery ────────────────────────────────────────────
@@ -27,6 +30,7 @@ function findJsFiles(dir, out) {
   for (const ent of entries) {
     if (ent.name.startsWith('.') && ent.name.length > 1) continue; // .hidden
     if (EXCLUDE_DIRS.has(ent.name)) continue;
+    if (ent.name.indexOf('.bak') !== -1) continue;
     const full = path.join(dir, ent.name);
     if (ent.isDirectory()) findJsFiles(full, out);
     else if (ent.name.endsWith('.js')) out.push(full);
