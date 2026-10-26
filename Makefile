@@ -10,6 +10,9 @@ APK_OUT  := $(CURDIR)/build/mtapi.apk
 APKS_DIR := $(HOME)/dwn/apks
 W2A      := $(HOME)/w2a
 
+sync-help:
+	@bash scripts/sync-help.sh
+
 verify:
 	@bash scripts/verify.sh
 
