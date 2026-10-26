@@ -1408,14 +1408,144 @@ function _domClickHandler(ev){
   var _tabLabels = {logs:'Logs', console:'Console', errors:'Errors', logcat:'Logcat', devtools:'DevTools', system:'System', network:'Network'};
 
   // TAB_INFO: descriptions for tooltips (online help)
+  var LOG_LEVEL_INFO = {
+    v: 'V = Verbose\n\nВсе сообщения, включая отладочные.\nСамый подробный вывод.\n\nИспользуется редко, обычно для глубокой диагностики.',
+    d: 'D = Debug\n\nОтладочные сообщения разработчика.\n\nОбычно выключены в release-сборках, но полезны при разработке.',
+    i: 'I = Info\n\nИнформационные сообщения.\n\nОбычные события: запуск, подключение, успешные операции.',
+    w: 'W = Warning\n\nПредупреждения.\n\nЧто-то не так, но не критично. Функция работает, но могут быть проблемы.',
+    e: 'E = Error\n\nОшибки.\n\nЧто-то не выполнено. Приложение продолжает работать, но функционал недоступен.\n\nF = Fatal — краш приложения.'
+  };
+
   var TAB_INFO = {
-    logs:     'JS logs (console.log/warn/error). Colors by level. Click row to copy',
-    console:  'JS eval. await works. Help: ? / ?? / ???. Ctrl+Enter = Run',
-    errors:   'Persistent errors (localStorage). Survives reload. Clear = wipe',
-    logcat:   'Android logcat (needs adb/root). V D I W E F = level filter',
-    devtools: 'WebView DevTools JSON. Network + sources (adb on PC)',
-    system:   'System info: CPU, memory, storage, thermal',
-    network:  'HTTP requests from this WebView. Status, size, time'
+    logs: 'JS Logs — вывод console.log / warn / error из WebView\n\n'
+        + 'Столбцы:\n'
+        + '• Time — когда вызвано (чч:мм:сс.мс)\n'
+        + '• L — уровень: LOG / WARN / ERROR\n'
+        + '• Message — текст + стек (для errors)\n\n'
+        + 'Фильтр: V D I W E = уровни. Поиск — по тексту.\n'
+        + 'Клик по строке = копировать в буфер.',
+    console: 'Console Eval — выполнить JavaScript прямо в WebView\n\n'
+        + 'Что можно:\n'
+        + '• арифметика, строки, объекты\n'
+        + '• await fetch(\'/battery\').then(r => r.json())\n'
+        + '• log(x), warn(x), error(x) — в таб Logs\n'
+        + '• $(), $$() — DOM-селекторы\n\n'
+        + 'Help: ? (кратко), ?? (cheatsheet), ??? (все endpoints)\n'
+        + 'Ctrl+Enter = Run. output: plain / JSON / HTML-таблицы.',
+    errors: 'Errors — накопленные ошибки JS (localStorage)\n\n'
+        + 'Переживают перезагрузку страницы (persistent).\n'
+        + '• Time — когда случилось\n'
+        + '• L — E (error) / F (fatal)\n'
+        + '• Error — сообщение + стек\n\n'
+        + '🗑 Clear — очистить localStorage.\n'
+        + 'Клик по строке = копировать.',
+    logcat: 'Logcat — лог Android (нужен adb или root)\n\n'
+        + 'Android 11+ SELinux: для untrusted_app logcat ограничен.\n'
+        + 'Работает: adb logcat (с ПК) или root.\n\n'
+        + 'Столбцы: Time | PID | TID | L | Tag | Message\n'
+        + '• PID — Process ID (число)\n'
+        + '• TID — Thread ID (число)\n'
+        + '• L — уровень: V / D / I / W / E / F\n'
+        + '• Tag — метка модуля (например, ActivityManager)\n\n'
+        + 'V D I W E = фильтр по уровню. Поиск — по тексту.\n'
+        + '↻ Refresh — обновить. 📋 Copy — копировать.',
+    devtools: 'DevTools — инструменты WebView\n\n'
+        + 'На ПК (через adb):\n'
+        + '• adb shell pidof dev.mtapi\n'
+        + '• adb forward tcp:9222 localabstract:webview_devtools_remote_<PID>\n'
+        + '• chrome://inspect/#devices\n\n'
+        + 'На телефоне:\n'
+        + '• GET /devtools/json — JSON-список страниц\n'
+        + '• Load app.js — исходник приложения\n\n'
+        + 'Network: см. таб Network. Sources: см. Load app.js.',
+    system: 'System — информация о системе\n\n'
+        + 'Performance (perf):\n'
+        + '• MtapiDebug.time(label) / timeEnd(label) — замер\n'
+        + '• _perfReset() — сброс\n\n'
+        + 'System info:\n'
+        + '• model, SDK, kernel, uptime\n'
+        + '• CPU: cores, arch, freq per-core\n'
+        + '• Memory: total / used / free / cached\n'
+        + '• Storage: mount / total / used / free\n'
+        + '• Thermal: зоны и температуры\n\n'
+        + 'Auto-refresh: при открытии таба. ↻ — вручную.',
+    network: 'Network — HTTP-запросы из WebView\n\n'
+        + 'Столбцы:\n'
+        + '• Time — когда\n'
+        + '• Method — GET / POST / PUT / DELETE\n'
+        + '• URL — адрес (обрезан)\n'
+        + '• Status — HTTP-код (200, 401, 500…)\n'
+        + '• Size — байт ответа\n'
+        + '• ms — время ответа (мс)\n\n'
+        + 'Клик по строке = раскрыть тело ответа (JSON / text).\n'
+        + 'verbose — показывать тело в списке.\n'
+        + '📋 Copy / 🗑 Clear — копировать / очистить.'
+  };
+
+  // ─── HELP MODE (wiki-style, click = show tooltip, no action) ──
+  var _helpMode = false;
+  var _helpPinned = false;
+
+  global._helpTipShow = function(el, x, y) {
+    var d = global.document; if (!d || !el) return;
+    var text = el.getAttribute('data-tip') || el.getAttribute('title');
+    if (!text) return;
+    var tip = d.getElementById('mtapi-help-tip');
+    if (!tip) {
+      tip = d.createElement('div');
+      tip.id = 'mtapi-help-tip';
+      d.body.appendChild(tip);
+    }
+    tip.innerHTML = '<span class="help-close" onclick="window._helpTipHide()">✕</span>' + esc(text);
+    tip.classList.add('show');
+    var w = tip.offsetWidth || 440;
+    var h = tip.offsetHeight || 200;
+    var left = Math.min(Math.max(8, x + 8), (global.innerWidth || 400) - w - 8);
+    var top = Math.min(Math.max(8, y + 8), (global.innerHeight || 600) - h - 8);
+    tip.style.left = left + 'px';
+    tip.style.top = top + 'px';
+    _helpPinned = true;
+  };
+
+  global._helpTipHide = function() {
+    var d = global.document; if (!d) return;
+    var tip = d.getElementById('mtapi-help-tip');
+    if (tip) tip.classList.remove('show');
+    _helpPinned = false;
+  };
+
+  global._helpModeToggle = function() {
+    var d = global.document; if (!d) return;
+    _helpMode = !_helpMode;
+    d.body.classList.toggle('help-mode', _helpMode);
+    if (!_helpMode) global._helpTipHide();
+  };
+
+  // capture-phase: in help-mode, tap → show tooltip, stop event
+  global._helpModeInit = function() {
+    var d = global.document; if (!d || global._helpModeBound) return;
+    global._helpModeBound = true;
+
+    d.addEventListener('click', function(e) {
+      if (!_helpMode) return;
+      var el = e.target;
+      while (el && el !== d.body) {
+        if (el.hasAttribute && (el.hasAttribute('data-tip') || el.hasAttribute('title'))) {
+          e.preventDefault();
+          e.stopPropagation();
+          e.stopImmediatePropagation();
+          global._helpTipShow(el, e.clientX || 60, e.clientY || 60);
+          return;
+        }
+        el = el.parentNode;
+      }
+      // клик мимо — закрыть, но не блокировать
+      global._helpTipHide();
+    }, true);
+
+    d.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape') global._helpTipHide();
+    });
   };
 
   function _tipAll() {
@@ -1740,6 +1870,19 @@ function _domClickHandler(ev){
     '#mtapi-debug-network::-webkit-scrollbar-thumb, #mtapi-debug-dom-tree::-webkit-scrollbar-thumb, #mtapi-debug-dom-info::-webkit-scrollbar-thumb{background:var(--fg3);border-radius:7px;border:2px solid var(--bg)}',
   ].join('\n');
 
+  function _lvlFilter(id, onchange) {
+    var out = '<div class="logcat-lvl"' + (id ? ' id="' + id + '"' : '') + '>';
+    var levels = ['v','d','i','w','e'];
+    for (var i = 0; i < levels.length; i++) {
+      var L = levels[i];
+      var info = LOG_LEVEL_INFO[L] || L.toUpperCase();
+      var shortTip = info.split('\n')[0];
+      out += '<label><input type="checkbox" data-lvl="' + L + '" checked onchange="' + onchange + '"><span class="lvl-' + L + '" data-tip="' + esc(info) + '" title="' + esc(shortTip) + '">' + L.toUpperCase() + '</span></label>';
+    }
+    out += '</div>';
+    return out;
+  }
+
   function buildTabContents(){
     var p1 = '';
     for(var i=global._jslogBuf.length-1;i>=0;i--){ var e=global._jslogBuf[i]; p1 += esc(fmtTime(e.t)+' ['+(e.lvl||'log')+'] '+e.m)+'\n'; }
@@ -1752,13 +1895,7 @@ function _domClickHandler(ev){
     html += '<div data-tab-content="logs" class="' + (_activeTab==='logs'?'active':'') + '">';
     html += '<details class="mtapi-debug-section" open data-flat="1" data-refresh="jslog"><summary>JS Logs <span id="mtapi-debug-jslog-count">('+global._jslogBuf.length+')</span></summary>';
     html += '<div class="mtapi-debug-toolbar">';
-    html += '<div class="logcat-lvl" id="mtapi-debug-jslog-lvl" title="filter by level">';
-    html += '<label><input type="checkbox" data-lvl="v" checked onchange="window._jslogFilter&&window._jslogFilter()"><span class="lvl-v">V</span></label>';
-    html += '<label><input type="checkbox" data-lvl="d" checked onchange="window._jslogFilter&&window._jslogFilter()"><span class="lvl-d">D</span></label>';
-    html += '<label><input type="checkbox" data-lvl="i" checked onchange="window._jslogFilter&&window._jslogFilter()"><span class="lvl-i">I</span></label>';
-    html += '<label><input type="checkbox" data-lvl="w" checked onchange="window._jslogFilter&&window._jslogFilter()"><span class="lvl-w">W</span></label>';
-    html += '<label><input type="checkbox" data-lvl="e" checked onchange="window._jslogFilter&&window._jslogFilter()"><span class="lvl-e">E</span></label>';
-    html += '</div>';
+    html += _lvlFilter('mtapi-debug-jslog-lvl', "window._jslogFilter&&window._jslogFilter()");
     html += _iconSearch('mtapi-debug-jslog-search', "window._refreshJslogQuery&&window._refreshJslogQuery()");
     html += _iconBtn('\uD83D\uDCCB', 'Copy', "window._copyJslog&&window._copyJslog()");
     html += _iconBtn('\uD83D\uDDD1', 'Clear', "window._jslogBuf=[];window._jslogClear&&window._jslogClear()", 'danger');
@@ -1791,13 +1928,7 @@ function _domClickHandler(ev){
     html += '<div data-tab-content="logcat" class="' + (_activeTab==='logcat'?'active':'') + '">';
     html += '<details class="mtapi-debug-section" open data-flat="1" data-refresh="logcat"><summary>Logcat</summary>';
     html += '<div class="mtapi-debug-toolbar">';
-    html += '<div class="logcat-lvl" title="filter by level">';
-    html += '<label><input type="checkbox" data-lvl="v" checked onchange="window._logcatFilter&&window._logcatFilter()"><span class="lvl-v">V</span></label>';
-    html += '<label><input type="checkbox" data-lvl="d" checked onchange="window._logcatFilter&&window._logcatFilter()"><span class="lvl-d">D</span></label>';
-    html += '<label><input type="checkbox" data-lvl="i" checked onchange="window._logcatFilter&&window._logcatFilter()"><span class="lvl-i">I</span></label>';
-    html += '<label><input type="checkbox" data-lvl="w" checked onchange="window._logcatFilter&&window._logcatFilter()"><span class="lvl-w">W</span></label>';
-    html += '<label><input type="checkbox" data-lvl="e" checked onchange="window._logcatFilter&&window._logcatFilter()"><span class="lvl-e">E</span></label>';
-    html += '</div>';
+    html += _lvlFilter('', "window._logcatFilter&&window._logcatFilter()");
     html += _iconSearch('mtapi-debug-logcat-search', "window._refreshLogcatQuery&&window._refreshLogcatQuery()");
     html += _iconBtn('\uD83D\uDCCB', 'Copy', "window._copyLogcat&&window._copyLogcat()");
     html += _iconBtn('\u21BB', 'Refresh', "window._logcatRefresh&&window._logcatRefresh()", 'accent');
@@ -1885,7 +2016,19 @@ function _domClickHandler(ev){
     menuBtn.setAttribute('onclick', 'window._sidePanelToggle()');
     row1.appendChild(menuBtn);
 
-    ov.appendChild(row1);
+    // HELP button (wiki-mode toggle) — after row1
+    var helpBtn = doc.createElement('button');
+    helpBtn.id = 'mtapi-debug-help-btn';
+    helpBtn.textContent = '?';
+    helpBtn.title = 'Help mode: tap any control → wiki tooltip (no action)';
+    helpBtn.setAttribute('data-tip', 'Help mode\n\nВключи — и любой тап/клик по кнопке, табу, карточке показывает подробную подсказку (wiki), НЕ выполняя действие.\n\nПовторный тап по ? — выключить. Esc — закрыть подсказку.');
+    helpBtn.style.cssText = 'position:fixed;top:8px;right:8px;z-index:10000000;width:28px;height:28px;border-radius:14px;background:#333;color:#fff;border:1px solid #555;font-weight:bold;cursor:pointer;font-family:monospace;font-size:14px';
+    helpBtn.onclick = function(){ global._helpModeToggle && global._helpModeToggle(); };
+    // добавляем в row2 (рядом с tabs) или как fixed — проще fixed, всегда видна
+    ov.appendChild(helpBtn);
+    // init listeners один раз
+    global._helpModeInit && global._helpModeInit();
+        ov.appendChild(row1);
 
     // ── row 2: tabs ──
     var row2 = doc.createElement('div');
