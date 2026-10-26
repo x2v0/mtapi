@@ -479,3 +479,24 @@ body.help-mode #mtapi-debug-help-btn {
 [data-tip]:focus-within::after { z-index: 100001; }
 [data-tip]:hover::before,
 [data-tip]:focus-within::before { z-index: 100002; }
+
+
+/* ── HELP button in header (рядом с 🌙) ───────────────────── */
+#help-btn {
+  position: absolute;
+  left: calc(50% + 22px);
+  width: 16px; height: 16px;
+  font-size: 12px; font-weight: bold;
+  padding: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  cursor: pointer;
+  background: transparent; color: inherit;
+  border: 1px solid var(--bg4, #444); border-radius: 3px;
+}
+#help-btn:hover { background: var(--bg3, #333); }
+body.help-mode #help-btn {
+  background: #0288d1 !important;
+  color: #fff !important;
+  border-color: #0288d1 !important;
+  box-shadow: 0 0 0 3px rgba(2,136,209,0.45) !important;
+}

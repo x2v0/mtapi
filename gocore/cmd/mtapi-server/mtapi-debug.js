@@ -2016,19 +2016,7 @@ function _domClickHandler(ev){
     menuBtn.setAttribute('onclick', 'window._sidePanelToggle()');
     row1.appendChild(menuBtn);
 
-    // HELP button (wiki-mode toggle) — after row1
-    var helpBtn = doc.createElement('button');
-    helpBtn.id = 'mtapi-debug-help-btn';
-    helpBtn.textContent = '?';
-    helpBtn.title = 'Help mode: tap any control → wiki tooltip (no action)';
-    helpBtn.setAttribute('data-tip', 'Help mode\n\nВключи — и любой тап/клик по кнопке, табу, карточке показывает подробную подсказку (wiki), НЕ выполняя действие.\n\nПовторный тап по ? — выключить. Esc — закрыть подсказку.');
-    helpBtn.style.cssText = 'position:fixed;top:8px;right:8px;z-index:10000000;width:28px;height:28px;border-radius:14px;background:#333;color:#fff;border:1px solid #555;font-weight:bold;cursor:pointer;font-family:monospace;font-size:14px';
-    helpBtn.onclick = function(){ global._helpModeToggle && global._helpModeToggle(); };
-    // добавляем в row2 (рядом с tabs) или как fixed — проще fixed, всегда видна
-    ov.appendChild(helpBtn);
-    // init listeners один раз
-    global._helpModeInit && global._helpModeInit();
-        ov.appendChild(row1);
+    ov.appendChild(row1);
 
     // ── row 2: tabs ──
     var row2 = doc.createElement('div');
@@ -2105,6 +2093,9 @@ function _domClickHandler(ev){
       else if (r === 'system') { try { refreshSystemInfo(); } catch(e){} }
     }, true);
   }
+
+  // init help-mode bindings once (header #help-btn)
+  try { global._helpModeInit && global._helpModeInit(); } catch(e) {}
 
   global.MtapiDebug = {
     attach: function(o){
