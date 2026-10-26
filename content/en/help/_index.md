@@ -8,10 +8,10 @@ bookCollapseSection: false
 # Help
 
 - [About / Resume](/mtapi/en/help/resume/) — who I am and what I do
-- [Architecture](/mtapi/en/docs/architecture/) — Go + WebView + JNI
-- [Build](/mtapi/en/docs/build/) — make so / test / apk
-- [Tests](/mtapi/en/docs/tests/) — 170/170
-- [FAQ](/mtapi/en/docs/faq/) — iframe, logcat, CORS
+- [Architecture](/mtapi/en/help/docs/architecture/) — Go + WebView + JNI
+- [Build](/mtapi/en/help/docs/build/) — make so / test / apk
+- [Tests](/mtapi/en/help/docs/tests/) — 170/170
+- [FAQ](/mtapi/en/help/docs/faq/) — iframe, logcat, CORS
 
 ## Quick links
 
