@@ -27,15 +27,18 @@ params:
 
 menu:
   before:
+    - name: "Help"
+      url: "/mtapi/help/"
+      weight: 1
     - name: "Demo"
       url: "/mtapi/demo/"
-      weight: 1
+      weight: 2
     - name: "GitHub"
       url: "https://github.com/x2v0/mtapi"
-      weight: 2
+      weight: 3
     - name: "Releases"
       url: "https://github.com/x2v0/mtapi/releases"
-      weight: 3
+      weight: 4
 
 markup:
   goldmark:
