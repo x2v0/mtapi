@@ -378,13 +378,12 @@ mark.tbl-hl {
 /* ── TOOLTIPS (online help) ───────────────────────────────── */
 [data-tip]{position:relative;cursor:help}
 [data-tip]:hover::after,
-[data-tip]:focus-within::after,
-[data-tip]:active::after{
+[data-tip]:focus-within::after{
   content:attr(data-tip);
   position:absolute;left:0;top:calc(100% + 6px);
   background:#1e1e1e;color:#eee;border:1px solid #444;
-  border-radius:6px;padding:6px 10px;font-size:11px;
-  line-height:1.4;max-width:340px;white-space:normal;
+  border-radius:6px;padding:8px 12px;font-size:11px;
+  line-height:1.55;max-width:420px;white-space:pre-line;
   z-index:100000;box-shadow:0 4px 12px rgba(0,0,0,0.5);
   pointer-events:none;font-family:ui-monospace,monospace;
   font-weight:normal;text-align:left;
@@ -399,3 +398,84 @@ html[data-theme="light"] [data-tip]:hover::after,
 body.light [data-tip]:hover::after{background:#f5f5f5;color:#1a1a1a;border-color:#ccc}
 html[data-theme="light"] [data-tip]:hover::before,
 body.light [data-tip]:hover::before{border-bottom-color:#f5f5f5}
+
+/* ── HELP MODE (wiki-style online help) ───────────────────── */
+/* 1. Light-blue wash over whole page (tooltips stay color) */
+body.help-mode::before {
+  content: "";
+  position: fixed; inset: 0;
+  background: rgba(179, 229, 252, 0.55);
+  backdrop-filter: brightness(1.05) saturate(0.85);
+  -webkit-backdrop-filter: brightness(1.05) saturate(0.85);
+  z-index: 99998;
+  pointer-events: none;
+  transition: opacity 0.2s;
+}
+html[data-theme="light"] body.help-mode::before,
+body.help-mode.light::before {
+  background: rgba(144, 202, 249, 0.45);
+  backdrop-filter: brightness(1.02) saturate(0.9);
+  -webkit-backdrop-filter: brightness(1.02) saturate(0.9);
+}
+
+/* 2. Top banner */
+body.help-mode::after {
+  content: "HELP MODE — tap any control to see description (Esc to exit)";
+  position: fixed; top: 0; left: 0; right: 0;
+  background: #0288d1; color: #fff;
+  font-family: ui-monospace, monospace;
+  font-size: 11px; font-weight: 600;
+  text-align: center; padding: 4px;
+  z-index: 100003; letter-spacing: 0.3px;
+  pointer-events: none;
+}
+
+/* 3. Cursor + hover highlight */
+body.help-mode [data-tip],
+body.help-mode [title],
+body.help-mode button,
+body.help-mode [role="button"],
+body.help-mode summary,
+body.help-mode input,
+body.help-mode textarea { cursor: help !important; }
+
+body.help-mode [data-tip]:hover,
+body.help-mode [data-tip]:focus-within {
+  outline: 2px solid #0288d1 !important;
+  outline-offset: 2px;
+  box-shadow: 0 0 0 4px rgba(2,136,209,0.3) !important;
+  transition: outline-color 0.1s, box-shadow 0.1s;
+}
+
+/* 4. Help button active */
+body.help-mode #mtapi-debug-help-btn {
+  background: #0288d1 !important;
+  color: #fff !important;
+  border-color: #0288d1 !important;
+  box-shadow: 0 0 0 3px rgba(2,136,209,0.45) !important;
+}
+
+/* 5. Pinned wiki tooltip (above overlay) */
+#mtapi-help-tip {
+  position: fixed; max-width: 440px; max-height: 62vh; overflow: auto;
+  background: var(--bg3, #2a2a2a); color: var(--fg, #eee);
+  border: 1px solid #0288d1;
+  border-radius: 8px; padding: 10px 14px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11px; line-height: 1.55; white-space: pre-line;
+  z-index: 100002; box-shadow: 0 8px 24px rgba(0,0,0,0.6);
+  display: none; pointer-events: auto;
+  backdrop-filter: blur(3px);
+}
+#mtapi-help-tip.show { display: block; }
+#mtapi-help-tip .help-close {
+  float: right; cursor: pointer; color: var(--fg3, #888); font-weight: bold;
+  margin-left: 8px; padding: 0 4px; border-radius: 3px;
+}
+#mtapi-help-tip .help-close:hover { background: var(--bg4, #444); color: var(--fg, #fff); }
+
+/* 6. Ensure z-index ordering: tooltips > overlay */
+[data-tip]:hover::after,
+[data-tip]:focus-within::after { z-index: 100001; }
+[data-tip]:hover::before,
+[data-tip]:focus-within::before { z-index: 100002; }
