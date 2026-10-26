@@ -1804,12 +1804,31 @@ function _domClickHandler(ev){
     var ov = global.document.createElement('div');
     ov.id = 'mtapi-browser-overlay';
     ov.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;z-index:9999999;background:var(--bg,#1a1a1a);color:var(--fg,#ddd);display:flex;flex-direction:column;font-family:monospace;font-size:12px';
-    ov.innerHTML = '<div id="mtapi-browser-header" style="display:flex;align-items:center;gap:4px;padding:6px 8px;background:var(--bg3,#222);border-bottom:1px solid var(--bg4,#444);flex-shrink:0">'
+    ov.innerHTML = '<div id="mtapi-browser-header" style="position:relative;display:flex;align-items:center;gap:4px;padding:6px 8px;background:var(--bg3,#222);border-bottom:1px solid var(--bg4,#444);flex-shrink:0">'
       + '<button id="mtapi-browser-api" class="icon-btn-sm accent" title="Back to MTAPI" style="width:16px;height:16px;font-size:12px;padding:0;display:inline-flex;align-items:center;justify-content:center">\u2699\uFE0F</button><span id="mtapi-browser-spinner" style="display:none;width:14px;height:14px;border:2px solid var(--bg4,#444);border-top-color:var(--accent,#4fc3f7);border-radius:50%;animation:mtapi-spin 0.8s linear infinite;flex-shrink:0"></span>'
       + '<button id="mtapi-browser-back" class="icon-btn-sm" title="Back" disabled>\u2190</button>'
       + '<input id="mtapi-browser-url" type="text" placeholder="URL..." value="' + esc(u) + '" style="flex:1;padding:4px 8px;background:var(--bg,#1a1a1a);color:var(--fg,#ddd);border:1px solid var(--bg4,#444);border-radius:3px;font-family:monospace;font-size:12px;min-width:0">'
       + '<button id="mtapi-browser-forward" class="icon-btn-sm" title="Forward" disabled>\u2192</button>'
-      + '<button id="mtapi-browser-reload" class="icon-btn-sm accent" title="Reload">\u21BB</button>'
+      + '<span style="position:relative;display:inline-flex"><button id="mtapi-browser-presets" class="icon-btn-sm accent" title="Presets & Pretty print">?</button>'
+      + '<div id="mtapi-browser-presets-menu" style="display:none;position:absolute;top:100%;right:0;background:var(--bg3,#222);color:var(--fg,#ddd);border:1px solid var(--bg4,#444);border-radius:4px;padding:4px 0;z-index:10000001;min-width:230px;box-shadow:0 4px 12px rgba(0,0,0,0.5);font-size:11px;text-align:left">'
+      + '<style>#mtapi-browser-presets-menu>div[data-nav]:hover,#mtapi-browser-presets-menu>div[data-action]:hover{background:var(--bg4,#444)}</style>'
+      + '<div data-nav="/console" style="padding:6px 10px;cursor:pointer">/console</div>'
+      + '<div data-nav="/battery" style="padding:6px 10px;cursor:pointer">/battery</div>'
+      + '<div data-nav="/system" style="padding:6px 10px;cursor:pointer">/system</div>'
+      + '<div data-nav="/sensors" style="padding:6px 10px;cursor:pointer">/sensors</div>'
+      + '<div data-nav="/wifi" style="padding:6px 10px;cursor:pointer">/wifi</div>'
+      + '<div data-nav="/app/list" style="padding:6px 10px;cursor:pointer">/app/list</div>'
+      + '<div data-nav="/devtools/json" style="padding:6px 10px;cursor:pointer">/devtools/json</div>'
+      + '<div style="border-top:1px solid var(--bg4,#444);margin:4px 0"></div>'
+      + '<div data-nav="https://x2v0.github.io/mtapi" style="padding:6px 10px;cursor:pointer">x2v0/mtapi</div>'
+      + '<div data-nav="https://x2v0.github.io/mtapi/demo/" style="padding:6px 10px;cursor:pointer">x2v0 demo</div>'
+      + '<div data-nav="https://x2v0.github.io/mtapi/help/" style="padding:6px 10px;cursor:pointer">x2v0 help</div>'
+      + '<div data-nav="https://google.ru" style="padding:6px 10px;cursor:pointer">google.ru</div>'
+      + '<div data-nav="https://github.com/x2v0/mtapi" style="padding:6px 10px;cursor:pointer">github</div>'
+      + '<div style="border-top:1px solid var(--bg4,#444);margin:4px 0"></div>'
+      + '<div data-action="pretty" style="padding:6px 10px;cursor:pointer;color:#4fc3f7">\u2728 Pretty print (JSON \u2192 table)</div>'
+      + '<div data-action="reload" style="padding:6px 10px;cursor:pointer">\u21BB Reload</div>'
+      + '</div></span>'
       + '<button id="mtapi-browser-debug" class="icon-btn-sm danger" title="Debug (inspect iframe content)">\uD83D\uDC1E</button>'
       + '</div>'
       + '<iframe id="mtapi-browser-iframe" sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals allow-top-navigation-by-user-activation" style="flex:1 1 0;border:0;background:#fff;min-height:0"></iframe>';
@@ -1831,6 +1850,85 @@ function _domClickHandler(ev){
     var bReload = global.document.getElementById('mtapi-browser-reload');
     var bApi = global.document.getElementById('mtapi-browser-api');
     var bDebug = global.document.getElementById('mtapi-browser-debug');
+
+    // ── Presets dropdown + Pretty print ──
+    var bPresets = global.document.getElementById('mtapi-browser-presets');
+    var bPresetsMenu = global.document.getElementById('mtapi-browser-presets-menu');
+    if (bPresets && bPresetsMenu) {
+      bPresets.onclick = function(e) {
+        e.stopPropagation();
+        bPresetsMenu.style.display = (bPresetsMenu.style.display === 'block') ? 'none' : 'block';
+      };
+      bPresetsMenu.onclick = function(e) {
+        var t = e.target; if (!t) return;
+        var nav = t.getAttribute('data-nav');
+        var action = t.getAttribute('data-action');
+        bPresetsMenu.style.display = 'none';
+        if (nav) {
+          urlIn.value = nav;
+          try {
+            var ev = new KeyboardEvent('keydown', { key: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true });
+            urlIn.dispatchEvent(ev);
+          } catch(x) { try { iframe.src = nav; } catch(y) {} }
+          return;
+        }
+        if (action === 'reload') {
+          try { iframe.src = iframe.src; } catch(x) {}
+          return;
+        }
+        if (action === 'pretty') {
+          try {
+            var idoc = iframe.contentDocument || iframe.contentWindow.document;
+            if (!idoc) { alert('Pretty print: cross-origin (no access)'); return; }
+            var text = (idoc.body && (idoc.body.textContent || idoc.body.innerText)) || '';
+            var j = JSON.parse(text);
+            var rJSON = function(o) {
+              var esc = function(s){ return String(s==null?'':s).replace(/[&<>"']/g, function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]}); };
+              if (o === null) return '<span style="color:#888">null</span>';
+              if (typeof o !== 'object') return esc(String(o));
+              if (Array.isArray(o)) {
+                if (!o.length) return '<span style="color:#888">(empty)</span>';
+                if (typeof o[0] !== 'object') return o.map(function(v){return esc(String(v))}).join(', ');
+                var keys = {}; o.forEach(function(it){Object.keys(it).forEach(function(k){keys[k]=1})});
+                var cols = Object.keys(keys);
+                var h = '<table><thead><tr>' + cols.map(function(c){return '<th>'+esc(c)+'</th>'}).join('') + '</tr></thead><tbody>';
+                o.forEach(function(it){ h += '<tr>' + cols.map(function(c){return '<td>'+rJSON(it[c])+'</td>'}).join('') + '</tr>'; });
+                return h + '</tbody></table>';
+              }
+              var keys = Object.keys(o);
+              if (!keys.length) return '<span style="color:#888">{}</span>';
+              var h = '<table><tbody>';
+              keys.forEach(function(k){
+                var v = o[k];
+                if (v !== null && typeof v === 'object') h += '<tr><td style="color:#888;width:180px;vertical-align:top">'+esc(k)+'</td><td>'+rJSON(v)+'</td></tr>';
+                else h += '<tr><td style="color:#888;width:180px">'+esc(k)+'</td><td>'+esc(String(v))+'</td></tr>';
+              });
+              return h + '</tbody></table>';
+            };
+            var html = '<!DOCTYPE html><html><head><meta charset="utf-8"><style>' +
+              'body{font-family:ui-monospace,monospace;font-size:11px;background:#fafafa;color:#1a1a1a;padding:8px;margin:0}' +
+              'table{width:100%;border-collapse:collapse;margin:4px 0}' +
+              'th,td{border:1px solid #ddd;padding:4px 8px;text-align:left;vertical-align:top}' +
+              'th{background:#e3f2fd;color:#555}' +
+              '</style></head><body>' + rJSON(j) + '</body></html>';
+            idoc.open(); idoc.write(html); idoc.close();
+          } catch(ex) {
+            try { alert('Pretty print: ' + ex.message); } catch(y) {}
+          }
+          return;
+        }
+      };
+      if (!global._browserPresetsOutsideClick) {
+        global._browserPresetsOutsideClick = true;
+        global.document.addEventListener('click', function(e) {
+          var m = global.document.getElementById('mtapi-browser-presets-menu');
+          var b = global.document.getElementById('mtapi-browser-presets');
+          if (!m || m.style.display !== 'block') return;
+          if (e.target === b || (b && b.contains(e.target)) || (m && m.contains(e.target))) return;
+          m.style.display = 'none';
+        }, true);
+      }
+    }
 
     _browserHistory = [u];
     _browserHistoryIdx = 0;
