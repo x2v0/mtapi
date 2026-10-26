@@ -242,12 +242,12 @@ test('index.html exists', () => {
 
 test('index.html: <link href="/style.css">', () => {
   const html = fs.readFileSync(INDEX_HTML, 'utf8');
-  assert.ok(html.includes('href="/style.css"'), 'style.css link');
+  assert.ok(/href="\/style\.css(\?v=[a-z0-9]+)?"/.test(html), 'style.css link');
 });
 
 test('index.html: <script src="/app.js">', () => {
   const html = fs.readFileSync(INDEX_HTML, 'utf8');
-  assert.ok(html.includes('src="/app.js"'), 'app.js script');
+  assert.ok(/src="\/app\.js(\?v=[a-z0-9]+)?"/.test(html), 'app.js script');
 });
 
 test('style.css exists', () => {
