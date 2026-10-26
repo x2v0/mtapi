@@ -373,3 +373,29 @@ mark.tbl-hl {
   padding-left: 6px;
   font-weight: 600;
 }
+
+
+/* ── TOOLTIPS (online help) ───────────────────────────────── */
+[data-tip]{position:relative;cursor:help}
+[data-tip]:hover::after,
+[data-tip]:focus-within::after,
+[data-tip]:active::after{
+  content:attr(data-tip);
+  position:absolute;left:0;top:calc(100% + 6px);
+  background:#1e1e1e;color:#eee;border:1px solid #444;
+  border-radius:6px;padding:6px 10px;font-size:11px;
+  line-height:1.4;max-width:340px;white-space:normal;
+  z-index:100000;box-shadow:0 4px 12px rgba(0,0,0,0.5);
+  pointer-events:none;font-family:ui-monospace,monospace;
+  font-weight:normal;text-align:left;
+}
+[data-tip]:hover::before,
+[data-tip]:focus-within::before{
+  content:"";position:absolute;left:10px;top:100%;
+  border:5px solid transparent;border-bottom-color:#1e1e1e;
+  z-index:100001;pointer-events:none;
+}
+html[data-theme="light"] [data-tip]:hover::after,
+body.light [data-tip]:hover::after{background:#f5f5f5;color:#1a1a1a;border-color:#ccc}
+html[data-theme="light"] [data-tip]:hover::before,
+body.light [data-tip]:hover::before{border-bottom-color:#f5f5f5}

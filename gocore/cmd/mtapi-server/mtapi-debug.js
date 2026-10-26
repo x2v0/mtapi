@@ -483,10 +483,10 @@
   }
   function _iconBtn(icon, label, onclick, cls) {
     var c = 'icon-btn-sm' + (cls ? ' ' + cls : '');
-    return '<button class="' + c + '" aria-label="' + label + '" title="' + label + '" onclick="' + onclick + '">' + icon + '</button>';
+    return '<button class="' + c + '" aria-label="' + label + '" data-tip="' + label + '" title="' + label + '" onclick="' + onclick + '">' + icon + '</button>';
   }
   function _iconSearch(id, oninput) {
-    return '<input id="' + id + '" class="proc-search" placeholder="search..." oninput="' + oninput + '">';
+    return '<input id="' + id + '" class="proc-search" placeholder="search..." data-tip="search (live, case-insensitive)" title="search (live)" oninput="' + oninput + '">';
   }
 
   global._copyText = function(text) {
@@ -1407,6 +1407,29 @@ function _domClickHandler(ev){
   var _tabs = ['logs', 'console', 'errors', 'logcat', 'devtools', 'system', 'network'];
   var _tabLabels = {logs:'Logs', console:'Console', errors:'Errors', logcat:'Logcat', devtools:'DevTools', system:'System', network:'Network'};
 
+  // TAB_INFO: descriptions for tooltips (online help)
+  var TAB_INFO = {
+    logs:     'JS logs (console.log/warn/error). Colors by level. Click row to copy',
+    console:  'JS eval. await works. Help: ? / ?? / ???. Ctrl+Enter = Run',
+    errors:   'Persistent errors (localStorage). Survives reload. Clear = wipe',
+    logcat:   'Android logcat (needs adb/root). V D I W E F = level filter',
+    devtools: 'WebView DevTools JSON. Network + sources (adb on PC)',
+    system:   'System info: CPU, memory, storage, thermal',
+    network:  'HTTP requests from this WebView. Status, size, time'
+  };
+
+  function _tipAll() {
+    var d = global.document; if (!d) return;
+    var els = d.querySelectorAll('[title]');
+    for (var i = 0; i < els.length; i++) {
+      var el = els[i];
+      if (el.hasAttribute('data-tip')) continue;
+      var t = el.getAttribute('title');
+      if (!t) continue;
+      el.setAttribute('data-tip', t);
+    }
+  }
+
   global._setTab = function(name){
     if (_tabs.indexOf(name) === -1) return;
     _activeTab = name;
@@ -1580,7 +1603,7 @@ function _domClickHandler(ev){
   };
 
 
-  global._debugOpen = function(){ var ov = global.document && global.document.getElementById('mtapi-debug-overlay'); if (!ov) return; ov.removeAttribute('hidden'); global._setTab(_activeTab); global._domRootMode = 'overlay'; var _b = global.document.getElementById('mtapi-debug-root-toggle'); if (_b) _b.textContent = '\u25A3'; if (global._domRefresh) { try { global._domRefresh(); } catch(e){} } };
+  global._debugOpen = function(){ var ov = global.document && global.document.getElementById('mtapi-debug-overlay'); if (!ov) return; ov.removeAttribute('hidden'); global._setTab(_activeTab); _tipAll(); global._domRootMode = 'overlay'; var _b = global.document.getElementById('mtapi-debug-root-toggle'); if (_b) _b.textContent = '\u25A3'; if (global._domRefresh) { try { global._domRefresh(); } catch(e){} } };
   global._debugClose = function(){ var ov = global.document && global.document.getElementById('mtapi-debug-overlay'); if (ov) ov.setAttribute('hidden', ''); global._sidePanelClose(); global._domRootMode = 'page'; var _b = global.document.getElementById('mtapi-debug-root-toggle'); if (_b) _b.textContent = '\uD83C\uDF10'; if (global._domRefresh) { try { global._domRefresh(); } catch(e){} } };
 
   var CSS = [
@@ -1874,6 +1897,8 @@ function _domClickHandler(ev){
       var b = doc.createElement('button');
       b.textContent = _tabLabels[t] || t;
       b.setAttribute('data-tab', t);
+      b.setAttribute('data-tip', TAB_INFO[t] || '');
+      b.setAttribute('title', TAB_INFO[t] || '');
       b.setAttribute('onclick', 'window._setTab("' + t + '")');
       if (t === _activeTab) b.classList.add('active');
       tabsDiv.appendChild(b);

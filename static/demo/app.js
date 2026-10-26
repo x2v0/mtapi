@@ -960,9 +960,68 @@ function _highlightString(text, query) {
 }
 
 
+// EP_INFO: endpoint descriptions for tooltips (online help)
+const EP_INFO = {
+  '/ping':                    'Liveness check. Returns "pong". No params',
+  '/battery':                 'Battery: percentage, charging, temperature, voltage, health, technology',
+  '/wifi':                    'WiFi: SSID, RSSI, link speed, frequency, IP',
+  '/device':                  'Device: model, manufacturer, SDK, brand, device, product',
+  '/location':                'GPS: lat, lon, accuracy, provider, time',
+  '/clipboard':               'Clipboard. Read: GET. Write: ?op=set&text=hello',
+  '/toast':                   'Android Toast. ?text=hello',
+  '/notify':                  'Notification. ?title=Hi&body=There',
+  '/vibrate':                 'Vibrate. ?ms=200',
+  '/torch':                   'Torch on/off. ?on=1 or ?on=0',
+  '/torch/brightness':        'Torch brightness 0-100. ?level=50',
+  '/tts':                     'Text-to-speech. ?text=hello',
+  '/share':                   'Share intent. ?title=Hi&text=There',
+  '/contacts':                'Contacts. ?limit=0 = all',
+  '/calllog':                 'Call log. ?limit=0 = all',
+  '/sms':                     'SMS. ?limit=0 = all',
+  '/system':                  'System: model, SDK, kernel, uptime, locale, timezone',
+  '/cpu/detail':              'CPU: cores, arch, freq (max/min/current per-core)',
+  '/thermal':                 'Thermal zones: name, temp',
+  '/memory':                  'RAM: total, used, free, cached',
+  '/storage':                 'Storage: mount, total, used, free',
+  '/kernel':                  'Kernel: version, build, arch',
+  '/network':                 'Network: type (wifi/mobile), connected, metered',
+  '/wifi/detailed':           'WiFi detailed: BSSID, IP, gateway, DNS',
+  '/bluetooth':               'Bluetooth: enabled, paired devices',
+  '/telephony':               'Telephony: SIM state, carrier, signal',
+  '/wifi/scan':               'Scan WiFi: SSID, RSSI, freq',
+  '/net/ping':                'Ping host. ?host=8.8.8.8&count=3',
+  '/net/dns':                 'DNS resolve. ?host=example.com',
+  '/net/fetch':               'Fetch URL via Java (no CORS). ?url=https%3A%2F%2F...',
+  '/display':                 'Display: width, height, density, brightness, refresh',
+  '/display/brightness':      'Brightness level (current/max)',
+  '/display/color':           'Display color mode + color space',
+  '/audio':                   'Audio streams: music, ring, alarm, notification, call',
+  '/microphone':              'Microphone: muted, available',
+  '/audio/volume':            'Audio volume. ?stream=2',
+  '/audio/ringer':            'Ringer mode: normal/silent/vibrate',
+  '/sensors':                 'All sensors: accelerometer, gyroscope, magnetometer, light, proximity, pressure',
+  '/sensors/read':            'Read one sensor. ?name=accelerometer&ms=200',
+  '/sensors/stream':          'Stream sensor. ?name=accelerometer&hz=10',
+  '/sensors/stream/stop':     'Stop stream. ?name=accelerometer',
+  '/camera/list':             'Cameras: id, facing, megapixels',
+  '/app/list':                'Installed apps: pkg, name',
+  '/features':                'Features: camera, flash, gps, nfc, sensors, telephony, wifi',
+  '/locale':                  'Locale: language, country, timezone',
+  '/calendar':                'Calendar events. ?days=7',
+  '/alarm/next':              'Next alarm: time, label, enabled',
+  '/files/save':              'Save file. ?path=...&text=...',
+  '/tts/voices':              'TTS voices: ru-RU, en-US, ...',
+  '/debug':                   'Debug info (logcat)',
+  '/devtools/json':           'WebView DevTools JSON'
+};
+
 function makeCard(path){
   var ep=document.createElement('details');
   ep.className='ep'; ep.dataset.path=path;
+  var _base = path.split('?')[0];
+  var _info = EP_INFO[_base] || EP_INFO[path] || (path + ' — click GET to fetch');
+  ep.setAttribute('data-tip', _info);
+  ep.setAttribute('title', _info);
   var head=document.createElement('summary'); head.className='ep-h';
   var btn=document.createElement('button'); btn.className='run'; btn.textContent='GET '+path; btn.title='Click to fetch '+path+' (single request, no queue)';
   btn.addEventListener('click',function(e){e.preventDefault();e.stopPropagation();run(ep,path)});
