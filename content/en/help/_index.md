@@ -7,11 +7,11 @@ bookCollapseSection: false
 
 # Help
 
-- [About / Resume](resume.md) — who I am and what I do
-- [Architecture](../docs/architecture.md) — Go + WebView + JNI
-- [Build](../docs/build.md) — make so / test / apk
-- [Tests](../docs/tests.md) — 170/170
-- [FAQ](../docs/faq.md) — iframe, logcat, CORS
+- [About / Resume](/mtapi/en/help/resume/) — who I am and what I do
+- [Architecture](/mtapi/en/docs/architecture/) — Go + WebView + JNI
+- [Build](/mtapi/en/docs/build/) — make so / test / apk
+- [Tests](/mtapi/en/docs/tests/) — 170/170
+- [FAQ](/mtapi/en/docs/faq/) — iframe, logcat, CORS
 
 ## Quick links
 
