@@ -729,6 +729,42 @@
   };
 
   // ─── network table ────────────────────────────────────────
+  function renderResources() {
+    var esc = function(s){ return String(s==null?'':s).replace(/[&<>"']/g, function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]}); };
+    function getTable(obj, title) {
+      var keys = Object.keys(obj);
+      if (!keys.length) return '<h3 style="color:#888;margin:12px 0 4px">' + title + '</h3><div style="color:#666">(empty)</div>';
+      var h = '<h3 style="color:#888;margin:12px 0 4px">' + title + '</h3><table class="mtapi-debug-table"><thead><tr><th>Key</th><th>Value</th></tr></thead><tbody>';
+      keys.forEach(function(k){
+         h += '<tr><td>' + esc(k) + '</td><td style="word-break:break-all">' + esc(obj[k]) + '</td></tr>';
+      });
+      return h + '</tbody></table>';
+    }
+    var h = '';
+    try {
+      var ls = {}; for(var i=0; i<localStorage.length; i++){ var k=localStorage.key(i); ls[k]=localStorage.getItem(k); }
+      h += getTable(ls, 'localStorage');
+    } catch(e) { h += '<div class="err">localStorage error: ' + esc(e.message) + '</div>'; }
+    try {
+      var ss = {}; for(var i=0; i<sessionStorage.length; i++){ var k=sessionStorage.key(i); ss[k]=sessionStorage.getItem(k); }
+      h += getTable(ss, 'sessionStorage');
+    } catch(e) { h += '<div class="err">sessionStorage error: ' + esc(e.message) + '</div>'; }
+    try {
+      var ck = document.cookie.split(';').reduce(function(acc, c){ var parts=c.trim().split('='); if(parts[0]) acc[parts[0]]=parts.slice(1).join('='); return acc; }, {});
+      h += getTable(ck, 'cookies');
+    } catch(e) { h += '<div class="err">cookies error: ' + esc(e.message) + '</div>'; }
+    
+    var el = global.document.getElementById('mtapi-debug-resources');
+    if (el) el.innerHTML = h;
+  }
+  global._resourceRefresh = renderResources;
+  global._resourceClear = function() {
+     if (!confirm('Clear localStorage & sessionStorage?')) return;
+     try { localStorage.clear(); } catch(e){}
+     try { sessionStorage.clear(); } catch(e){}
+     renderResources();
+  };
+
   function renderNetwork(){
     var buf = global._netBuf || [];
     var inp = global.document && global.document.getElementById('mtapi-debug-network-search');
@@ -751,7 +787,9 @@
         } else { bodyHtml = '<pre class="net-body-pre">' + esc(e.body) + '</pre>'; }
       }
 
-      var _curl = "curl -X " + e.method + " '" + e.url + "'";
+      var _host = (global.location && global.location.origin) ? global.location.origin : 'http://127.0.0.1:7788';
+      if (_host === 'about:srcdoc') _host = 'http://127.0.0.1:7788';
+      var _curl = "curl -X " + e.method + " '" + _host + e.url + "'";
       for (var k in (e.reqH || {})) { _curl += " -H '" + k + ": " + String(e.reqH[k]) + "'"; }
       if (e.reqB) { _curl += " --data-raw '" + String(e.reqB) + "'"; }
 
@@ -1427,8 +1465,8 @@ function _domClickHandler(ev){
 
   // ─── chrome (FAB + overlay + tabs + side panel) ───────────
   var _activeTab = 'logs';
-  var _tabs = ['logs', 'console', 'errors', 'logcat', 'devtools', 'system', 'network'];
-  var _tabLabels = {logs:'Logs', console:'Console', errors:'Errors', logcat:'Logcat', devtools:'DevTools', system:'System', network:'Network'};
+  var _tabs = ['logs', 'console', 'errors', 'logcat', 'devtools', 'system', 'network', 'resources', 'sources'];
+  var _tabLabels = {logs:'Logs', console:'Console', errors:'Errors', logcat:'Logcat', devtools:'DevTools', system:'System', network:'Network', resources:'Resources', sources:'Sources'};
 
   // TAB_INFO: descriptions for tooltips (online help)
   var LOG_LEVEL_INFO = {
@@ -1800,6 +1838,9 @@ function _domClickHandler(ev){
     if (name === 'logcat') global._logcatRefresh();
     if (name === 'system') { global._perfRefresh(); refreshSystemInfo(); }
     if (name === 'logs') global._netRefresh();
+    if (name === 'network') global._netRefresh();
+    if (name === 'resources' && global._resourceRefresh) global._resourceRefresh();
+    if (name === 'sources' && global._sourcesLoad) global._sourcesLoad('html');
     // Scroll active tab to center of tab bar
     try {
       var _tb = doc.querySelector('.mtapi-debug-tabs [data-tab="' + name + '"]');
@@ -2408,6 +2449,30 @@ global._browserOpen = function(url) {
     html += '</details>';
     html += '</div>';
 
+    // ── Resources ──
+    html += '<div data-tab-content="resources" class="' + (_activeTab==='resources'?'active':'') + '">';
+    html += '<details class="mtapi-debug-section" open data-flat="1"><summary>Resources (Local/Session/Cookies)</summary>';
+    html += '<div class="mtapi-debug-toolbar">';
+    html += _iconBtn('\u21BB', 'Refresh', "window._resourceRefresh&&window._resourceRefresh()", 'accent');
+    html += _iconBtn('\uD83D\uDDD1', 'Clear All', "window._resourceClear&&window._resourceClear()", 'danger');
+    html += '</div>';
+    html += '<div id="mtapi-debug-resources" class="mtapi-debug-pre" style="color:#ddd">(loading...)</div>';
+    html += '</details>';
+    html += '</div>';
+
+    // ── Sources ──
+    html += '<div data-tab-content="sources" class="' + (_activeTab==='sources'?'active':'') + '">';
+    html += '<details class="mtapi-debug-section" open data-flat="1"><summary>Sources (HTML/CSS/JS)</summary>';
+    html += '<div class="mtapi-debug-toolbar">';
+    html += _iconBtn('HTML', 'HTML', "window._sourcesLoad&&window._sourcesLoad('html')", 'accent');
+    html += _iconBtn('CSS', 'CSS', "window._sourcesLoad&&window._sourcesLoad('css')", 'accent');
+    html += _iconBtn('JS', 'JS', "window._sourcesLoad&&window._sourcesLoad('js')", 'accent');
+    html += _iconBtn('📋', 'Copy', "window._sourcesCopy&&window._sourcesCopy()");
+    html += '</div>';
+    html += '<div id="mtapi-debug-sources" class="mtapi-debug-pre" style="color:#ddd;font-size:10px">(select HTML/CSS/JS)</div>';
+    html += '</details>';
+    html += '</div>';
+
     return html;
   }
 
@@ -2538,6 +2603,75 @@ global._browserOpen = function(url) {
 
   // init help-mode bindings once (header #help-btn)
   try { global._helpModeInit && global._helpModeInit(); } catch(e) {}
+
+  // ── Sources (HTML/CSS/JS viewer) ──
+  var _sourceCache = {};
+  global._sourcesLoad = function(type) {
+    var el = global.document.getElementById('mtapi-debug-sources');
+    if (!el) return;
+    el.textContent = '(loading...)';
+
+    // Подсветка активной кнопки
+    var p = global.document.querySelector('.mtapi-debug-content > [data-tab-content="sources"]');
+    if (p) {
+      Array.prototype.forEach.call(p.querySelectorAll('button'), function(b){
+         if (b.getAttribute('aria-label') === type.toUpperCase()) b.style.background = '#0288d1';
+         else if (['HTML','CSS','JS'].indexOf(b.getAttribute('aria-label')) !== -1) b.style.background = '#444';
+      });
+    }
+
+    function render(text) {
+      el.textContent = text;
+      _sourceCache[type] = text;
+    }
+
+    var iframe = global.document.getElementById('mtapi-browser-iframe');
+    var targetDoc = null;
+    
+    try {
+      if (iframe && iframe.contentDocument) {
+        targetDoc = iframe.contentDocument;
+      }
+    } catch(e) {
+      render('Cross-origin error: Cannot access iframe content.');
+      return;
+    }
+
+    if (!targetDoc) targetDoc = global.document; // fallback
+
+    if (type === 'html') {
+      if (targetDoc === global.document) {
+         render('(no iframe open - showing parent HTML)\n\n' + '<!DOCTYPE html>\n' + targetDoc.documentElement.outerHTML);
+      } else {
+         render('<!DOCTYPE html>\n' + targetDoc.documentElement.outerHTML);
+      }
+    } else if (type === 'css') {
+      var css = '';
+      try { 
+        Array.prototype.forEach.call(targetDoc.styleSheets, function(ss){ 
+          try { Array.prototype.forEach.call(ss.cssRules, function(r){ css += r.cssText + '\n'; }); } catch(e){} 
+        }); 
+      } catch(e){}
+      render(css || '(no styles or cross-origin)');
+    } else if (type === 'js') {
+      var scripts = targetDoc.querySelectorAll('script[src]');
+      var srcs = Array.from(scripts).map(function(s){return s.src;}).join('\n');
+      if (targetDoc === global.document && global._fetchAppSource) {
+         try { global._fetchAppSource(); } catch(e){ render('Error fetching JS: ' + e.message); return; }
+         setTimeout(function(){
+            var src = global.document.getElementById('mtapi-debug-app-source');
+            render(src ? src.textContent : '(no JS source)');
+         }, 300);
+      } else {
+         render('External JS files:\n' + (srcs || '(none)'));
+      }
+    }
+  };
+
+  global._sourcesCopy = function() {
+     var el = global.document.getElementById('mtapi-debug-sources');
+     if (el && global._copyText) global._copyText(el.textContent);
+  };
 
   global.MtapiDebug = {
     attach: function(o){
