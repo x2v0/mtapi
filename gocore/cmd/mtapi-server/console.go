@@ -5,7 +5,7 @@ import (
 	"net/http"
 )
 
-const consoleTabsCSS = `body{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;background:#fafafa;color:#1a1a1a;margin:0;padding:10px;font-size:12px;line-height:1.4}h1{color:#0288d1;font-size:15px;margin:0 0 6px}.tabs{display:flex;gap:4px;overflow-x:auto;padding:6px 0;border-bottom:1px solid #e0e0e0;margin-bottom:10px}.tabs button{padding:5px 12px;background:#fff;border:1px solid #e0e0e0;border-radius:4px;color:#555;white-space:nowrap;font-size:11px;cursor:pointer;font-family:inherit}.tabs button.active{background:#0288d1;color:#fff;border-color:#0288d1}.tabs button:hover{background:#e3f2fd}.tabs button.active:hover{background:#0277bd}.pane{display:none}.pane.active{display:block}.bar{display:flex;gap:6px;margin:8px 0;flex-wrap:wrap}button.act{background:#0288d1;color:#fff;border:none;border-radius:4px;padding:5px 12px;font-family:monospace;font-size:11px;cursor:pointer}button.act:hover{background:#0277bd}button.g{background:#e0e0e0;color:#1a1a1a;border:1px solid #ccc;border-radius:4px;padding:4px 10px;font-family:monospace;font-size:11px;cursor:pointer}button.g:hover{background:#d0d0d0}pre{background:#fff;border:1px solid #e0e0e0;border-radius:4px;padding:8px;margin:0;white-space:pre-wrap;word-break:break-all;overflow:auto;max-height:70vh;font-size:11px}textarea{width:100%;box-sizing:border-box;padding:8px;background:#fff;color:#1a1a1a;border:1px solid #ccc;border-radius:4px;font-family:monospace;font-size:12px;resize:vertical;min-height:50px}table{width:100%;border-collapse:collapse;background:#fff;font-size:11px}th,td{border:1px solid #e0e0e0;padding:3px 6px;text-align:left;vertical-align:top}th{background:#e3f2fd;color:#555;position:sticky;top:0}.hint{color:#888;font-size:11px;margin:4px 0}.err{color:#c00;background:#fff3f3;border:1px solid #fcc;padding:8px;border-radius:4px}.lvl-e{color:#c00}.lvl-w{color:#e67e22}.lvl-v{color:#888}#out{padding:6px;background:#fff;border:1px solid #e0e0e0;border-radius:4px;min-height:60px;overflow:auto;max-height:70vh;white-space:pre-wrap;font-family:monospace;font-size:12px}`
+const consoleTabsCSS = `body{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;background:#fafafa;color:#1a1a1a;margin:0;padding:10px;font-size:12px;line-height:1.4}h1{color:#0288d1;font-size:15px;margin:0 0 6px}.tabs{display:flex;gap:4px;overflow-x:auto;padding:6px 0;border-bottom:1px solid #e0e0e0;margin-bottom:10px}.tabs button{padding:5px 12px;background:#fff;border:1px solid #e0e0e0;border-radius:4px;color:#555;white-space:nowrap;font-size:11px;cursor:pointer;font-family:inherit}.tabs button.active{background:#0288d1;color:#fff;border-color:#0288d1}.tabs button:hover{background:#e3f2fd}.tabs button.active:hover{background:#0277bd}.pane{display:none}.pane.active{display:block}.bar{display:flex;gap:6px;margin:8px 0;flex-wrap:wrap}button.act{background:#0288d1;color:#fff;border:none;border-radius:4px;padding:5px 12px;font-family:monospace;font-size:11px;cursor:pointer}button.act:hover{background:#0277bd}button.g{background:#e0e0e0;color:#1a1a1a;border:1px solid #ccc;border-radius:4px;padding:4px 10px;font-family:monospace;font-size:11px;cursor:pointer}button.g:hover{background:#d0d0d0}pre{background:#fff;border:1px solid #e0e0e0;border-radius:4px;padding:8px;margin:0;white-space:pre-wrap;word-break:break-all;overflow:auto;max-height:70vh;font-size:11px}textarea{width:100%;box-sizing:border-box;padding:8px;background:#fff;color:#1a1a1a;border:1px solid #ccc;border-radius:4px;font-family:monospace;font-size:12px;resize:vertical;min-height:50px}table{width:100%;border-collapse:collapse;background:#fff;font-size:11px}th,td{border:1px solid #e0e0e0;padding:3px 6px;text-align:left;vertical-align:top}th{background:#e3f2fd;color:#555;position:sticky;top:0}.hint{color:#888;font-size:11px;margin:4px 0}.err{color:#c00;background:#fff3f3;border:1px solid #fcc;padding:8px;border-radius:4px}.lvl-e{color:#c00}.lvl-w{color:#e67e22}.lvl-v{color:#888}#out{padding:6px;background:#fff;border:1px solid #e0e0e0;border-radius:4px;min-height:60px;overflow:auto;max-height:70vh;white-space:pre-wrap;font-family:monospace;font-size:12px}.spin{display:inline-block;width:12px;height:12px;border:2px solid #e0e0e0;border-top-color:#0288d1;border-radius:50%;animation:mtapi-spin 0.8s linear infinite;vertical-align:middle}@keyframes mtapi-spin{to{transform:rotate(360deg)}}`
 
 func (s *apiServer) consoleHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -33,28 +33,28 @@ func (s *apiServer) consoleHandler(w http.ResponseWriter, r *http.Request) {
 <div class="pane" id="pane-logs">
 <div class="bar"><button class="act" onclick="loadLogs()">↻ Refresh</button><button class="g" onclick="copyId('logs-out')">📋 Copy</button></div>
 <div class="hint">JS logs from WebView memory (parent.MtapiDebug.buffer). External browser: n/a.</div>
-<div id="logs-out">(loading...)</div>
+<div id="logs-out"><span class="spin"></span></div>
 </div>
 
 <!-- Errors -->
 <div class="pane" id="pane-errors">
 <div class="bar"><button class="act" onclick="loadErrors()">↻ Refresh</button><button class="g" onclick="copyId('errors-out')">📋 Copy</button></div>
 <div class="hint">Persistent errors (localStorage). Works everywhere.</div>
-<div id="errors-out">(loading...)</div>
+<div id="errors-out"><span class="spin"></span></div>
 </div>
 
 <!-- Logcat -->
 <div class="pane" id="pane-logcat">
 <div class="bar"><button class="act" onclick="loadLogcat()">↻ Refresh</button><button class="g" onclick="copyId('logcat-out')">📋 Copy</button></div>
 <div class="hint">Logcat via Android bridge (parent.Android.getLogcat). External browser: n/a.</div>
-<div id="logcat-out">(loading...)</div>
+<div id="logcat-out"><span class="spin"></span></div>
 </div>
 
 <!-- Sys -->
 <div class="pane" id="pane-sys">
 <div class="bar"><button class="act" onclick="loadSys()">↻ Refresh</button><button class="g" onclick="copyId('sys-out')">📋 Copy</button></div>
 <div class="hint">GET /system, /cpu/detail, /memory, /storage. Works everywhere.</div>
-<div id="sys-out">(loading...)</div>
+<div id="sys-out"><span class="spin"></span></div>
 </div>
 
 <script>
@@ -247,7 +247,8 @@ function renderJSON(o){
 }
 
 function loadSys(){
-  setHtml('sys-out','(loading...)');
+  setHtml('sys-out','<span class="spin"></span>');
+  var _t0 = Date.now();
   Promise.all([
     fetch('/system').then(function(r){return r.json()}).catch(function(e){return {error:e.message}}),
     fetch('/cpu/detail').then(function(r){return r.json()}).catch(function(e){return {error:e.message}}),
@@ -261,7 +262,8 @@ function loadSys(){
       if(o && o.error){ h+='<div class="err">'+esc(o.error)+'</div>'; }
       else { h+=renderJSON(o); }
     });
-    setHtml('sys-out',h);
+    var delay = Math.max(0, 400 - (Date.now() - _t0));
+    setTimeout(function(){ setHtml('sys-out',h); }, delay);
   });
 }
 
