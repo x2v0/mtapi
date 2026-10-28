@@ -1793,7 +1793,54 @@ function _domClickHandler(ev){
   var _browserHistory = [];
   var _browserHistoryIdx = -1;
 
-  global._browserOpen = function(url) {
+  function _browserRenderJSONPage(j) {
+  var esc = function(s){ return String(s==null?'':s).replace(/[&<>"']/g, function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]}); };
+  var rJSON = function(o) {
+    if (o === null) return '<span style="color:#888">null</span>';
+    if (typeof o !== 'object') return esc(String(o));
+    if (Array.isArray(o)) {
+      if (!o.length) return '<span style="color:#888">(empty)</span>';
+      if (typeof o[0] !== 'object') return o.map(function(v){return esc(String(v))}).join(', ');
+      var keys = {}; o.forEach(function(it){Object.keys(it).forEach(function(k){keys[k]=1})});
+      var cols = Object.keys(keys);
+      var h = '<table><thead><tr>' + cols.map(function(c){return '<th>'+esc(c)+'</th>'}).join('') + '</tr></thead><tbody>';
+      o.forEach(function(it){ h += '<tr>' + cols.map(function(c){return '<td>'+rJSON(it[c])+'</td>'}).join('') + '</tr>'; });
+      return h + '</tbody></table>';
+    }
+    var keys = Object.keys(o);
+    if (!keys.length) return '<span style="color:#888">{}</span>';
+    var h = '<table><tbody>';
+    keys.forEach(function(k){
+      var v = o[k];
+      if (v !== null && typeof v === 'object') h += '<tr><td style="color:#888;width:180px;vertical-align:top">'+esc(k)+'</td><td>'+rJSON(v)+'</td></tr>';
+      else h += '<tr><td style="color:#888;width:180px">'+esc(k)+'</td><td>'+esc(String(v))+'</td></tr>';
+    });
+    return h + '</tbody></table>';
+  };
+  var pretty = rJSON(j);
+  var raw = '<pre style="white-space:pre-wrap;word-break:break-all;margin:0">' + esc(JSON.stringify(j, null, 2)) + '</pre>';
+  
+  var p_js = JSON.stringify(pretty).replace(/<\/script>/gi, '<\/script>');
+  var r_js = JSON.stringify(raw).replace(/<\/script>/gi, '<\/script>');
+
+  return '<!DOCTYPE html><html><head><meta charset="utf-8"><style>' +
+    'body{font-family:ui-monospace,monospace;font-size:11px;background:#fafafa;color:#1a1a1a;padding:8px;margin:0}' +
+    'table{width:100%;border-collapse:collapse;margin:4px 0}' +
+    'th,td{border:1px solid #ddd;padding:4px 8px;text-align:left;vertical-align:top}' +
+    'th{background:#e3f2fd;color:#555}' +
+    '.bar{margin-bottom:8px;font-size:12px}' +
+    '</style></head><body>' +
+    '<div class="bar"><label style="cursor:pointer"><input type="checkbox" id="pretty" checked onchange="toggleP()"> Pretty print (json - table)</label></div>' +
+    '<div id="out">' + pretty + '</div>' +
+    '<script>' +
+    'var _P = ' + p_js + ';' +
+    'var _R = ' + r_js + ';' +
+    'function toggleP() { var el = document.getElementById("pretty"); document.getElementById("out").innerHTML = el.checked ? _P : _R; }' +
+    '<\/script>' +
+    '</body></html>';
+}
+
+global._browserOpen = function(url) {
     var existing = global.document.getElementById('mtapi-browser-overlay');
     if (existing) { existing.remove(); }
     var u = url || (
@@ -1813,6 +1860,7 @@ function _domClickHandler(ev){
       + '<div id="mtapi-browser-presets-menu" style="display:none;position:absolute;top:100%;right:0;background:var(--bg3,#222);color:var(--fg,#ddd);border:1px solid var(--bg4,#444);border-radius:4px;padding:4px 0;z-index:10000001;min-width:230px;box-shadow:0 4px 12px rgba(0,0,0,0.5);font-size:11px;text-align:left">'
       + '<style>#mtapi-browser-presets-menu>div[data-nav]:hover,#mtapi-browser-presets-menu>div[data-action]:hover{background:var(--bg4,#444)}</style>'
       + '<div data-nav="/console" style="padding:6px 10px;cursor:pointer">/console</div>'
+      + '<div data-nav="/sys" style="padding:6px 10px;cursor:pointer">/sys</div>'
       + '<div data-nav="/battery" style="padding:6px 10px;cursor:pointer">/battery</div>'
       + '<div data-nav="/system" style="padding:6px 10px;cursor:pointer">/system</div>'
       + '<div data-nav="/sensors" style="padding:6px 10px;cursor:pointer">/sensors</div>'
@@ -1826,7 +1874,6 @@ function _domClickHandler(ev){
       + '<div data-nav="https://google.ru" style="padding:6px 10px;cursor:pointer">google.ru</div>'
       + '<div data-nav="https://github.com/x2v0/mtapi" style="padding:6px 10px;cursor:pointer">github</div>'
       + '<div style="border-top:1px solid var(--bg4,#444);margin:4px 0"></div>'
-      + '<div data-action="pretty" style="padding:6px 10px;cursor:pointer;color:#4fc3f7">\u2728 Pretty print (JSON \u2192 table)</div>'
       + '<div data-action="reload" style="padding:6px 10px;cursor:pointer">\u21BB Reload</div>'
       + '</div></span>'
       + '<button id="mtapi-browser-debug" class="icon-btn-sm danger" title="Debug (inspect iframe content)">\uD83D\uDC1E</button>'
@@ -1876,47 +1923,6 @@ function _domClickHandler(ev){
           try { iframe.src = iframe.src; } catch(x) {}
           return;
         }
-        if (action === 'pretty') {
-          try {
-            var idoc = iframe.contentDocument || iframe.contentWindow.document;
-            if (!idoc) { alert('Pretty print: cross-origin (no access)'); return; }
-            var text = (idoc.body && (idoc.body.textContent || idoc.body.innerText)) || '';
-            var j = JSON.parse(text);
-            var rJSON = function(o) {
-              var esc = function(s){ return String(s==null?'':s).replace(/[&<>"']/g, function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]}); };
-              if (o === null) return '<span style="color:#888">null</span>';
-              if (typeof o !== 'object') return esc(String(o));
-              if (Array.isArray(o)) {
-                if (!o.length) return '<span style="color:#888">(empty)</span>';
-                if (typeof o[0] !== 'object') return o.map(function(v){return esc(String(v))}).join(', ');
-                var keys = {}; o.forEach(function(it){Object.keys(it).forEach(function(k){keys[k]=1})});
-                var cols = Object.keys(keys);
-                var h = '<table><thead><tr>' + cols.map(function(c){return '<th>'+esc(c)+'</th>'}).join('') + '</tr></thead><tbody>';
-                o.forEach(function(it){ h += '<tr>' + cols.map(function(c){return '<td>'+rJSON(it[c])+'</td>'}).join('') + '</tr>'; });
-                return h + '</tbody></table>';
-              }
-              var keys = Object.keys(o);
-              if (!keys.length) return '<span style="color:#888">{}</span>';
-              var h = '<table><tbody>';
-              keys.forEach(function(k){
-                var v = o[k];
-                if (v !== null && typeof v === 'object') h += '<tr><td style="color:#888;width:180px;vertical-align:top">'+esc(k)+'</td><td>'+rJSON(v)+'</td></tr>';
-                else h += '<tr><td style="color:#888;width:180px">'+esc(k)+'</td><td>'+esc(String(v))+'</td></tr>';
-              });
-              return h + '</tbody></table>';
-            };
-            var html = '<!DOCTYPE html><html><head><meta charset="utf-8"><style>' +
-              'body{font-family:ui-monospace,monospace;font-size:11px;background:#fafafa;color:#1a1a1a;padding:8px;margin:0}' +
-              'table{width:100%;border-collapse:collapse;margin:4px 0}' +
-              'th,td{border:1px solid #ddd;padding:4px 8px;text-align:left;vertical-align:top}' +
-              'th{background:#e3f2fd;color:#555}' +
-              '</style></head><body>' + rJSON(j) + '</body></html>';
-            idoc.open(); idoc.write(html); idoc.close();
-          } catch(ex) {
-            try { alert('Pretty print: ' + ex.message); } catch(y) {}
-          }
-          return;
-        }
       };
       if (!global._browserPresetsOutsideClick) {
         global._browserPresetsOutsideClick = true;
@@ -1951,6 +1957,8 @@ function _domClickHandler(ev){
       if (bFwd) bFwd.disabled = false; // always enabled; acts as Enter when no forward history
     }
     function _browserLoad(url) {
+      var _if = global.document.getElementById('mtapi-browser-iframe');
+      if (_if) _if._jsonInjected = false;
       if (!url) return;
       // Auto-add token for localhost (same-origin)
       if ((url.indexOf('/') === 0 || url.indexOf('127.0.0.1:7788') >= 0) && url.indexOf('token=') < 0) {
@@ -1966,7 +1974,74 @@ function _domClickHandler(ev){
       // Local (same-origin) → iframe.src directly
       if (url.indexOf('/') === 0) {
         iframe.removeAttribute('srcdoc');
-        iframe.src = url;
+              // JSON interceptor
+      var isLocal = (url.indexOf('/') === 0 || url.indexOf('127.0.0.1:7788') >= 0);
+      if (isLocal && typeof _browserRenderJSONPage === 'function') {
+          fetch(url).then(function(r){
+              var ct = (r.headers.get('content-type') || '').toLowerCase();
+              if (ct.indexOf('application/json') !== -1) {
+                  return r.text().then(function(t){
+                      try {
+                          var j = JSON.parse(t);
+                          var html = _browserRenderJSONPage(j);
+                          iframe.removeAttribute('src');
+                          iframe.srcdoc = html;
+                          return true;
+                      } catch(err) {}
+                      return false;
+                  });
+              }
+              return false;
+          }).then(function(handled){
+              if (!handled) {
+                  iframe.removeAttribute('srcdoc');
+                        var _spin = global.document.getElementById('mtapi-browser-spinner');
+      if (_spin) _spin.style.display = 'inline-block';
+
+      var isLocal = (url.indexOf('/') === 0 || url.indexOf('127.0.0.1:7788') >= 0);
+      if (isLocal && typeof _browserRenderJSONPage === 'function') {
+          fetch(url, { cache: 'no-store' }).then(function(r){
+              var ct = (r.headers.get('content-type') || '').toLowerCase();
+              if (ct.indexOf('application/json') !== -1) {
+                  return r.text().then(function(t){
+                      try {
+                          var j = JSON.parse(t);
+                          var html = _browserRenderJSONPage(j);
+                          iframe.removeAttribute('src');
+                          iframe.srcdoc = html;
+                          if (_spin) _spin.style.display = 'none';
+                          return;
+                      } catch(err) { console.error('[json parse]', err); }
+                      iframe.removeAttribute('srcdoc');
+                      iframe.src = url;
+                      if (_spin) _spin.style.display = 'none';
+                  });
+              } else {
+                  iframe.removeAttribute('srcdoc');
+                  iframe.src = url;
+                  if (_spin) _spin.style.display = 'none';
+              }
+          }).catch(function(e){
+              console.error('[fetch error]', e);
+              iframe.removeAttribute('srcdoc');
+              iframe.src = url;
+              if (_spin) _spin.style.display = 'none';
+          });
+      } else {
+          iframe.removeAttribute('srcdoc');
+          iframe.src = url;
+          if (_spin) _spin.style.display = 'none';
+      }
+              }
+          }).catch(function(){
+              iframe.removeAttribute('srcdoc');
+              iframe.src = url;
+          });
+      } else {
+          iframe.removeAttribute('srcdoc');
+          iframe.src = url;
+      }
+
         return;
       }
       // Priority 1: Android.httpGet (Java DNS, no CORS, no X-Frame-Options)
