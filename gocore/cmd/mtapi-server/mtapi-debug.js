@@ -1817,25 +1817,38 @@ function _domClickHandler(ev){
     });
     return h + '</tbody></table>';
   };
+  
   var pretty = rJSON(j);
-  var raw = '<pre style="white-space:pre-wrap;word-break:break-all;margin:0">' + esc(JSON.stringify(j, null, 2)) + '</pre>';
+  var raw_pre = '<pre style="white-space:pre-wrap;word-break:break-all;margin:0">' + esc(JSON.stringify(j, null, 2)) + '</pre>';
+  var raw_json = JSON.stringify(j, null, 2);
   
   var p_js = JSON.stringify(pretty).replace(/<\/script>/gi, '<\/script>');
-  var r_js = JSON.stringify(raw).replace(/<\/script>/gi, '<\/script>');
+  var r_js = JSON.stringify(raw_pre).replace(/<\/script>/gi, '<\/script>');
+  var j_js = JSON.stringify(raw_json).replace(/<\/script>/gi, '<\/script>');
 
   return '<!DOCTYPE html><html><head><meta charset="utf-8"><style>' +
     'body{font-family:ui-monospace,monospace;font-size:11px;background:#fafafa;color:#1a1a1a;padding:8px;margin:0}' +
     'table{width:100%;border-collapse:collapse;margin:4px 0}' +
     'th,td{border:1px solid #ddd;padding:4px 8px;text-align:left;vertical-align:top}' +
     'th{background:#e3f2fd;color:#555}' +
-    '.bar{margin-bottom:8px;font-size:12px}' +
+    '.bar{margin-bottom:8px;font-size:12px;display:flex;gap:8px;align-items:center}' +
+    'button{background:#0288d1;color:#fff;border:none;border-radius:3px;padding:4px 10px;font-family:monospace;font-size:11px;cursor:pointer}' +
+    'button:hover{background:#0277bd}' +
     '</style></head><body>' +
-    '<div class="bar"><label style="cursor:pointer"><input type="checkbox" id="pretty" checked onchange="toggleP()"> Pretty print (json - table)</label></div>' +
+    '<div class="bar">' +
+    '<label style="cursor:pointer"><input type="checkbox" id="pretty" checked onchange="toggleP()"> Pretty print (json - table)</label>' +
+    '<button id="copy-json" onclick="copyJSON()">📋 Copy</button>' +
+    '</div>' +
     '<div id="out">' + pretty + '</div>' +
     '<script>' +
     'var _P = ' + p_js + ';' +
     'var _R = ' + r_js + ';' +
+    'var _J = ' + j_js + ';' +
     'function toggleP() { var el = document.getElementById("pretty"); document.getElementById("out").innerHTML = el.checked ? _P : _R; }' +
+    'function copyJSON() { ' +
+    '  if (navigator.clipboard) { navigator.clipboard.writeText(_J).then(function(){ alert("Copied "+_J.length+" chars"); }); } ' +
+    '  else { var ta = document.createElement("textarea"); ta.value = _J; document.body.appendChild(ta); ta.select(); document.execCommand("copy"); document.body.removeChild(ta); alert("Copied"); } ' +
+    '}' +
     '<\/script>' +
     '</body></html>';
 }
@@ -1883,6 +1896,29 @@ global._browserOpen = function(url) {
     global.document.body.appendChild(ov);
 
     var iframe = global.document.getElementById('mtapi-browser-iframe');
+    
+    // Event Tracer
+    var bTrace = global.document.getElementById('mtapi-browser-trace');
+    if (bTrace && !bTrace._bound) {
+      bTrace._bound = true;
+      bTrace.onclick = function() {
+        global._mtapiTrace = !global._mtapiTrace;
+        bTrace.style.background = global._mtapiTrace ? '#4fc3f7' : '';
+        bTrace.style.color = global._mtapiTrace ? '#000' : '';
+        if (global._mtapiTrace) global.console.log('[trace] ENABLED');
+      };
+    }
+    if (iframe && !iframe._traceBound) {
+      iframe._traceBound = true;
+      ['load', 'error', 'readystatechange'].forEach(function(ev) {
+        iframe.addEventListener(ev, function() {
+          if (global._mtapiTrace) {
+            var src = iframe.src || (iframe.srcdoc ? '(srcdoc)' : 'about:blank');
+            global.console.log('[trace] ' + ev + ': ' + src);
+          }
+        });
+      });
+    }
     var urlIn = global.document.getElementById('mtapi-browser-url');
     if (!global._mtapiBrowserNavListener) {
       global._mtapiBrowserNavListener = true;
@@ -2290,7 +2326,7 @@ global._browserOpen = function(url) {
     // ── Console ──
     html += '<div data-tab-content="console" class="' + (_activeTab==='console'?'active':'') + '">';
     html += '<details class="mtapi-debug-section" open data-flat="1"><summary>Console Eval</summary>';
-    html += '<div style="margin:4px 0;display:flex;gap:4px;align-items:center;flex-wrap:wrap"><textarea class="mtapi-dbg-eval-input" placeholder="JS (multiline, Ctrl+Enter to run)..." rows="3" style="flex:1 1 100%;padding:6px;background:#000;color:#ddd;border:1px solid #444;font-family:monospace;resize:vertical;min-height:60px;max-height:40vh"></textarea><button onclick="window._evalConsole()">\u25B6</button><button class="icon-btn-sm" aria-label="Copy" title="Copy output" onclick="window._evalCopy&&window._evalCopy()">\uD83D\uDCCB</button><button class="icon-btn-sm danger" aria-label="Clear" title="Clear output" onclick="window._evalClear&&window._evalClear()">\uD83D\uDDD1</button><div style="flex:1"></div><button class="icon-btn-sm" aria-label="DOM" title="Floating DOM tree" onclick="window._domShowFloating&&window._domShowFloating()">\uD83C\uDF33</button></div>';
+    html += '<div style="margin:4px 0;display:flex;gap:4px;align-items:center;flex-wrap:wrap"><label style="font-size:10px;margin-right:4px;cursor:pointer" title="Eval inside browser iframe"><input type="checkbox" id="mtapi-eval-iframe"> iframe</label><textarea class="mtapi-dbg-eval-input" placeholder="JS (multiline, Ctrl+Enter to run)..." rows="3" style="flex:1 1 100%;padding:6px;background:#000;color:#ddd;border:1px solid #444;font-family:monospace;resize:vertical;min-height:60px;max-height:40vh"></textarea><button onclick="window._evalConsole()">\u25B6</button><button class="icon-btn-sm" aria-label="Copy" title="Copy output" onclick="window._evalCopy&&window._evalCopy()">\uD83D\uDCCB</button><button class="icon-btn-sm danger" aria-label="Clear" title="Clear output" onclick="window._evalClear&&window._evalClear()">\uD83D\uDDD1</button><div style="flex:1"></div><button class="icon-btn-sm" aria-label="DOM" title="Floating DOM tree" onclick="window._domShowFloating&&window._domShowFloating()">\uD83C\uDF33</button></div>';
     html += '<div id="mtapi-debug-eval-out" class="mtapi-debug-pre" style="color:#ddd">\u2014</div>';
     html += '</details>';
     html += '</div>';
