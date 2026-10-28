@@ -91,7 +91,15 @@
         var ct=(r.headers&&r.headers.get)?((r.headers.get('content-type')||'?').split(';')[0]):'?';
         if(!skip){
           global.console.log('[net] \u2190 '+r.status+' '+m+' '+u+' ('+ms+'ms, '+cl+'b, '+ct+')');
-          var entry = { t: Date.now(), method: m, url: u, status: r.status, ms: ms, size: cl, ct: ct, body: null };
+          
+          var reqH = {};
+          try { if (opts && opts.headers) { new Headers(opts.headers).forEach(function(v,k){ reqH[k] = v; }); } } catch(e){}
+          var reqB = (opts && opts.body) ? String(opts.body) : null;
+          
+          var respH = {};
+          try { r.headers.forEach(function(v,k){ respH[k] = v; }); } catch(e){}
+
+          var entry = { t: Date.now(), method: m, url: u, status: r.status, ms: ms, size: cl, ct: ct, body: null, reqH: reqH, reqB: reqB, respH: respH };
           try { r.clone().text().then(function(b){ entry.body = b.length > 2048 ? b.slice(0, 2048) + '\n... (' + (b.length - 2048) + ' more)' : b; _netPush(entry); }).catch(function(){ _netPush(entry); }); }
           catch(e) { _netPush(entry); }
         }
@@ -731,22 +739,37 @@
     o += '<thead><tr style="background:#222"><th>Time</th><th>Method</th><th>URL</th><th>Status</th><th>Size</th><th>CT</th><th>ms</th></tr></thead><tbody>';
     for (var i = buf.length - 1; i >= 0; i--) {
       var e = buf[i];
-      o += '<tr style="border-top:1px solid #333"><td>' + esc(fmtTime(e.t)) + '</td><td>' + esc(e.method) + '</td><td title="' + esc(e.url) + '">' + esc(e.url.length > 60 ? e.url.slice(0, 60) + '...' : e.url) + '</td><td>' + esc(String(e.status)) + '</td><td>' + esc(String(e.size)) + '</td><td>' + esc(String(e.ct)) + '</td><td>' + esc(String(e.ms)) + '</td></tr>';
+      var reqH_str = e.reqH && Object.keys(e.reqH).length ? JSON.stringify(e.reqH, null, 2) : '(empty)';
+      var respH_str = e.respH && Object.keys(e.respH).length ? JSON.stringify(e.respH, null, 2) : '(empty)';
+      
+      var bodyHtml = '';
       if (e.body) {
-        var bodyHtml = '';
         var parsed = null, isJson = false;
         try { parsed = JSON.parse(e.body); isJson = true; } catch(x){}
         if (isJson && parsed !== null && typeof parsed === 'object' && typeof window.renderData === 'function') {
-          try {
-            bodyHtml = '<div class="net-body-json">' + window.renderData(parsed) + '</div>';
-          } catch(y) {
-            bodyHtml = '<pre class="net-body-pre">' + esc(e.body) + '</pre>';
-          }
-        } else {
-          bodyHtml = '<pre class="net-body-pre">' + esc(e.body) + '</pre>';
-        }
-        o += '<tr><td colspan="7" class="net-body-cell">' + bodyHtml + '</td></tr>';
+          try { bodyHtml = '<div class="net-body-json">' + window.renderData(parsed) + '</div>'; } catch(y) { bodyHtml = '<pre class="net-body-pre">' + esc(e.body) + '</pre>'; }
+        } else { bodyHtml = '<pre class="net-body-pre">' + esc(e.body) + '</pre>'; }
       }
+
+      var _curl = "curl -X " + e.method + " '" + e.url + "'";
+      for (var k in (e.reqH || {})) { _curl += " -H '" + k + ": " + String(e.reqH[k]) + "'"; }
+      if (e.reqB) { _curl += " --data-raw '" + String(e.reqB) + "'"; }
+
+      var row = '<details style="border-top:1px solid #333;margin:0">';
+      row += '<summary style="padding:4px;cursor:pointer;list-style:none;display:flex;justify-content:space-between;font-size:10px">';
+      row += '<span>' + esc(fmtTime(e.t)) + ' ' + esc(e.method) + ' ' + esc(e.url.length > 60 ? e.url.slice(0, 60) + '...' : e.url) + '</span>';
+      row += '<span style="color:' + (e.status < 400 ? '#4fc3f7' : '#f66') + '">' + esc(String(e.status)) + ' (' + esc(String(e.ms)) + 'ms)</span>';
+      row += '</summary>';
+      
+      row += '<div style="padding:8px;background:#111">';
+      row += '<button class="icon-btn-sm" style="margin-bottom:8px" onclick="window._copyText ? window._copyText(\'' + _curl.replace(/\\/g, '\\\\').replace(/'/g, "\\'") + '\') : 0">📋 Copy as cURL</button>';
+      row += '<details style="margin-bottom:4px"><summary style="cursor:pointer;color:#888">Request Headers</summary><pre style="margin:4px 0;color:#aaa;font-size:9px">' + esc(reqH_str) + '</pre></details>';
+      if (e.reqB) row += '<details style="margin-bottom:4px"><summary style="cursor:pointer;color:#888">Request Body</summary><pre style="margin:4px 0;color:#aaa;font-size:9px">' + esc(e.reqB) + '</pre></details>';
+      row += '<details style="margin-bottom:4px"><summary style="cursor:pointer;color:#888">Response Headers</summary><pre style="margin:4px 0;color:#aaa;font-size:9px">' + esc(respH_str) + '</pre></details>';
+      if (bodyHtml) row += '<details open><summary style="cursor:pointer;color:#4fc3f7">Response Body</summary>' + bodyHtml + '</details>';
+      row += '</div></details>';
+      
+      o += '<tr><td colspan="7" style="padding:0">' + row + '</td></tr>';
     }
     return o + '</tbody></table>';
   }
