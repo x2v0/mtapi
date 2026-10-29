@@ -836,7 +836,7 @@
     if (!global._domInspectActive) return;  // guard: no highlight if inspect OFF
     global._lastInspected = el;
     var aiBtn = global.document.getElementById('mtapi-debug-ai-snap-btn');
-    if (aiBtn) { try { aiBtn.disabled = !(global._domInspectActive || global._domInspectActive === true); } catch(e){} }
+    if (aiBtn) { try { aiBtn.disabled = false; } catch(e){} }
     try {
       var selBox = global.document.getElementById('mtapi-debug-select-box');
       if (!selBox) {
@@ -943,6 +943,7 @@
     return ul;
   }
   global._domCloseFloating = function() {
+    global._lastInspected = null; // Сбрасываем выбор при закрытии окна
     var all = global.document.querySelectorAll('[id^="mtapi-debug-dom-floating"]');
     for (var i = 0; i < all.length; i++) {
       try { all[i].remove(); } catch(e){}
@@ -970,7 +971,7 @@
       + '<button class="icon-btn-sm accent" onclick="event.stopPropagation();window._domRefresh&&window._domRefresh()" title="Refresh">\u21bb</button>'
       + '<button class="icon-btn-sm" id="mtapi-debug-inspect-btn" onclick="event.stopPropagation();window._domInspect&&window._domInspect()" title="Select element (toggle)">\u25A3</button>'
             + '<button class="icon-btn-sm" onclick="event.stopPropagation();window._captureElement&&window._captureElement()" title="Copy HTML of selected element">\uD83D\uDCCB</button>'
-      + '<button class="icon-btn-sm accent" id="mtapi-debug-ai-snap-btn" onclick="event.stopPropagation();window._aiSnap&&window._aiSnap()" title="AI Snap (select element first)" disabled>\u2728</button>'
+      + '<button class="icon-btn-sm accent" id="mtapi-debug-ai-snap-btn" onclick="event.stopPropagation();window._aiSnap&&window._aiSnap()" title="AI Snap">\u2728</button>'
       
       
       + '<button class="icon-btn-sm danger" onclick="event.stopPropagation();window._domCloseFloating&&window._domCloseFloating()" title="Close">\u2715</button>'
@@ -1197,7 +1198,18 @@
     md += 'Tag: `' + (el.tagName || '?').toLowerCase() + '`\n';
     if (el.id) md += 'ID: `#' + el.id + '`\n';
     if (el.className && typeof el.className === 'string') md += 'Classes: `.' + el.className.split(/\s+/).filter(Boolean).join('.') + '`\n';
-    md += '\n### HTML\n```html\n' + ((el.outerHTML || '').slice(0, 3000)) + '\n```\n\n';
+    var htmlStr = el.outerHTML || '';
+    if (el === global.document.body) {
+        var clone = el.cloneNode(true);
+        var dbg = clone.querySelector('#mtapi-debug-overlay');
+        if (dbg) dbg.remove();
+        var fab = clone.querySelector('#mtapi-debug-fab');
+        if (fab) fab.remove();
+        var scripts = clone.querySelectorAll('script[src*="mtapi-debug"]');
+        for (var i=0; i<scripts.length; i++) scripts[i].remove();
+        htmlStr = clone.outerHTML;
+    }
+    md += '\n### HTML\n```html\n' + htmlStr.slice(0, 3000) + '\n```\n\n';
     md += '### Computed CSS\n```css\n';
     if (cs) {
       ['display','position','width','height','min-width','min-height','max-width','max-height','padding','margin','border','color','background-color','font-size','font-weight','font-family','line-height','flex','flex-direction','grid','grid-template-columns','gap','overflow','z-index','opacity','transform','transition'].forEach(function(k){
@@ -1222,9 +1234,26 @@
     }
     return md;
   }
-  function _copyAiSnap(md) {
+  function _getElementLabel(el) {
+    if (!el) return 'page';
+    var name = el.tagName ? el.tagName.toLowerCase() : 'element';
+    if (el.id) name += '#' + el.id;
+    var txt = (el.textContent || '').replace(/\s+/g, ' ').trim();
+    if (txt) {
+      if (txt.length > 25) txt = txt.slice(0, 25) + '...';
+      name += ' "' + txt + '"';
+    }
+    return name;
+  }
+  function _copyAiSnap(md, elName) {
+    var nameStr = elName || 'page';
     if (global.navigator.clipboard && global.navigator.clipboard.writeText) {
-      global.navigator.clipboard.writeText(md).then(function(){ try { console.log('[aiSnap] copied (' + md.length + ' chars)'); } catch(e){} }).catch(function(){ if (typeof _copyFallback === 'function') _copyFallback(md); });
+      global.navigator.clipboard.writeText(md).then(function(){ 
+        try { console.log('[aiSnap] copied (' + nameStr + ', ' + md.length + ' chars)'); } catch(e){}
+        if (global._mtapiToast) global._mtapiToast('Copied ' + nameStr + ' (' + md.length + ' chars)');
+      }).catch(function(){ 
+        if (typeof _copyFallback === 'function') _copyFallback(md); 
+      });
     } else if (typeof _copyFallback === 'function') {
       _copyFallback(md);
     }
@@ -1249,12 +1278,47 @@
     }
   };
 
-  global._aiSnap = function() {
+  
+  global._aiSnapCurrent = function() {
     var el = global._lastInspected;
-    if (!el) { if (global._mtapiToast) global._mtapiToast('Select element first (🔍 then tap)'); return; }
+    
+    if (!el) {
+      var iframe = global.document.getElementById('mtapi-browser-iframe');
+      if (iframe && iframe.src && iframe.src.indexOf('http') === 0) {
+        var isCrossOrigin = false;
+        try {
+          if (iframe.contentDocument && iframe.contentDocument.body) {
+            el = iframe.contentDocument.body;
+          }
+        } catch(e) {
+          isCrossOrigin = true;
+        }
+
+        if (isCrossOrigin || !el) {
+          if (global._mtapiToast) global._mtapiToast('Fetching iframe HTML...');
+          fetch(iframe.src).then(function(r){ return r.text(); }).then(function(text){
+            var parser = new global.DOMParser();
+            var doc = parser.parseFromString(text, 'text/html');
+            var md = _buildAISnapshot(doc.body, '');
+            _copyAiSnap(md, '<body> (fetched)');
+          }).catch(function(err){
+            if (global._mtapiToast) global._mtapiToast('Fetch error: ' + err.message);
+            var md = _buildAISnapshot(global.document.body, '');
+            _copyAiSnap(md, _getElementLabel(global.document.body));
+          });
+          return;
+        }
+      }
+      if (!el) el = global.document.body;
+    }
     var md = _buildAISnapshot(el, '');
-    _copyAiSnap(md);
-    if (global._mtapiToast) global._mtapiToast('Copied AI prompt (' + md.length + ' chars) → paste into DeepSeek/ChatGPT');
+    _copyAiSnap(md, _getElementLabel(el));
+  };
+
+global._aiSnap = function() {
+    var el = global._lastInspected || global.document.body;
+    var md = _buildAISnapshot(el, '');
+    _copyAiSnap(md, _getElementLabel(el));
   };
   global._aiSnapWithRequest = function(prompt) {
     var el = global._lastInspected;
@@ -2258,16 +2322,17 @@ global._browserOpen = function(url) {
     '.tbl-toolbar{display:flex;gap:4px;align-items:center;margin:4px 0}',
     '.mtapi-debug-fab{position:fixed;top:8px;right:8px;z-index:999999;width:16px;height:16px;border-radius:50%;border:1px solid var(--bg4);background:var(--bg3);color:var(--accent);font-size:10px;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 6px rgba(0,0,0,0.4);padding:0;line-height:1;font-family:monospace}',
     '.mtapi-debug-fab:hover{background:#3a3a3a}',
-    '.mtapi-debug-overlay{position:fixed;top:0;left:0;right:0;bottom:0;z-index:9999998;background:var(--bg);color:var(--fg);font-family:monospace;font-size:12px;display:flex;flex-direction:column}',
+    '.mtapi-debug-overlay{position:fixed;top:0;left:0;right:0;bottom:0;width:100vw !important;max-width:100vw !important;overflow-x:hidden !important;box-sizing:border-box !important;width:100vw;max-width:100vw;overflow-x:hidden;box-sizing:border-box;z-index:9999998;background:var(--bg);color:var(--fg);font-family:monospace;font-size:12px;display:flex;flex-direction:column}',
     '.mtapi-debug-overlay[hidden]{display:none}',
-    '.mtapi-debug-topbar{display:flex;align-items:center;padding:4px 8px;background:var(--bg3);border-bottom:1px solid var(--bg4);gap:8px;flex-shrink:0}',
+    '.mtapi-debug-topbar{width:100% !important;max-width:100vw !important;overflow:hidden !important;box-sizing:border-box !important;display:flex;align-items:center;padding:4px 8px;background:var(--bg3);border-bottom:1px solid var(--bg4);gap:8px;flex-shrink:0;width:100%;max-width:100vw;box-sizing:border-box;overflow:hidden}',
     '.mtapi-debug-topbar button{background:transparent;color:var(--fg);border:1px solid var(--bg4);border-radius:3px;padding:2px 8px;font-family:monospace;font-size:12px;cursor:pointer}',
     '.mtapi-debug-topbar button:hover{background:var(--bg4)}',
-    '.mtapi-debug-topbar-row1{padding:6px 8px;border-bottom:1px solid var(--bg4)}',
+    '.mtapi-debug-topbar-row1{display:flex !important;justify-content:space-between !important;align-items:center !important;width:100% !important;max-width:100vw !important;box-sizing:border-box !important;padding:6px 8px;border-bottom:1px solid var(--bg4);box-sizing:border-box;display:flex;justify-content:space-between;align-items:center;min-width:0;}',
+    '.mtapi-debug-menu{flex-shrink:0 !important;margin-right:6px !important;}',
     '.mtapi-debug-topbar-row2{padding:4px 8px;border-bottom:1px solid var(--bg4);overflow-x:auto;flex-shrink:0}',
     '.mtapi-debug-tabs{display:flex;gap:2px;flex:1;overflow-x:auto;min-width:0}',
     '.mtapi-debug-tabs button.active{background:var(--bg4);border-color:#666}',
-    '.mtapi-debug-content{flex:1;overflow:auto;padding:8px;position:relative;display:flex;flex-direction:column;min-height:0}',
+    '.mtapi-debug-content{width:100% !important;max-width:100vw !important;overflow-x:hidden !important;box-sizing:border-box !important;flex:1;overflow:auto;padding:8px;position:relative;display:flex;flex-direction:column;min-height:0}',
     '.mtapi-debug-content > [data-tab-content]{display:none}',
     '.mtapi-debug-content > [data-tab-content].active{display:flex;flex-direction:column;flex:1 1 0 !important;min-height:0;height:100% !important;gap:8px}',
     '.mtapi-debug-sidepanel{position:absolute;top:0;right:0;bottom:0;width:200px;background:var(--bg3);border-left:1px solid var(--bg4);padding:8px;transform:translateX(100%);transition:transform 0.2s;box-shadow:-2px 0 6px rgba(0,0,0,0.4)}',
@@ -2499,10 +2564,12 @@ global._browserOpen = function(url) {
     backBtn.id = 'mtapi-debug-back';
     backBtn.className = 'mtapi-debug-back';
     backBtn.textContent = '\u2699\uFE0F';
+    
     backBtn.style.cssText = 'width:16px;height:16px;font-size:12px;padding:0;display:inline-flex;align-items:center;justify-content:center';
     backBtn.title = 'Back to app';
     backBtn.setAttribute('onclick', 'window._debugClose()');
     row1.appendChild(backBtn);
+
     var browserBtn = doc.createElement('button');
     browserBtn.id = 'mtapi-debug-browser-btn';
     browserBtn.className = 'mtapi-debug-back';
@@ -2521,6 +2588,9 @@ global._browserOpen = function(url) {
     menuBtn.textContent = '\uD83D\uDC1E';
     menuBtn.title = 'Tabs menu';
     menuBtn.setAttribute('onclick', 'window._sidePanelToggle()');
+    menuBtn.style.flexShrink = '0';
+    menuBtn.style.margin = '0';
+    menuBtn.style.marginRight = '0px';
     row1.appendChild(menuBtn);
 
     ov.appendChild(row1);
@@ -2640,10 +2710,17 @@ global._browserOpen = function(url) {
     if (!targetDoc) targetDoc = global.document; // fallback
 
     if (type === 'html') {
-      if (targetDoc === global.document) {
-         render('(no iframe open - showing parent HTML)\n\n' + '<!DOCTYPE html>\n' + targetDoc.documentElement.outerHTML);
-      } else {
+      if (targetDoc !== global.document) {
          render('<!DOCTYPE html>\n' + targetDoc.documentElement.outerHTML);
+      } else if (iframe && iframe.src && iframe.src.indexOf('http') === 0) {
+         render('(Fetching iframe HTML via fetch...)\n');
+         fetch(iframe.src).then(function(r){ return r.text(); }).then(function(txt){
+            render(txt);
+         }).catch(function(e){
+            render('Fetch error: ' + e.message);
+         });
+      } else {
+         render('(no iframe open - showing parent HTML)\n\n' + '<!DOCTYPE html>\n' + targetDoc.documentElement.outerHTML);
       }
     } else if (type === 'css') {
       var css = '';
@@ -2673,7 +2750,30 @@ global._browserOpen = function(url) {
      if (el && global._copyText) global._copyText(el.textContent);
   };
 
-  global.MtapiDebug = {
+  
+  // ── Add Snap FAB to main screen ──
+  try {
+    var fab = global.document.querySelector('.mtapi-debug-fab, .mtapi-debug-fab-inline');
+    if (fab && !global.document.getElementById('mtapi-snap-fab')) {
+      var snapFab = global.document.createElement('button');
+      snapFab.id = 'mtapi-snap-fab';
+      snapFab.className = fab.className; // Копируем стили (inline или fixed)
+      snapFab.innerHTML = '✨';
+      snapFab.title = 'AI Snap';
+      snapFab.style.marginRight = '4px'; // Отступ от 🐞
+      snapFab.style.color = 'var(--accent, #4fc3f7)';
+      
+      snapFab.onclick = function(e) {
+        e.stopPropagation();
+        if (global._aiSnapCurrent) global._aiSnapCurrent();
+      };
+      
+      // Вставляем перед кнопкой 🐞
+      fab.parentNode.insertBefore(snapFab, fab);
+    }
+  } catch(e) { console.error('[snap fab]', e); }
+
+global.MtapiDebug = {
     attach: function(o){
       global._mtapiAttachStart = (global.performance && global.performance.now) ? global.performance.now() : Date.now();
       o = o || {};

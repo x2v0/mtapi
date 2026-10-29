@@ -836,7 +836,7 @@
     if (!global._domInspectActive) return;  // guard: no highlight if inspect OFF
     global._lastInspected = el;
     var aiBtn = global.document.getElementById('mtapi-debug-ai-snap-btn');
-    if (aiBtn) { try { aiBtn.disabled = !(global._domInspectActive || global._domInspectActive === true); } catch(e){} }
+    if (aiBtn) { try { aiBtn.disabled = false; } catch(e){} }
     try {
       var selBox = global.document.getElementById('mtapi-debug-select-box');
       if (!selBox) {
@@ -943,6 +943,7 @@
     return ul;
   }
   global._domCloseFloating = function() {
+    global._lastInspected = null; // Сбрасываем выбор при закрытии окна
     var all = global.document.querySelectorAll('[id^="mtapi-debug-dom-floating"]');
     for (var i = 0; i < all.length; i++) {
       try { all[i].remove(); } catch(e){}
@@ -970,7 +971,7 @@
       + '<button class="icon-btn-sm accent" onclick="event.stopPropagation();window._domRefresh&&window._domRefresh()" title="Refresh">\u21bb</button>'
       + '<button class="icon-btn-sm" id="mtapi-debug-inspect-btn" onclick="event.stopPropagation();window._domInspect&&window._domInspect()" title="Select element (toggle)">\u25A3</button>'
             + '<button class="icon-btn-sm" onclick="event.stopPropagation();window._captureElement&&window._captureElement()" title="Copy HTML of selected element">\uD83D\uDCCB</button>'
-      + '<button class="icon-btn-sm accent" id="mtapi-debug-ai-snap-btn" onclick="event.stopPropagation();window._aiSnap&&window._aiSnap()" title="AI Snap (select element first)" disabled>\u2728</button>'
+      + '<button class="icon-btn-sm accent" id="mtapi-debug-ai-snap-btn" onclick="event.stopPropagation();window._aiSnap&&window._aiSnap()" title="AI Snap">\u2728</button>'
       
       
       + '<button class="icon-btn-sm danger" onclick="event.stopPropagation();window._domCloseFloating&&window._domCloseFloating()" title="Close">\u2715</button>'
@@ -1197,7 +1198,18 @@
     md += 'Tag: `' + (el.tagName || '?').toLowerCase() + '`\n';
     if (el.id) md += 'ID: `#' + el.id + '`\n';
     if (el.className && typeof el.className === 'string') md += 'Classes: `.' + el.className.split(/\s+/).filter(Boolean).join('.') + '`\n';
-    md += '\n### HTML\n```html\n' + ((el.outerHTML || '').slice(0, 3000)) + '\n```\n\n';
+    var htmlStr = el.outerHTML || '';
+    if (el === global.document.body) {
+        var clone = el.cloneNode(true);
+        var dbg = clone.querySelector('#mtapi-debug-overlay');
+        if (dbg) dbg.remove();
+        var fab = clone.querySelector('#mtapi-debug-fab');
+        if (fab) fab.remove();
+        var scripts = clone.querySelectorAll('script[src*="mtapi-debug"]');
+        for (var i=0; i<scripts.length; i++) scripts[i].remove();
+        htmlStr = clone.outerHTML;
+    }
+    md += '\n### HTML\n```html\n' + htmlStr.slice(0, 3000) + '\n```\n\n';
     md += '### Computed CSS\n```css\n';
     if (cs) {
       ['display','position','width','height','min-width','min-height','max-width','max-height','padding','margin','border','color','background-color','font-size','font-weight','font-family','line-height','flex','flex-direction','grid','grid-template-columns','gap','overflow','z-index','opacity','transform','transition'].forEach(function(k){
@@ -1222,9 +1234,13 @@
     }
     return md;
   }
-  function _copyAiSnap(md) {
+  function _copyAiSnap(md, elName) {
+    var nameStr = elName ? elName.toLowerCase() : 'page';
     if (global.navigator.clipboard && global.navigator.clipboard.writeText) {
-      global.navigator.clipboard.writeText(md).then(function(){ try { console.log('[aiSnap] copied (' + md.length + ' chars)'); } catch(e){} }).catch(function(){ if (typeof _copyFallback === 'function') _copyFallback(md); });
+      global.navigator.clipboard.writeText(md).then(function(){ 
+        try { console.log('[aiSnap] copied (<' + nameStr + '>, ' + md.length + ' chars)'); } catch(e){}
+        if (global._mtapiToast) global._mtapiToast('Copied <' + nameStr + '> (' + md.length + ' chars)');
+      }).catch(function(){ if (typeof _copyFallback === 'function') _copyFallback(md); });
     } else if (typeof _copyFallback === 'function') {
       _copyFallback(md);
     }
@@ -1249,11 +1265,29 @@
     }
   };
 
-  global._aiSnap = function() {
+  
+  global._aiSnapCurrent = function() {
     var el = global._lastInspected;
-    if (!el) { if (global._mtapiToast) global._mtapiToast('Select element first (🔍 then tap)'); return; }
+    
+    // Если элемент не выбран, ищем iframe (браузер) или берем body
+    if (!el) {
+      var iframe = global.document.getElementById('mtapi-browser-iframe');
+      if (iframe && iframe.contentDocument && iframe.contentDocument.body) {
+         el = iframe.contentDocument.body;
+         if (global._mtapiToast) global._mtapiToast('Snapping iframe content...');
+      } else {
+         el = global.document.body;
+      }
+    }
     var md = _buildAISnapshot(el, '');
-    _copyAiSnap(md);
+    _copyAiSnap(md, (el && el.tagName) ? el.tagName : 'page');
+  };
+
+global._aiSnap = function() {
+    var el = global._lastInspected || global.document.body;
+    try { console.log('[aiSnap] building for', el.tagName); } catch(e){}
+    var md = _buildAISnapshot(el, '');
+    _copyAiSnap(md, (el && el.tagName) ? el.tagName : 'page');
     if (global._mtapiToast) global._mtapiToast('Copied AI prompt (' + md.length + ' chars) → paste into DeepSeek/ChatGPT');
   };
   global._aiSnapWithRequest = function(prompt) {
@@ -2499,10 +2533,12 @@ global._browserOpen = function(url) {
     backBtn.id = 'mtapi-debug-back';
     backBtn.className = 'mtapi-debug-back';
     backBtn.textContent = '\u2699\uFE0F';
+    
     backBtn.style.cssText = 'width:16px;height:16px;font-size:12px;padding:0;display:inline-flex;align-items:center;justify-content:center';
     backBtn.title = 'Back to app';
     backBtn.setAttribute('onclick', 'window._debugClose()');
     row1.appendChild(backBtn);
+
     var browserBtn = doc.createElement('button');
     browserBtn.id = 'mtapi-debug-browser-btn';
     browserBtn.className = 'mtapi-debug-back';
@@ -2640,10 +2676,17 @@ global._browserOpen = function(url) {
     if (!targetDoc) targetDoc = global.document; // fallback
 
     if (type === 'html') {
-      if (targetDoc === global.document) {
-         render('(no iframe open - showing parent HTML)\n\n' + '<!DOCTYPE html>\n' + targetDoc.documentElement.outerHTML);
-      } else {
+      if (targetDoc !== global.document) {
          render('<!DOCTYPE html>\n' + targetDoc.documentElement.outerHTML);
+      } else if (iframe && iframe.src && iframe.src.indexOf('http') === 0) {
+         render('(Fetching iframe HTML via fetch...)\n');
+         fetch(iframe.src).then(function(r){ return r.text(); }).then(function(txt){
+            render(txt);
+         }).catch(function(e){
+            render('Fetch error: ' + e.message);
+         });
+      } else {
+         render('(no iframe open - showing parent HTML)\n\n' + '<!DOCTYPE html>\n' + targetDoc.documentElement.outerHTML);
       }
     } else if (type === 'css') {
       var css = '';
@@ -2673,7 +2716,30 @@ global._browserOpen = function(url) {
      if (el && global._copyText) global._copyText(el.textContent);
   };
 
-  global.MtapiDebug = {
+  
+  // ── Add Snap FAB to main screen ──
+  try {
+    var fab = global.document.querySelector('.mtapi-debug-fab, .mtapi-debug-fab-inline');
+    if (fab && !global.document.getElementById('mtapi-snap-fab')) {
+      var snapFab = global.document.createElement('button');
+      snapFab.id = 'mtapi-snap-fab';
+      snapFab.className = fab.className; // Копируем стили (inline или fixed)
+      snapFab.innerHTML = '✨';
+      snapFab.title = 'AI Snap';
+      snapFab.style.marginRight = '4px'; // Отступ от 🐞
+      snapFab.style.color = 'var(--accent, #4fc3f7)';
+      
+      snapFab.onclick = function(e) {
+        e.stopPropagation();
+        if (global._aiSnapCurrent) global._aiSnapCurrent();
+      };
+      
+      // Вставляем перед кнопкой 🐞
+      fab.parentNode.insertBefore(snapFab, fab);
+    }
+  } catch(e) { console.error('[snap fab]', e); }
+
+global.MtapiDebug = {
     attach: function(o){
       global._mtapiAttachStart = (global.performance && global.performance.now) ? global.performance.now() : Date.now();
       o = o || {};
