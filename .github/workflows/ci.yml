@@ -41,24 +41,22 @@ jobs:
             exit 1
           fi
 
-  js-tests:
-    name: JS tests
+  js:
+    name: JS (Node tests)
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '26'
-          cache: 'npm'
+          node-version: 18
 
-      - name: install dependencies
-        run: npm ci
+      - name: Install dependencies
+        run: npm install
 
-      - name: run test suite
-        run: bash test/run-all.sh
-
+      - name: Run node tests
+        run: npm test
 
   playwright:
     name: Playwright (UI tests)
@@ -71,8 +69,8 @@ jobs:
         with:
           node-version: 18
           
-      - name: Install dependencies
-        run: npm install -D @playwright/test && npx playwright install --with-deps chromium
+      - name: Install Playwright
+        run: npm install && npx playwright install --with-deps chromium
         
       - name: Start local server
         run: python3 -m http.server 8080 &
